@@ -1,0 +1,1 @@
+ALTER TABLE market_indexes DROP COLUMN IF EXISTS sparkline_dates;

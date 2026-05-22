@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s -o /dev/null -w '%{http_code}' http://localhost:5173/src/pages/__TRACKED_VAR__)",
+      "Bash(go build *)",
+      "Bash(flutter analyze *)",
+      "Bash(curl -s -o /dev/null -w \"Backend HTTP %{http_code}\\\\n\" --max-time 3 http://localhost:8080/api/health)",
+      "Bash(curl -s -o /dev/null -w \"Backend: %{http_code}\\\\n\" --max-time 3 http://localhost:8080/api/health)",
+      "Bash(pg_isready -h localhost -p 5432)",
+      "Bash(psql -U zaidaqrawi -d postgres -c \"SELECT 1\")",
+      "Bash(brew list *)",
+      "Bash(/Library/PostgreSQL/18/bin/psql -h localhost -U zaidaqrawi -d postgres -c '\\\\l')",
+      "Bash(/Library/PostgreSQL/18/bin/psql -h localhost -U postgres -d postgres -c '\\\\du')",
+      "Bash(docker info *)",
+      "Bash(flutter pub *)",
+      "Bash(pkill -f \"go-build.*api\")",
+      "Bash(pkill -f \"exe/main\")",
+      "Bash(go run *)",
+      "Bash(xargs kill *)",
+      "Bash(go get *)",
+      "Bash(grep -n \"^  }$\\\\|^}$\" /Volumes/Sizar/easy_tech/test/run/newone/StockAnalyzer-main/lib/screens/social/social_hub_screen.dart)",
+      "Read(//Users/armanjzeway/.claude/**)",
+      "Bash(cp \"/Volumes/ADATA UFD/claude_skills.md\" /Users/armanjzeway/.claude/skills.md && ls -la /Users/armanjzeway/.claude/skills.md)"
+    ]
+  }
+}

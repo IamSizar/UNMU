@@ -1,0 +1,60 @@
+name: version-bump
+
+# Manual trigger — run from the Actions tab and choose the bump type.
+# The job edits pubspec.yaml, commits the change, and tags the commit.
+on:
+  workflow_dispatch:
+    inputs:
+      type:
+        description: "Which segment to bump"
+        required: true
+        default: "build"
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - build
+
+permissions:
+  # Required so GITHUB_TOKEN can push the commit + tag back to origin.
+  contents: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Fetch full history so the tag push can resolve refs.
+          fetch-depth: 0
+          # Use the default GITHUB_TOKEN for the push step below.
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Bump pubspec version
+        id: bump
+        run: |
+          new_version=$(dart run tool/bump_version.dart --type "${{ inputs.type }}")
+          echo "new_version=${new_version}" >> "$GITHUB_OUTPUT"
+          echo "Bumped to ${new_version}"
+
+      - name: Commit and tag
+        env:
+          NEW_VERSION: ${{ steps.bump.outputs.new_version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pubspec.yaml
+          git commit -m "chore: bump version to ${NEW_VERSION}"
+          # The tag drops the build suffix so `v1.2.3` always points
+          # at the latest build of that semver name.
+          semver_name="${NEW_VERSION%+*}"
+          git tag "v${semver_name}" -f
+          git push origin HEAD
+          git push origin "v${semver_name}" -f

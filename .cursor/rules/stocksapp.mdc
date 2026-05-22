@@ -1,0 +1,258 @@
+---
+alwaysApply: true
+---
+
+# Project Rules & Guidelines
+
+## 1. Code Organization & File Management
+
+### File Length
+- **Max 500 lines per file**.
+- If longer → refactor into smaller, logically grouped files.
+- **Visual cue**: Use a chart or diagram to show module dependencies when splitting large files.
+
+### Folder Structure
+- Organize by **feature / screen / module**.
+- Subfolders for components, views, services, utils.
+- **Visual cue**: Tree diagram of folder structure improves clarity for new developers.
+
+### Localization
+- Each screen/feature → **own localization file** (English & Arabic).
+- **Avoid one giant file** for the whole app.
+- Key naming consistent by screen/feature.
+- **Chart suggestion**: table mapping screens → keys → translations for quick reference.
+
+### Documentation
+- Include small visual diagrams:
+    - Component hierarchy flowchart.
+    - Data flow diagram for complex screens.
+- Notes on design patterns & caveats.
+
+### Compiler-Friendly Views
+- Keep views modular & lightweight.
+- Break complex screens into reusable subviews.
+- **Chart suggestion**: component tree to illustrate subview structure.
+
+## 2. Design & UX Principles
+
+### Aesthetic
+- **Minimalist, modern, slightly playful**.
+- **Whitespace first**: let content breathe.
+- Avoid gradients, heavy textures, noisy backgrounds.
+
+### Layout
+- Flexible, grid-aligned layouts.
+- Consistent spacing, padding, alignment.
+- Cards & containers to group related elements.
+- **Chart suggestion**: grid alignment diagram for consistent spacing.
+
+### Typography
+- Clean sans-serif fonts.
+- Hierarchy: headings → bold/larger, body → regular.
+- Left-aligned unless design demands otherwise.
+
+### Color Palette
+- Neutral backgrounds, subtle section separation.
+- Primary accent: buttons, links, highlights.
+- Ensure contrast ratio > 4.5:1 for accessibility.
+- **Chart suggestion**: color swatch table showing usage per element.
+
+### UI Components
+- **Buttons**: filled (primary), outlined/subtle (secondary).
+- **Inputs**: rounded, padded, clear borders.
+- **Cards**: light background, subtle shadow, rounded corners.
+- **Icons**: thin line, consistent sizing, accent or monochrome.
+- **Content blocks**: limited width, context-aligned.
+
+### Visual Style
+- No heavy shadows/gradients.
+- Subtle animations only.
+- Ample whitespace for calm, readable screens.
+
+## 3. Modern Interaction Patterns
+
+### Interactive
+- Beyond static lists/pickers.
+- Immediate feedback for taps & selections.
+
+### Visual Hierarchy
+- Use spacing, typography, and cards to guide focus.
+- **Chart suggestion**: attention flow diagram showing which areas user notices first.
+
+### Context-Aware
+- Only show relevant options to reduce clutter.
+
+### Tactile & Responsive
+- Haptic feedback for taps & primary actions.
+- Example:
+    - Light tap → selection.
+    - Success → form submission.
+
+## 4. Key UI Implementations
+
+### Card-Based Selection
+- Replace pickers with tappable cards.
+- Include icon, title, description.
+- Selected card → accent border & tinted icon.
+- **Chart idea**: comparison table of old picker vs card design.
+
+### Date & Repetition Controls
+- **Weekly picker**: horizontal tappable day buttons, accent-filled selected day.
+- **Monthly picker**: dropdown to save space.
+- **Chart idea**: timeline or calendar visualization for clarity.
+
+### Conditional Sections
+- Optional content wrapped in rounded, subtle cards.
+- Smooth transitions on appear/disappear.
+
+### Haptic Feedback
+- Light taps on cards/day pickers.
+- Success vibration for primary actions.
+
+## 5. Localization Guidelines
+- One file per screen/feature.
+- Consistent key naming per screen.
+- Easy editing & translation.
+- **Chart idea**: matrix chart showing screens → keys → translation completeness.
+
+## 6. Development Best Practices
+- Small, modular views.
+- Split complex logic into smaller functions/components.
+- Consider tactile haptics.
+- **Readability & maintainability > clever complexity**.
+- **Chart idea**: modular dependency diagram to visualize code coupling.
+
+## 7. Style Summary Checklist
+- [ ] Minimalist, clean, modern
+- [ ] Organized folder & file structure
+- [ ] Screen-based localization
+- [ ] Card-based content grouping
+- [ ] Interactive, context-aware controls
+- [ ] Subtle haptics
+- [ ] Modular, compiler-friendly views
+- [ ] Documentation + diagrams
+- [ ] Charts for clarity when needed
+
+## 8. Recommended Charts & Visual Aids
+
+| Use Case | Chart/Visual Type | Purpose |
+| :--- | :--- | :--- |
+| Folder structure | Tree diagram | Quick navigation & clarity |
+| Localization | Table mapping screens → keys → translations | Translation overview |
+| Component hierarchy | Flowchart | Easy onboarding & maintenance |
+| Attention flow | Heatmap-like diagram | Design validation |
+| Pickers vs Cards | Comparison table | UX decision rationale |
+| Modular dependencies | Dependency diagram | Avoid coupling & complexity |
+
+## Overall Design Style
+Make the design in the style of: **clean, flat, white spaces, elegant, playful and highly organized with no clutter, easy to read, easy to understand**.
+
+## 9. Platform-Adaptive UI Guidelines
+
+> [!CAUTION]
+> **CRITICAL: Platform-Adaptive Design Required**
+>
+> All UI components MUST be platform-adaptive:
+> - **iOS**: Use Cupertino widgets (`cupertino_native`)
+> - **Android**: Use Material widgets
+>
+> This ensures native look and feel on each platform.
+
+### iOS Implementation (cupertino_native)
+
+Use `cupertino_native` for iOS specific UI elements.
+
+### Tab Bar
+Overlay this at the bottom of your page.
+
+```dart
+int _tabIndex = 0;
+
+// Overlay this at the bottom of your page
+CNTabBar(
+  items: const [
+    CNTabBarItem(label: 'Home', icon: CNSymbol('house.fill')),
+    CNTabBarItem(label: 'Profile', icon: CNSymbol('person.crop.circle')),
+    CNTabBarItem(label: 'Settings', icon: CNSymbol('gearshape.fill')),
+  ],
+  currentIndex: _tabIndex,
+  onTap: (i) => setState(() => _tabIndex = i),
+)
+```
+
+### Popup Menu
+```dart
+final items = [
+  const CNPopupMenuItem(label: 'New File', icon: CNSymbol('doc', size: 18)),
+  const CNPopupMenuItem(label: 'New Folder', icon: CNSymbol('folder', size: 18)),
+  const CNPopupMenuDivider(),
+  const CNPopupMenuItem(label: 'Rename', icon: CNSymbol('rectangle.and.pencil.and.ellipsis', size: 18)),
+];
+
+CNPopupMenuButton(
+  buttonLabel: 'Actions',
+  items: items,
+  onSelected: (index) {
+    // Handle selection
+  },
+)
+```
+
+### Icons
+```dart
+// Monochrome symbol
+const CNIcon(symbol: CNSymbol('star'));
+
+// Multicolor / hierarchical options are also supported
+const CNIcon(
+  symbol: CNSymbol('paintpalette.fill'),
+  mode: CNSymbolRenderingMode.multicolor,
+)
+```
+
+### Buttons
+```dart
+CNButton(
+  label: 'Press me',
+  onPressed: () {},
+)
+
+// Icon button variant
+CNButton.icon(
+  icon: const CNSymbol('heart.fill'),
+  onPressed: () {},
+)
+```
+
+### Segmented Control
+```dart
+int _index = 0;
+
+CNSegmentedControl(
+  labels: const ['One', 'Two', 'Three'],
+  selectedIndex: _index,
+  onValueChanged: (i) => setState(() => _index = i),
+)
+```
+
+### Switch
+```dart
+bool _on = true;
+
+CNSwitch(
+  value: _on,
+  onChanged: (v) => setState(() => _on = v),
+)
+```
+
+### Slider
+```dart
+double _value = 50;
+
+CNSlider(
+  value: _value,
+  min: 0,
+  max: 100,
+  onChanged: (v) => setState(() => _value = v),
+)
+```

@@ -1,0 +1,29 @@
+# Secrets — NEVER commit
+.env
+.env.*
+!.env.example
+
+# Compiled binaries
+api
+daily_update
+ingest
+rescreen
+screen
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binaries
+*.test
+
+# Coverage
+*.out
+
+# Local DB dumps / sqlite
+*.dump
+halalstocks.db
+
+# Local upload cache (S3 is the new home)
+uploads/

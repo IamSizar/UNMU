@@ -1,0 +1,436 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Kurdfont (Rabar) — bundled Arabic-script font, used ONLY in RTL/Arabic. */
+@font-face {
+  font-family: 'Kurdfont';
+  src: url('/fonts/Kurdfont.woff2') format('woff2'),
+       url('/fonts/Kurdfont.woff') format('woff');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Arabic (RTL) → Kurdfont. English (LTR) keeps Inter via :root below.
+   html[dir="rtl"] outranks :root, and the .font-sans rule catches the
+   few elements that set the family explicitly. */
+html[dir="rtl"],
+html[dir="rtl"] .font-sans {
+  font-family: 'Kurdfont', 'Noto Sans Arabic', system-ui, sans-serif;
+}
+
+:root {
+  font-family: 'Inter', 'Noto Sans Arabic', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* ── Light theme (default) ─────────────────────────────────────────
+     Page reads as warm-white with crisp slate text. White cards lift
+     off a slate-50 canvas via 1px hairlines (no shadows at rest). */
+  --app-bg: #f8fafc;
+  --app-text: #0f172a;
+  --app-text-muted: #475569;
+  --scrollbar-thumb: #cbd5e1;
+  --scrollbar-thumb-hover: #94a3b8;
+
+  /* v2 design-system tokens — light values.
+     Channel-form (R G B space-separated) so Tailwind's `bg-canvas/80`
+     opacity modifier can compose them via `rgb(... / α)`. */
+  --bg-canvas-rgb: 248 250 252;   /* slate-50  #F8FAFC */
+  --bg-surface-rgb: 255 255 255;  /* pure white       */
+  --bg-elevated-rgb: 255 255 255; /* same as surface; depth via border */
+  --fg-rgb: 15 23 42;             /* slate-900 #0F172A */
+  --fg-muted-rgb: 71 85 105;      /* slate-600 #475569 */
+  --fg-subtle-rgb: 100 116 139;   /* slate-500 #64748B */
+
+  /* Hairlines for light mode — dark RGBA so they read on white. */
+  --border-hairline: rgba(15, 23, 42, 0.06);
+  --border-default: rgba(15, 23, 42, 0.10);
+  --border-strong: rgba(15, 23, 42, 0.16);
+
+  /* Shimmer pulses use the inverse of the surface so they're visible
+     against both palettes. Slightly translucent dark on light. */
+  --shimmer-bg: rgba(15, 23, 42, 0.06);
+  --shimmer-glow: rgba(15, 23, 42, 0.10);
+
+  /* Recharts theme — grid + axis + tooltip surface. Used by the chart
+     helper hook so legends + axes adapt to the theme. */
+  --chart-grid: rgba(15, 23, 42, 0.06);
+  --chart-axis: #64748B;
+  --chart-tooltip-bg: #FFFFFF;
+  --chart-tooltip-border: rgba(15, 23, 42, 0.10);
+  --chart-tooltip-text: #0F172A;
+  --chart-tooltip-shadow: 0 8px 24px rgba(15, 23, 42, 0.10);
+
+  color-scheme: light;
+}
+
+:root.dark {
+  --app-bg: #08090C;
+  --app-text: #e2e8f0;
+  --app-text-muted: #94a3b8;
+  --scrollbar-thumb: #1a2942;
+  --scrollbar-thumb-hover: #243759;
+
+  /* v2 design-system tokens — dark values (channel form). */
+  --bg-canvas-rgb: 8 9 12;        /* near-black #08090C */
+  --bg-surface-rgb: 14 16 21;     /* #0E1015 */
+  --bg-elevated-rgb: 22 26 33;    /* #161A21 */
+  --fg-rgb: 241 245 249;          /* slate-100 #F1F5F9 */
+  --fg-muted-rgb: 148 163 184;    /* slate-400 #94A3B8 */
+  --fg-subtle-rgb: 100 116 139;   /* slate-500 #64748B */
+
+  /* Hairlines for dark mode — translucent white on near-black. */
+  --border-hairline: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.10);
+  --border-strong: rgba(255, 255, 255, 0.16);
+
+  /* Shimmer — translucent white over dark surface. */
+  --shimmer-bg: rgba(255, 255, 255, 0.04);
+  --shimmer-glow: rgba(255, 255, 255, 0.06);
+
+  /* Recharts theme — dark variant. */
+  --chart-grid: rgba(255, 255, 255, 0.05);
+  --chart-axis: #64748B;
+  --chart-tooltip-bg: #161A21;
+  --chart-tooltip-border: rgba(255, 255, 255, 0.10);
+  --chart-tooltip-text: #F1F5F9;
+  --chart-tooltip-shadow: 0 12px 32px rgba(0, 0, 0, 0.60);
+
+  color-scheme: dark;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background-color: var(--app-bg);
+  color: var(--app-text);
+  overflow-x: hidden;
+  overscroll-behavior-y: none;
+  transition: background-color 0.2s ease;
+}
+
+/* Make sure native form controls don't auto-zoom the viewport on iOS Safari. */
+@media (max-width: 640px) {
+  input, select, textarea {
+    font-size: 16px;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+@keyframes slide-in-right {
+  from { transform: translateX(120%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+@layer components {
+  /* ── legacy component classes (still used by un-migrated pages) ──── */
+  .card {
+    @apply bg-white/[0.03] backdrop-blur-sm border border-white/5 rounded-2xl;
+  }
+  .card-hover {
+    @apply hover:border-cyan-500/30 transition-all;
+  }
+  .card-hover:hover {
+    box-shadow: 0 0 0 1px rgba(0, 217, 255, 0.15), 0 4px 24px -2px rgba(0, 217, 255, 0.12);
+  }
+  .chip {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ring-1;
+  }
+  .btn-primary {
+    @apply inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-midnight-500 text-sm font-semibold transition-colors;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 text-sm font-medium transition-colors;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white text-sm font-medium transition-colors;
+  }
+  .input {
+    @apply w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-cyan-500/60;
+  }
+
+  /* ── v2 design system (redesign) ─────────────────────────────────────
+     Token-driven component classes for the new look. Existing pages
+     keep using the legacy classes above; redesigned pages use these.
+     Bookkeeping: each v2 class is prefixed `*-v2` so the two systems
+     don't collide in grep. */
+
+  /* Card — true surface on canvas, hairline border, no shadow at rest.
+     `border-hairline` is theme-aware: rgba(15,23,42,0.06) on light,
+     rgba(255,255,255,0.06) on dark. Same swap pattern for hover. */
+  .card-v2 {
+    @apply bg-surface border border-hairline rounded-lg
+           transition-all duration-micro ease-out-expo;
+  }
+  .card-v2-hover {
+    @apply hover:border-line hover:shadow-hover hover:-translate-y-[2px];
+  }
+
+  /* Chip / pill — 4px radius, tabular, hairline ring. */
+  .chip-v2 {
+    @apply inline-flex items-center gap-1 px-2 h-[22px] rounded-sm text-xs
+           font-medium ring-1 ring-inset font-mono tracking-tight;
+  }
+
+  /* Buttons — 32px height on default, 8px radius, tight letter-spacing. */
+  .btn-v2 {
+    @apply inline-flex items-center gap-2 h-8 px-3 rounded-md text-sm
+           font-semibold tracking-[-0.005em]
+           transition-colors duration-micro ease-out-expo
+           disabled:opacity-50 disabled:cursor-not-allowed
+           focus-visible:outline-none focus-visible:shadow-focus;
+  }
+  .btn-v2-primary {
+    /* Primary CTA: brand cyan filled, text reads as canvas (the
+       darkest surface) regardless of theme — cyan stays bright enough
+       to host dark text on both light and dark backgrounds. */
+    @apply btn-v2 bg-brand-cyan hover:bg-brand-cyan-deep text-[#0F172A];
+  }
+  .btn-v2-secondary {
+    /* Theme-aware: hairline ring + soft surface on either palette. */
+    @apply btn-v2 bg-surface hover:bg-elevated
+           ring-1 ring-inset ring-line text-fg;
+  }
+  .btn-v2-ghost {
+    @apply btn-v2 hover:bg-hairline text-fg-muted hover:text-fg;
+  }
+  .btn-v2-danger {
+    @apply btn-v2 bg-err/[0.12] hover:bg-err/[0.20]
+           ring-1 ring-inset ring-err/30 text-err;
+  }
+
+  /* Input — flat, hairline border, cyan focus glow. */
+  .input-v2 {
+    @apply w-full h-9 px-3 rounded-md bg-surface
+           ring-1 ring-inset ring-hairline
+           text-sm text-fg placeholder:text-fg-subtle
+           focus:outline-none focus:ring-brand-cyan/40 focus:ring-2
+           transition-shadow duration-micro ease-out-expo;
+  }
+
+  /* Section header — page-level h1 / h2. */
+  .h1-v2 {
+    @apply text-2xl font-extrabold tracking-tight text-fg;
+  }
+  .h2-v2 {
+    @apply text-lg font-bold tracking-tight text-fg;
+  }
+  .h3-v2 {
+    @apply text-base font-bold tracking-tight text-fg;
+  }
+  /* Eyebrow — uppercase label above stats. */
+  .eyebrow-v2 {
+    @apply text-[11px] font-bold tracking-[0.08em] uppercase text-fg-subtle;
+  }
+
+  /* Tabular numerals — for stat values, IDs, money. */
+  .num-v2 {
+    @apply font-mono tabular-nums tracking-[-0.01em];
+  }
+
+  /* Hairline divider — theme-aware. */
+  .hairline-v2 {
+    @apply border-hairline;
+  }
+}
+
+/* ── Skeleton shimmer overlay ────────────────────────────────────────
+   Used by <Shimmer> motion primitive. The gradient slides across via
+   the `shimmer` keyframes defined in tailwind.config.js. The colors
+   come from CSS vars so the shimmer is visible in both themes. */
+.shimmer-v2 {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--shimmer-bg);
+}
+.shimmer-v2::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--shimmer-glow) 50%,
+    transparent 100%
+  );
+  animation: shimmer 1.6s linear infinite;
+}
+
+/* ── Focus-visible polish ────────────────────────────────────────────
+   Default browser focus rings are too thick; use the design-system
+   cyan glow instead. Only applies to keyboard focus (focus-visible),
+   so mouse clicks don't leave halos. */
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.32);
+  border-radius: 6px;
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   LIGHT-MODE OVERRIDES
+   ─────────────────────────────────────────────────────────────────
+   The dashboard was authored dark-first using literal Tailwind
+   utilities (e.g. `text-white`, `bg-midnight-500`, `border-white/5`).
+   Rather than touching every component, we override those specific
+   utility classes ONLY when the root is NOT `.dark`.
+
+   The `:root:not(.dark) .x` selector has one extra specificity over
+   `.x`, so it consistently wins regardless of source order. Inside
+   `.dark`, the original Tailwind colors apply.
+   ───────────────────────────────────────────────────────────────── */
+
+/* App / chrome surfaces — match the body bg (slate-50) so cards (pure
+   white) visibly lift off the chrome. */
+:root:not(.dark) .bg-midnight-500 { background-color: #f8fafc; }
+:root:not(.dark) .bg-midnight-500\/95 { background-color: rgba(248, 250, 252, 0.95); }
+:root:not(.dark) .bg-midnight-500\/80 { background-color: rgba(248, 250, 252, 0.85); }
+
+/* Translucent white overlays — used for cards/hover/dividers in dark */
+:root:not(.dark) .bg-white\/\[0\.02\] { background-color: rgba(15, 23, 42, 0.02); }
+:root:not(.dark) .bg-white\/\[0\.03\] { background-color: #ffffff; }
+:root:not(.dark) .bg-white\/5 { background-color: rgba(15, 23, 42, 0.04); }
+:root:not(.dark) .bg-white\/10 { background-color: rgba(15, 23, 42, 0.08); }
+:root:not(.dark) .bg-white\/20 { background-color: rgba(15, 23, 42, 0.12); }
+:root:not(.dark) .hover\:bg-white\/5:hover { background-color: rgba(15, 23, 42, 0.05); }
+:root:not(.dark) .hover\:bg-white\/10:hover { background-color: rgba(15, 23, 42, 0.08); }
+
+/* Borders, rings, dividers */
+:root:not(.dark) .border-white\/5 { border-color: rgba(15, 23, 42, 0.08); }
+:root:not(.dark) .border-white\/10 { border-color: rgba(15, 23, 42, 0.12); }
+:root:not(.dark) .border-white\/20 { border-color: rgba(15, 23, 42, 0.16); }
+:root:not(.dark) .divide-white\/5 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(15, 23, 42, 0.08);
+}
+:root:not(.dark) .ring-white\/5 { --tw-ring-color: rgba(15, 23, 42, 0.06); }
+:root:not(.dark) .ring-white\/10 { --tw-ring-color: rgba(15, 23, 42, 0.10); }
+:root:not(.dark) .ring-white\/20 { --tw-ring-color: rgba(15, 23, 42, 0.14); }
+:root:not(.dark) .ring-white\/30 { --tw-ring-color: rgba(15, 23, 42, 0.20); }
+
+/* Text */
+:root:not(.dark) .text-white { color: #0f172a; }
+:root:not(.dark) .text-slate-100 { color: #1e293b; }
+:root:not(.dark) .text-slate-200 { color: #1e293b; }
+:root:not(.dark) .text-slate-300 { color: #334155; }
+:root:not(.dark) .text-slate-400 { color: #475569; }
+:root:not(.dark) .text-slate-500 { color: #64748b; }
+:root:not(.dark) .placeholder\:text-slate-500::placeholder { color: #94a3b8; }
+:root:not(.dark) .hover\:text-white:hover { color: #0f172a; }
+
+/* Tinted accent bgs look dim over light gray — slightly bump them */
+:root:not(.dark) .bg-cyan-500\/15 { background-color: rgba(0, 217, 255, 0.14); }
+:root:not(.dark) .bg-gold-500\/15 { background-color: rgba(255, 215, 0, 0.18); }
+
+/* Page glow halos (top-right / left blur balls) — softer in light mode */
+:root:not(.dark) .bg-cyan-500\/10 { background-color: rgba(0, 217, 255, 0.10); }
+:root:not(.dark) .bg-gold-500\/5 { background-color: rgba(255, 215, 0, 0.08); }
+
+/* Recharts default tooltip — switch to a light tooltip skin in light mode.
+   Recharts inlines styles for the wrapper; we override the default class.
+   `!important` is needed because Recharts injects an inline background. */
+:root:not(.dark) .recharts-default-tooltip {
+  background-color: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #0f172a !important;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px -4px rgba(15, 23, 42, 0.12);
+}
+
+/* Recharts grid + axis lines hard-code a navy color (`#1a2942`) which is
+   too dark on white. CSS `stroke` overrides the SVG attribute. */
+:root:not(.dark) .recharts-cartesian-grid-horizontal line,
+:root:not(.dark) .recharts-cartesian-grid-vertical line {
+  stroke: #e2e8f0 !important;
+}
+
+/* Card-hover glow ring — slightly softer in light mode for less neon vibe */
+:root:not(.dark) .card-hover:hover {
+  box-shadow: 0 0 0 1px rgba(0, 217, 255, 0.20), 0 6px 24px -8px rgba(15, 23, 42, 0.10);
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   V2 LIGHT-MODE OVERRIDES
+   ─────────────────────────────────────────────────────────────────────
+   The v2 redesigned components (Sidebar, Header, StatCard, Dashboard,
+   etc.) use literal `bg-white/[0.04]` and `border-white/[0.06]`
+   utilities for hairlines + hover layers. Those are invisible on light
+   surfaces because white-on-white at 4% alpha = nothing.
+
+   Rather than refactor every file to use `bg-hairline` / `bg-line` /
+   etc., we flip these specific opacity stops to dark RGBA when the
+   root is NOT `.dark`. Same trick the legacy section above uses —
+   one extra specificity, no need to touch component code.
+   ───────────────────────────────────────────────────────────────────── */
+
+/* Backgrounds — translucent surface fills, hover overlays, dividers */
+:root:not(.dark) .bg-white\/\[0\.02\] { background-color: rgba(15, 23, 42, 0.02); }
+:root:not(.dark) .bg-white\/\[0\.03\] { background-color: rgba(15, 23, 42, 0.03); }
+:root:not(.dark) .bg-white\/\[0\.04\] { background-color: rgba(15, 23, 42, 0.04); }
+:root:not(.dark) .bg-white\/\[0\.05\] { background-color: rgba(15, 23, 42, 0.04); }
+:root:not(.dark) .bg-white\/\[0\.06\] { background-color: rgba(15, 23, 42, 0.05); }
+:root:not(.dark) .bg-white\/\[0\.08\] { background-color: rgba(15, 23, 42, 0.06); }
+
+/* Hover variants */
+:root:not(.dark) .hover\:bg-white\/\[0\.04\]:hover { background-color: rgba(15, 23, 42, 0.05); }
+:root:not(.dark) .hover\:bg-white\/\[0\.08\]:hover { background-color: rgba(15, 23, 42, 0.08); }
+
+/* Borders */
+:root:not(.dark) .border-white\/\[0\.06\] { border-color: rgba(15, 23, 42, 0.08); }
+:root:not(.dark) .border-white\/\[0\.08\] { border-color: rgba(15, 23, 42, 0.10); }
+:root:not(.dark) .border-white\/\[0\.10\] { border-color: rgba(15, 23, 42, 0.12); }
+:root:not(.dark) .border-white\/\[0\.12\] { border-color: rgba(15, 23, 42, 0.14); }
+:root:not(.dark) .border-white\/\[0\.16\] { border-color: rgba(15, 23, 42, 0.18); }
+
+/* Hover borders */
+:root:not(.dark) .hover\:border-white\/\[0\.12\]:hover { border-color: rgba(15, 23, 42, 0.14); }
+
+/* Rings */
+:root:not(.dark) .ring-white\/\[0\.06\] { --tw-ring-color: rgba(15, 23, 42, 0.06); }
+:root:not(.dark) .ring-white\/\[0\.08\] { --tw-ring-color: rgba(15, 23, 42, 0.08); }
+:root:not(.dark) .ring-white\/\[0\.10\] { --tw-ring-color: rgba(15, 23, 42, 0.10); }
+:root:not(.dark) .ring-white\/\[0\.12\] { --tw-ring-color: rgba(15, 23, 42, 0.12); }
+
+/* Dividers — using `divide-white/X` */
+:root:not(.dark) .divide-white\/\[0\.06\] > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(15, 23, 42, 0.08);
+}
+
+/* Card-hover shadow (v2) — softer drop shadow on white */
+:root:not(.dark) .hover\:shadow-hover:hover {
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+/* Brand-cyan tinted bg used on active nav, sub-bg, and tags — slightly
+   bump opacity on light to compensate for the brighter ambient. */
+:root:not(.dark) .bg-brand-cyan\/15 { background-color: rgba(34, 211, 238, 0.16); }
+:root:not(.dark) .bg-brand-cyan\/12 { background-color: rgba(34, 211, 238, 0.14); }
+:root:not(.dark) .bg-brand-gold\/15 { background-color: rgba(251, 191, 36, 0.18); }
+:root:not(.dark) .bg-brand-gold\/12 { background-color: rgba(251, 191, 36, 0.18); }
+
+/* Active sidebar bar — stays cyan on both; no override needed. */
+
+/* Scrollbar — slightly darker thumb on light. */
+:root:not(.dark) ::-webkit-scrollbar-thumb { background: #CBD5E1; }
+:root:not(.dark) ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }

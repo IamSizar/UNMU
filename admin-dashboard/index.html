@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0A1628" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f8fafc" media="(prefers-color-scheme: light)" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!--
+      Inter — UI font (all weights). 800/900 used for display headlines.
+      JetBrains Mono — numerals + IDs (tabular figures, ligatures off).
+      Noto Sans Arabic — Arabic glyph coverage (Inter has none). It sits
+      AFTER Inter in the font stack so Latin text stays Inter and only
+      Arabic codepoints fall through to it.
+      All load with display=swap so the page isn't blocked on font fetch.
+    -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+Arabic:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+      // Set theme synchronously before paint to avoid the light/dark flash
+      // ("FART"). Mirrors the logic in src/theme/ThemeContext.tsx.
+      (function () {
+        try {
+          var stored = localStorage.getItem('admin.theme');
+          var theme = stored === 'light' || stored === 'dark'
+            ? stored
+            : (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+          var root = document.documentElement;
+          root.classList.remove('light', 'dark');
+          root.classList.add(theme);
+          root.style.colorScheme = theme;
+        } catch (e) { /* keep default class */ }
+      })();
+    </script>
+    <title>UNMU Admin</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

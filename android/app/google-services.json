@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "589655176369",
+    "project_id": "unmuapp",
+    "storage_bucket": "unmuapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:589655176369:android:b4d14bbfee139112ed9e90",
+        "android_client_info": {
+          "package_name": "com.easytech.stocks"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "589655176369-qvm5o7dds9oagfvhernhropvepv7o27t.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBPAJ7f6aYLyRPXXzH7s8W0J3OUv-jDFeU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "589655176369-qvm5o7dds9oagfvhernhropvepv7o27t.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "589655176369-j7dqaq9mmunienrsb789tmem48g9p37o.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.easytech.stocksanalyzer"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

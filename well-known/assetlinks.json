@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.easytech.stocks",
+      "sha256_cert_fingerprints": [
+        "0F:26:49:F8:2B:FB:0D:2C:C5:25:57:A0:CF:F6:22:20:9D:43:06:8B:40:10:3D:B4:30:F3:36:BA:4D:23:B5:7E"
+      ]
+    }
+  }
+]

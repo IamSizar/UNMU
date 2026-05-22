@@ -1,0 +1,15 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["SBL65MNY44.com.easytech.stocksanalyzer"],
+        "components": [
+          {
+            "/": "/p/*",
+            "comment": "Match every post deep link, e.g. https://unmu.app/p/123"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,241 @@
+name: halalstocks
+description: "A new Flutter project."
+# The following line prevents the package from being accidentally published to
+# pub.dev using `flutter pub publish`. This is preferred for private packages.
+publish_to: "none" # Remove this line if you wish to publish to pub.dev
+
+# The following defines the version and build number for your application.
+# A version number is three numbers separated by dots, like 1.2.43
+# followed by an optional build number separated by a +.
+# Both the version and the builder number may be overridden in flutter
+# build by specifying --build-name and --build-number, respectively.
+# In Android, build-name is used as versionName while build-number used as versionCode.
+# Read more about Android versioning at https://developer.android.com/studio/publish/versioning
+# In iOS, build-name is used as CFBundleShortVersionString while build-number is used as CFBundleVersion.
+# Read more about iOS versioning at
+# https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
+# In Windows, build-name is used as the major, minor, and patch parts
+# of the product and file versions while build-number is used as the build suffix.
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.8.1 <4.0.0"
+
+# Dependencies specify other packages that your package needs in order to work.
+# To automatically upgrade your package dependencies to the latest versions
+# consider running `flutter pub upgrade --major-versions`. Alternatively,
+# dependencies can be manually updated by changing the version numbers below to
+# the latest version available on pub.dev. To see which dependencies have newer
+# versions available, run `flutter pub outdated`.
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # UI
+  cupertino_icons: ^1.0.8
+
+  # HTTP & State Management
+  http: ^1.1.0
+  get: ^4.6.6
+  web_socket_channel: ^2.4.0
+  # Allows clean full-app restart (used when role changes, so all GetX
+  # controllers + widget state rebuild from scratch).
+  flutter_phoenix: ^1.1.1
+
+  # Storage
+  shared_preferences: ^2.2.2
+
+  # Crypto — MD5 per chunk for upload integrity (Phase D)
+  crypto: ^3.0.3
+
+
+  # Localization
+  intl: ^0.20.2
+
+  # Charts
+  fl_chart: ^0.65.0
+
+  # Haptic Feedback
+  vibration: ^3.1.8
+  url_launcher: ^6.2.4
+  google_fonts: ^6.3.2
+
+  # Reels — video playback + file picker for uploading short clips.
+  video_player: ^2.9.2
+  file_picker: ^8.1.2
+  # Auto-generate a cover thumbnail at ~1s into the picked reel when the
+  # uploader doesn't provide one. Native iOS/Android frame extraction.
+  video_thumbnail: ^0.5.3
+  path_provider: ^2.1.4
+  # Pure-Dart visibility detection — used to pause reel playback when
+  # the user switches bottom-nav tabs (IndexedStack keeps offstage
+  # children alive otherwise, so audio would keep playing).
+  visibility_detector: ^0.4.0+2
+
+  # Image picker for editing the profile avatar
+  image_picker: ^1.0.7
+
+  # Markdown renderer for article bodies (mig 0020, item 4.17). We feed
+  # it a restricted subset (bold / italic / lists / links / blockquote)
+  # via custom syntax + element builders — code blocks, raw HTML, and
+  # image-via-syntax are dropped. flutter_markdown is the
+  # widely-maintained pub.dev option; it implements CommonMark on top
+  # of the `markdown` package.
+  flutter_markdown: ^0.7.4
+
+  # ── Voice messages in community chat ───────────────────────────
+  # `record` handles native audio recording (AAC/m4a, cross-platform).
+  # `audioplayers` handles playback for the chat bubbles.
+  #
+  # NOTE: record 5.x ships an out-of-sync record_linux (0.7.2) that
+  # doesn't implement the latest record_platform_interface — fails
+  # the iOS build at compile time even though Linux isn't a target.
+  # Pinned to ^6.0.0 (the major where all federated implementations
+  # are realigned) to keep the build green.
+  record: ^6.0.0
+  audioplayers: ^6.1.0
+
+  # Native share sheet — wraps iOS UIActivityViewController and Android
+  # Intent.ACTION_SEND so a single Share.share(text) call pops the OS
+  # share dialog with every messaging / mail / social app the user has.
+  share_plus: ^10.1.2
+
+  # Receive incoming deep-link URIs (cold-start + while-running) on iOS
+  # and Android. Drives DeepLinkService — when a shared `unmu.app/p/123`
+  # URL opens the app, this is what hands us the URI to route on.
+  app_links: ^6.3.2
+
+  # In-App Purchase — wraps StoreKit2 on iOS + Google Play Billing on
+  # Android with a single plugin API. We listen to purchaseStream, then
+  # POST the receipt blob to /api/me/iap/apple/verify (or future
+  # /google/verify) so the backend can validate with the store before
+  # flipping the user's subscription to active.
+  in_app_purchase: ^3.2.0
+
+  # ── Firebase + social sign-in ────────────────────────────────────────
+  # firebase_core is required by every other firebase_* package; it
+  # initializes the Firebase Dart layer once at app boot.
+  firebase_core: ^3.6.0
+  # FCM push notifications. We use this to get a per-device token that
+  # the backend will eventually save against the user row so the admin
+  # dashboard can broadcast to all devices.
+  firebase_messaging: ^15.1.3
+  # Crashlytics — uncaught Dart errors, native iOS/Android crashes, and
+  # ANRs stream to the Firebase console. Wired in main.dart via
+  # FlutterError.onError + PlatformDispatcher.instance.onError. Requires
+  # the com.google.firebase.crashlytics Gradle plugin on Android
+  # (configured in android/settings.gradle.kts + android/app/build.gradle.kts)
+  # and the auto-installed run-script phase on iOS (added by `pod install`).
+  firebase_crashlytics: ^4.1.3
+  # firebase_auth gives us the OAuth bridge (Google + Apple credentials
+  # → Firebase user → idToken). We then send the idToken to our backend,
+  # which verifies it with the Firebase Admin SDK and mints our own JWT.
+  firebase_auth: ^5.3.1
+  # Native Google Sign-In SDK — opens the system account picker on
+  # Android/iOS and returns an idToken/accessToken pair that we hand to
+  # firebase_auth.
+  google_sign_in: ^6.2.1
+  # Apple's "Sign In with Apple" flow — required by App Store policy
+  # whenever any third-party social login is offered on iOS. Returns an
+  # identity token that we feed into firebase_auth.
+  sign_in_with_apple: ^6.1.2
+
+  # App Tracking Transparency — wraps Apple's ATTrackingManager so we
+  # can request the system prompt before any IDFA-using SDK starts.
+  # No-op on Android. Required by App Store guideline 5.1.2 whenever
+  # the binary links the AppTrackingTransparency framework, even if we
+  # don't actively track today — pre-wiring this means we won't need a
+  # new submission when we later add an analytics SDK.
+  app_tracking_transparency: ^2.0.4+1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # The "flutter_lints" package below contains a set of recommended lints to
+  # encourage good coding practices. The lint set provided by the package is
+  # activated in the `analysis_options.yaml` file located at the root of your
+  # package. See that file for information about deactivating specific lint
+  # rules and activating additional ones.
+  flutter_lints: ^5.0.0
+
+  # Generates platform-specific app icons (Android/iOS) from one source PNG.
+  # Run with: dart run flutter_launcher_icons
+  flutter_launcher_icons: ^0.14.1
+
+  # Generates the OS-level launch screen (the native one that shows
+  # BEFORE Flutter has booted). Run with: dart run flutter_native_splash:create
+  flutter_native_splash: ^2.4.1
+
+# App-icon generator config — re-run `dart run flutter_launcher_icons`
+# any time the source images change.
+flutter_launcher_icons:
+  android: true
+  ios: true
+  # Square logo (1398x1398, padded) — used for both stores.
+  image_path: "assets/branding/unmu_icon.png"
+  # iOS rejects transparent icons; use the opaque-white variant.
+  image_path_ios: "assets/branding/unmu_icon_ios.png"
+  remove_alpha_ios: true
+  # Android adaptive icon: opaque background + transparent foreground.
+  # The teal arch + wordmark fall inside the safe-zone of the foreground.
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/branding/unmu_icon_foreground.png"
+
+# Native splash — shown by the OS before Flutter boots. We then transition
+# into the Flutter SplashScreen widget which fades to the main app.
+#
+# IMPORTANT: the wordmark PNG has BLACK "unmu" text. On a dark splash bg
+# those letters disappear. So both light + dark modes use a white-ish
+# background here to keep the logo readable. The Flutter splash widget
+# matches with a pale-cyan / white gradient.
+flutter_native_splash:
+  color: "#FFFFFF"
+  image: "assets/branding/unmu_wordmark.png"
+  color_dark: "#FFFFFF"
+  image_dark: "assets/branding/unmu_wordmark.png"
+  android_12:
+    image: "assets/branding/unmu_icon.png"
+    color: "#FFFFFF"
+    image_dark: "assets/branding/unmu_icon.png"
+    color_dark: "#FFFFFF"
+  android: true
+  ios: true
+
+# For information on the generic Dart part of this file, see the
+# following page: https://dart.dev/tools/pub/pubspec
+
+# The following section is specific to Flutter packages.
+flutter:
+  # The following line ensures that the Material Icons font is
+  # included with your application, so that you can use the icons in
+  # the material Icons class.
+  uses-material-design: true
+
+  # Brand assets — app icon (square), wordmark (horizontal), and the
+  # icon variants used by flutter_launcher_icons / flutter_native_splash.
+  # Adding the folder (not individual files) so future variants don't
+  # need pubspec edits.
+  assets:
+    - assets/branding/
+
+  # An image asset can refer to one or more resolution-specific "variants", see
+  # https://flutter.dev/to/resolution-aware-images
+
+  # For details regarding adding assets from package dependencies, see
+  # https://flutter.dev/to/asset-from-package
+
+  # To add custom fonts to your application, add a fonts section here,
+  # in this "flutter" section. Each entry in this list should have a
+  # "family" key with the font family name, and a "fonts" key with a
+  # list giving the asset and other descriptors for the font. For
+  # example:
+  fonts:
+    - family: Medel
+      fonts:
+        - asset: assets/fonts/Medel.ttf
+    - family: Kurdfont
+      fonts:
+        - asset: assets/fonts/Kurdfont.ttf
