@@ -31,6 +31,13 @@ class NotificationsController extends GetxController {
   int get unreadCount => _unreadCount.value;
   bool get loading => _loading.value;
 
+  /// Push an authoritative unread count. The unified [InboxScreen] owns the
+  /// read actions (mark-one / mark-all via [InboxService]), so it calls this
+  /// after every change to keep the bell badge in lock-step with what the
+  /// user just did — no refetch round-trip, no drift between the two places
+  /// that show the count (the bell + the inbox header).
+  void setUnreadCount(int n) => _unreadCount.value = n < 0 ? 0 : n;
+
   @override
   void onInit() {
     super.onInit();

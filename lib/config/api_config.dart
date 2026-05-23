@@ -13,7 +13,7 @@ class ApiConfig {
   /// move to a different Wi-Fi or your router hands out a new DHCP lease.
   /// Used for real-device builds (iPhone / physical Android) so the phone
   /// can reach the laptop on the same Wi-Fi.
-  static const String devMacLanIp = '192.168.0.107';
+  static const String devMacLanIp = '192.168.1.75';
 
   static String get baseUrl {
     if (!useLocalBackend) return railwayUrl;

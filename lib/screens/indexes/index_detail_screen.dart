@@ -637,7 +637,9 @@ class _DetailedChart extends StatelessWidget {
                 if (index >= 0 && index < chartDates.length) {
                   try {
                     final date = DateTime.parse(chartDates[index]);
-                    dateLabel = LocaleFormat.time(date);
+                    // Daily closes → show the real DATE (e.g. "22 May 2026"),
+                    // not a time-of-day (which would always be 00:00).
+                    dateLabel = LocaleFormat.date(date);
                   } catch (_) {}
                 }
 

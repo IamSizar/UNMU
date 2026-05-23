@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import '../../controllers/stocks_controller.dart';
 import '../../widgets/fear_and_greed_card.dart';
 import '../../widgets/index_card.dart';
+import '../../widgets/skeleton_loaders.dart';
 import '../../widgets/platform_adaptive/platform_app_bar.dart';
 import '../../controllers/auth_controller.dart';
 import '../../widgets/ads/banner_ad_widget.dart';
@@ -82,31 +83,43 @@ class _IndexesScreenState extends State<IndexesScreen> {
                     // free tier only saw "Benchmarks" with a lock-icon
                     // upsell card below; that gating was removed so the
                     // indexes surface is fully open.
-                    ...categories.entries.map((entry) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                            child: Text(
-                              _localizeCategory(entry.key).toUpperCase(),
-                              style: theme.textTheme.titleSmall?.copyWith(
-                                color: Colors.grey,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 1.2,
+                    // Loading: marketIndexes is empty until the first fetch
+                    // resolves — show shimmer skeletons that match the loaded
+                    // layout (no content-shift) instead of blank space.
+                    if (provider.marketIndexes.isEmpty)
+                      const IndexListSkeleton()
+                    else
+                      ...categories.entries.map((entry) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
+                              child: Text(
+                                _localizeCategory(entry.key).toUpperCase(),
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  color: Colors.grey,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1.2,
+                                ),
                               ),
                             ),
-                          ),
-                          ...entry.value.map(
-                            (index) => IndexCard(index: index),
-                          ),
-                          const SizedBox(height: 16),
-                        ],
-                      );
-                    }),
+                            // Stagger the real cards in (Framer-Motion
+                            // staggerChildren) for a polished reveal once
+                            // data arrives.
+                            ...entry.value.asMap().entries.map(
+                                  (e) => StaggeredReveal(
+                                    index: e.key,
+                                    child: IndexCard(index: e.value),
+                                  ),
+                                ),
+                            const SizedBox(height: 16),
+                          ],
+                        );
+                      }),
 
                     const SizedBox(height: 100), // Bottom padding for tab bar
                   ]),

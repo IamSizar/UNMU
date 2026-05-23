@@ -8,6 +8,7 @@ import '../../screens/stock_detail/stock_detail_screen.dart';
 import '../../utils/haptic_utils.dart';
 import '../../widgets/ads/banner_ad_widget.dart';
 import '../../widgets/stock_card.dart';
+import '../../widgets/skeleton_loaders.dart';
 
 /// =============================================================================
 /// Discover Screen — editorial bento redesign.
@@ -90,20 +91,6 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
             fontWeight: FontWeight.w800,
           ),
         ),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.search_rounded, color: palette.textPrimary),
-            onPressed: _openSearch,
-          ),
-          IconButton(
-            icon: Icon(
-              Icons.notifications_none_rounded,
-              color: palette.textPrimary,
-            ),
-            onPressed: () {},
-          ),
-          const SizedBox(width: 4),
-        ],
       ),
       body: Obx(() {
         final provider = Get.find<StocksController>();
@@ -184,12 +171,12 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                 ),
                 // ── List body ──
                 if (provider.isLoading)
-                  const SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: Center(
-                      child: CircularProgressIndicator(
-                        color: SocialTokens.cyan,
-                      ),
+                  // Shimmer skeletons that match the loaded StockCard layout —
+                  // no content-shift, far nicer than a centered spinner.
+                  const SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.only(top: 8),
+                      child: StockListSkeleton(),
                     ),
                   )
                 else if (provider.error != null)

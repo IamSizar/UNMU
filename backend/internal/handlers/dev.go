@@ -76,6 +76,7 @@ func (h *DevHandler) ListUsers(c *gin.Context) {
 		       email_verified_at IS NOT NULL,
 		       created_at::text
 		FROM users
+		WHERE deleted_at IS NULL
 		ORDER BY id DESC
 	`)
 	if err != nil {

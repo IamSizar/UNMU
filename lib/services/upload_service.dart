@@ -72,41 +72,66 @@ class UploadService {
 
   static Future<({String? url, String? error})> _upload(
       File file, String path) async {
-    try {
-      final token = await AuthService.getToken();
-      if (token == null || token.isEmpty) {
-        return (url: null, error: 'Not signed in.');
-      }
-
-      final uri = Uri.parse('$_base$path');
-      final request = http.MultipartRequest('POST', uri)
-        ..headers['Authorization'] = 'Bearer $token'
-        ..files.add(await http.MultipartFile.fromPath('file', file.path));
-
-      final streamed = await request.send();
-      final response = await http.Response.fromStream(streamed);
-
-      if (response.statusCode == 401) {
-        await Get.find<AuthController>().handleAuthFailure();
-        return (url: null, error: 'Session expired — please sign in again.');
-      }
-      if (response.statusCode == 200) {
-        final body = json.decode(response.body) as Map<String, dynamic>;
-        final relative = body['url'] as String? ?? '';
-        if (relative.isEmpty) {
-          return (url: null, error: 'Server returned no URL.');
-        }
-        // Return the relative path as-is. ExpertPost.fromJson resolves
-        // it to the current origin when the post is fetched back.
-        return (url: relative, error: null);
-      }
-      // Try to surface the backend's error message for size / type errors.
-      final err = _safeDecode(response.body)['error']?.toString() ??
-          'Upload failed (${response.statusCode}).';
-      return (url: null, error: err);
-    } catch (e) {
-      return (url: null, error: 'Connection error: $e');
+    final token = await AuthService.getToken();
+    if (token == null || token.isEmpty) {
+      return (url: null, error: 'Not signed in.');
     }
+    final uri = Uri.parse('$_base$path');
+
+    // Retry with a hard timeout so a stalled connection FAILS FAST and
+    // retries instead of hanging the picker forever (the old behavior —
+    // request.send() had no timeout, so a dropped cell signal froze the
+    // cover/thumbnail/image upload indefinitely with no recovery).
+    const maxAttempts = 3;
+    String? lastError;
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        // Rebuild every attempt — a sent MultipartRequest + its file
+        // stream can't be replayed.
+        final request = http.MultipartRequest('POST', uri)
+          ..headers['Authorization'] = 'Bearer $token'
+          ..files.add(await http.MultipartFile.fromPath('file', file.path));
+
+        final streamed =
+            await request.send().timeout(const Duration(seconds: 120));
+        final response = await http.Response.fromStream(streamed);
+
+        if (response.statusCode == 401) {
+          await Get.find<AuthController>().handleAuthFailure();
+          return (url: null, error: 'Session expired — please sign in again.');
+        }
+        if (response.statusCode == 200) {
+          final body = json.decode(response.body) as Map<String, dynamic>;
+          final relative = body['url'] as String? ?? '';
+          if (relative.isEmpty) {
+            return (url: null, error: 'Server returned no URL.');
+          }
+          // Return the relative path as-is. ExpertPost.fromJson resolves
+          // it to the current origin when the post is fetched back.
+          return (url: relative, error: null);
+        }
+        // 4xx = client error (too big / wrong type) — don't retry.
+        if (response.statusCode >= 400 && response.statusCode < 500) {
+          return (
+            url: null,
+            error: _safeDecode(response.body)['error']?.toString() ??
+                'Upload failed (${response.statusCode}).',
+          );
+        }
+        // 5xx — transient; retry.
+        lastError = 'Upload failed (${response.statusCode}).';
+      } on TimeoutException {
+        lastError = 'Upload timed out — check your connection and retry.';
+      } catch (e) {
+        lastError = 'Connection error: $e';
+      }
+      if (attempt < maxAttempts) {
+        await Future<void>.delayed(
+          Duration(milliseconds: 400 * (attempt * attempt)),
+        );
+      }
+    }
+    return (url: null, error: lastError ?? 'Upload failed.');
   }
 
   static Map<String, dynamic> _safeDecode(String s) {
@@ -653,13 +678,15 @@ class UploadService {
         // No Content-MD5 either — S3 only accepts it if it was part of
         // the signed headers (see doc comment above).
         //
-        // 300 s per-part timeout — a 10 MB part on slow cellular
-        // (~500 kbps) takes ~160 s end-to-end; we want generous
-        // headroom for TLS warm-up and tower retries before the
-        // request-level retry kicks in.
+        // 180 s per-part timeout. A 10 MB part needs ~0.45 Mbps to fit;
+        // virtually every connection clears that, so this still tolerates
+        // slow cellular — but it recovers from a genuinely STALLED part
+        // (0 bytes moving) in 3 min instead of 5, which is what made the
+        // progress bar look "frozen". The 3-attempt retry + on-disk
+        // resume below pick up any part that does trip the timeout.
         final response = await http
             .put(Uri.parse(url), body: bytes)
-            .timeout(const Duration(seconds: 300));
+            .timeout(const Duration(seconds: 180));
         if (response.statusCode == 200) {
           final etag = response.headers['etag'];
           if (etag == null || etag.isEmpty) {

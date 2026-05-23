@@ -27,6 +27,7 @@ type Config struct {
 	StockAPIProvider string
 	AlphaVantageAPIKey string // For Alpha Vantage provider
 	DataJockeyAPIKey string   // For DataJockey provider
+	EODHDAPIKey      string   // For EODHD provider (eodhd.com)
 
 	// AI Service
 	AIServiceURL string
@@ -70,6 +71,7 @@ func Load() (*Config, error) {
 		StockAPIProvider:   getEnv("STOCK_API_PROVIDER", "alphavantage"), // Default to Alpha Vantage
 		AlphaVantageAPIKey: getEnv("ALPHA_VANTAGE_API_KEY", ""),
 		DataJockeyAPIKey:   getEnv("DATAJOCKEY_API_KEY", ""),
+		EODHDAPIKey:        getEnv("EODHD_API_KEY", ""),
 
 		// AI Service
 		AIServiceURL: getEnv("AI_SERVICE_URL", "http://localhost:8000"),
@@ -101,6 +103,10 @@ func Load() (*Config, error) {
 	} else if cfg.StockAPIProvider == "datajockey" {
 		if cfg.DataJockeyAPIKey == "" {
 			return nil, fmt.Errorf("DATAJOCKEY_API_KEY is required when using DataJockey provider")
+		}
+	} else if cfg.StockAPIProvider == "eodhd" {
+		if cfg.EODHDAPIKey == "" {
+			return nil, fmt.Errorf("EODHD_API_KEY is required when using EODHD provider")
 		}
 	}
 

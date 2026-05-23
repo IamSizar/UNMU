@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
+import '../../controllers/notifications_controller.dart';
 import '../../controllers/realtime_controller.dart';
 import '../../localization/locale_format.dart';
 import '../../models/inbox_item.dart';
@@ -63,6 +64,20 @@ class _InboxScreenState extends State<InboxScreen>
       _unread = res.unreadCount;
       _error = res.error;
     });
+    _syncBadge();
+  }
+
+  /// Keep the bell badge (NotificationsController) in lock-step with the
+  /// inbox's unread count — one source of truth, so the two places that
+  /// show the count never drift and the badge clears the instant a row is
+  /// read here.
+  void _syncBadge() {
+    try {
+      Get.find<NotificationsController>().setUnreadCount(_unread);
+    } catch (_) {
+      // Controller not registered — ignore; the bell reconciles on its
+      // own next reload.
+    }
   }
 
   /// Listen for `notification_created` events so the inbox updates
@@ -97,6 +112,7 @@ class _InboxScreenState extends State<InboxScreen>
           .toList();
       _unread = (_unread - 1).clamp(0, 1 << 30);
     });
+    _syncBadge();
     final ok = await InboxService.markRead(item.source, item.id);
     if (!ok && mounted) {
       // Rollback the optimistic patch — the row stays unread.
@@ -113,6 +129,7 @@ class _InboxScreenState extends State<InboxScreen>
           .toList();
       _unread = 0;
     });
+    _syncBadge();
     final ok = await InboxService.markAllRead();
     if (!ok && mounted) _load();
   }
@@ -482,6 +499,13 @@ class _InboxRow extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
             decoration: BoxDecoration(
+              // Unread rows get a faint wash of the kind's color (heart-pink
+              // for likes, cyan for comments, …) so they're scannable at a
+              // glance; read rows stay plain (and are dimmed by the Opacity
+              // wrapper above).
+              color: item.isRead
+                  ? null
+                  : style.color.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
                 color: item.isRead

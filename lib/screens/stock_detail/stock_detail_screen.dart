@@ -872,17 +872,11 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                   if (translatedExplanation != null) const SizedBox(height: 16),
                 ],
                 if (translatedExplanation != null)
-                  Text(
+                  _buildExplanationBlock(
                     translatedExplanation,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: isDark
-                          ? HalalFintechTheme.textSecondaryDark
-                          : HalalFintechTheme.textSecondaryLight,
-                      height: 1.6,
-                    ),
-                    textDirection: isArabic
-                        ? TextDirection.rtl
-                        : TextDirection.ltr,
+                    isDark,
+                    theme,
+                    isArabic,
                   ),
               ],
             ),
@@ -891,6 +885,88 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
         ],
       ),
     );
+  }
+
+  /// Renders the Shariah explanation as clean, readable text. The backend
+  /// stores it as a raw ASCII report (==== separators, "1. SECTION:" numbering,
+  /// indented "Key: Value" lines) which reads like a terminal dump. This strips
+  /// the decorations and styles section headers vs body lines as normal text.
+  Widget _buildExplanationBlock(
+    String raw,
+    bool isDark,
+    ThemeData theme,
+    bool isArabic,
+  ) {
+    final sepRe = RegExp(r'^[=\-_\s]+$'); // separator-only lines
+    final numRe = RegExp(r'^\s*\d+[\.\)]\s*'); // leading "1. " / "2) "
+    final primary = isDark
+        ? HalalFintechTheme.textPrimaryDark
+        : HalalFintechTheme.textPrimaryLight;
+    final secondary = isDark
+        ? HalalFintechTheme.textSecondaryDark
+        : HalalFintechTheme.textSecondaryLight;
+    final dir = isArabic ? TextDirection.rtl : TextDirection.ltr;
+
+    bool isTitleLine(String l) =>
+        l.startsWith('Sharia Compliance Analysis') ||
+        l.startsWith('تحليل الامتثال الشرعي');
+
+    final blocks = <Widget>[];
+    for (final rawLine in raw.split('\n')) {
+      final line = rawLine.trim();
+      if (line.isEmpty || sepRe.hasMatch(line) || isTitleLine(line)) continue;
+
+      final hadNumber = numRe.hasMatch(line);
+      final stripped = line.replaceFirst(numRe, '').trim();
+      final isUpperLatin = stripped == stripped.toUpperCase() &&
+          RegExp(r'[A-Z]').hasMatch(stripped);
+      final isHeading = hadNumber || (stripped.endsWith(':') && isUpperLatin);
+
+      if (isHeading) {
+        blocks.add(Padding(
+          padding: EdgeInsets.only(top: blocks.isEmpty ? 0 : 16, bottom: 8),
+          child: Text(
+            _titleCaseIfUpper(stripped.replaceAll(':', '').trim()),
+            textDirection: dir,
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: primary,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.2,
+            ),
+          ),
+        ));
+      } else {
+        blocks.add(Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Text(
+            stripped,
+            textDirection: dir,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: secondary,
+              height: 1.55,
+            ),
+          ),
+        ));
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: blocks,
+    );
+  }
+
+  /// "BUSINESS ACTIVITY SCREENING" → "Business Activity Screening". Leaves
+  /// already-cased text and Arabic (no Latin caps) untouched.
+  String _titleCaseIfUpper(String s) {
+    if (s != s.toUpperCase() || !RegExp(r'[A-Z]').hasMatch(s)) return s;
+    return s
+        .toLowerCase()
+        .split(' ')
+        .map((w) => w.isEmpty
+            ? w
+            : '${w[0].toUpperCase()}${w.substring(1)}')
+        .join(' ');
   }
 
   Widget _buildReasonText(
