@@ -41,6 +41,10 @@ const Map<String, String> reelsVideoEn = {
   'videoPlayer.unlockControls': 'Unlock controls',
   'videoPlayer.mute': 'Mute',
   'videoPlayer.unmute': 'Unmute',
+  'videoPlayer.play': 'Play',
+  'videoPlayer.pause': 'Pause',
+  'videoPlayer.quality': 'Quality',
+  'videoPlayer.auto': 'Auto',
   'videoPlayer.enterLandscape': 'Enter landscape',
   'videoPlayer.exitLandscape': 'Exit landscape',
 };
@@ -78,6 +82,10 @@ const Map<String, String> reelsVideoAr = {
   'videoPlayer.unlockControls': 'إلغاء قفل عناصر التحكم',
   'videoPlayer.mute': 'كتم الصوت',
   'videoPlayer.unmute': 'إلغاء الكتم',
+  'videoPlayer.play': 'تشغيل',
+  'videoPlayer.pause': 'إيقاف مؤقت',
+  'videoPlayer.quality': 'الجودة',
+  'videoPlayer.auto': 'تلقائي',
   'videoPlayer.enterLandscape': 'العرض الأفقي',
   'videoPlayer.exitLandscape': 'إنهاء العرض الأفقي',
 };

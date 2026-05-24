@@ -95,6 +95,7 @@ export default function Settings() {
   const tabs = [
     { id: 'profile', label: t('settings.tabProfile') },
     { id: 'preferences', label: t('settings.tabPreferences') },
+    { id: 'features', label: 'Features' },
     { id: 'notifications', label: t('settings.tabNotifications') },
     { id: 'security', label: t('settings.tabSecurity') },
     { id: 'team', label: t('settings.tabTeam') },
@@ -132,6 +133,7 @@ export default function Settings() {
         <div className="p-4 sm:p-6">
           {tab === 'profile' && <ProfileForm />}
           {tab === 'preferences' && <PreferencesForm />}
+          {tab === 'features' && <FeaturesForm />}
           {tab === 'notifications' && <NotificationsForm />}
           {tab === 'security' && <SecurityForm />}
           {tab === 'team' && <Placeholder title={t('settings.teamManagement')} />}
@@ -436,6 +438,142 @@ function PreferencesForm() {
           </span>
         )}
       </div>
+    </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Features — admin feature flags. The community kill-switch: one master
+// toggle turns the entire community system off (browsing, joining, chats,
+// posts) for every user; chat + posts sub-toggles for finer control.
+// Wired to GET/PATCH /admin/settings. Optimistic flip + rollback on error.
+// Nothing is deleted — disabling just blocks access; flip back on to restore.
+// ────────────────────────────────────────────────────────────────────
+
+function FeaturesForm() {
+  const [flags, setFlags] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [saving, setSaving] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    api
+      .get('/admin/settings')
+      .then((f) => {
+        if (!cancelled) {
+          setFlags(f)
+          setLoading(false)
+        }
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setError(e instanceof ApiError ? e.message : 'Failed to load settings')
+          setLoading(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  async function toggle(key, next) {
+    if (!flags) return
+    const previous = flags
+    setFlags({ ...flags, [key]: next })
+    setSaving(key)
+    try {
+      const updated = await api.patch('/admin/settings', { [key]: next })
+      setFlags(updated)
+    } catch (e) {
+      setFlags(previous)
+      setError(e instanceof ApiError ? e.message : 'Failed to save setting')
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-slate-400">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        Loading…
+      </div>
+    )
+  }
+
+  const items = [
+    {
+      key: 'communityEnabled',
+      title: 'Communities',
+      desc: 'Master switch — turns ALL community features off for every user (browsing, joining, chats, posts).',
+      master: true,
+    },
+    {
+      key: 'communityChatEnabled',
+      title: 'Community chat',
+      desc: 'Sending / reading messages and polls inside communities.',
+    },
+    {
+      key: 'communityPostsEnabled',
+      title: 'Community posts',
+      desc: 'Creating and viewing posts inside communities.',
+    },
+  ]
+
+  return (
+    <div className="space-y-3 max-w-2xl">
+      <div className="rounded-md bg-cyan-500/[0.06] ring-1 ring-cyan-500/20 px-3 py-2 text-xs text-cyan-200/90 leading-relaxed">
+        Turn the whole community system on or off in one click. Nothing is
+        deleted — disabling just hides &amp; blocks it for users; flip it back
+        on to restore everything exactly as it was.
+      </div>
+      {error && (
+        <div className="rounded-md bg-rose-500/10 ring-1 ring-rose-500/30 px-3 py-2 text-rose-300 text-xs flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <div className="flex-1">{error}</div>
+          <button
+            onClick={() => setError(null)}
+            className="text-rose-300 hover:text-rose-200"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+      {items.map((it) => {
+        const value = !!flags?.[it.key]
+        // Sub-toggles are moot when the master is off — dim + disable them.
+        const disabled = !it.master && flags?.communityEnabled === false
+        return (
+          <div
+            key={it.key}
+            className={`flex items-start justify-between gap-3 p-3 sm:p-4 rounded-xl bg-white/[0.02] border transition-opacity ${
+              it.master ? 'border-cyan-500/20' : 'border-white/5'
+            } ${disabled ? 'opacity-50' : ''}`}
+          >
+            <div className="min-w-0">
+              <p className="font-medium text-white flex items-center gap-2">
+                {it.title}
+                {it.master && (
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-cyan-400">
+                    Master
+                  </span>
+                )}
+              </p>
+              <p className="text-sm text-slate-400">{it.desc}</p>
+            </div>
+            {saving === it.key ? (
+              <Loader2 className="w-5 h-5 animate-spin text-cyan-400 shrink-0" />
+            ) : (
+              <Toggle
+                on={value}
+                onChange={(v) => toggle(it.key, v)}
+                disabled={disabled}
+              />
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }

@@ -7,6 +7,7 @@ import 'dart:async';
 
 import '../../config/api_config.dart';
 import '../../localization/locale_format.dart';
+import '../../utils/responsive.dart';
 import '../../controllers/auth_controller.dart';
 import '../../controllers/language_controller.dart';
 import '../../controllers/realtime_controller.dart';
@@ -2255,8 +2256,9 @@ class _CommunityReelsTab extends StatelessWidget {
     return GridView.builder(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
       physics: const BouncingScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        // iPad: more columns, same 4:5 tile shape.
+        crossAxisCount: context.responsive(phone: 2, tablet: 3, large: 4),
         childAspectRatio: 4 / 5,
         crossAxisSpacing: 10,
         mainAxisSpacing: 10,

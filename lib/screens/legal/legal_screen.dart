@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../controllers/language_controller.dart';
+import '../../utils/responsive.dart';
 import '../social/social_tokens.dart';
 import 'legal_content.dart';
 
@@ -45,12 +46,16 @@ class LegalScreen extends StatelessWidget {
         iconTheme: IconThemeData(color: palette.textPrimary),
       ),
       body: SafeArea(
-        child: Markdown(
-          data: source,
-          padding: const EdgeInsets.fromLTRB(18, 8, 18, 28),
-          selectable: true,
-          onTapLink: (text, href, title) => _openLink(href),
-          styleSheet: _styleSheet(palette),
+        // iPad: cap the reading column so long legal text doesn't span the
+        // full width. Phone: untouched (MaxWidthBox is a pass-through).
+        child: MaxWidthBox(
+          child: Markdown(
+            data: source,
+            padding: const EdgeInsets.fromLTRB(18, 8, 18, 28),
+            selectable: true,
+            onTapLink: (text, href, title) => _openLink(href),
+            styleSheet: _styleSheet(palette),
+          ),
         ),
       ),
     );

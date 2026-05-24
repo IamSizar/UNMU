@@ -12,6 +12,7 @@ import '../../controllers/auth_controller.dart';
 import '../../screens/social/social_tokens.dart';
 import '../../services/upload_service.dart';
 import '../../utils/haptic_utils.dart';
+import '../../utils/responsive.dart';
 import '../../widgets/auth/auth_widgets.dart';
 
 /// =============================================================================
@@ -242,7 +243,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         child: DismissKeyboardOnTap(
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+          padding: EdgeInsets.fromLTRB(
+              context.centeringHPad(contentWidth: 560), 8,
+              context.centeringHPad(contentWidth: 560), 28),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [

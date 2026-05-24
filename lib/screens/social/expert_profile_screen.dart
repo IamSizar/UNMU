@@ -6,6 +6,7 @@ import '../../controllers/auth_controller.dart';
 import '../../controllers/expert_profile_controller.dart';
 import '../../localization/locale_format.dart';
 import '../../controllers/subscription_controller.dart';
+import '../../utils/responsive.dart';
 import '../../models/expert_post.dart' as live_post;
 import '../../models/expert_subscription.dart';
 import '../../services/community_service.dart';
@@ -1076,6 +1077,7 @@ class _LivePostCard extends StatelessWidget {
         HapticFeedback.lightImpact();
         Get.to(() => ReelPlayerScreen(
               mediaUrl: post.mediaUrl!,
+              qualityVariants: post.videoVariants,
               coverUrl: post.coverUrl,
               title: post.title,
               authorName: post.authorName,
@@ -1516,8 +1518,9 @@ class _ReelsTab extends StatelessWidget {
     return GridView.builder(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       physics: const BouncingScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        // iPad: more columns, same 9:14 tile shape (no aspect glitch).
+        crossAxisCount: context.responsive(phone: 3, tablet: 5, large: 6),
         childAspectRatio: 9 / 14,
         crossAxisSpacing: 10,
         mainAxisSpacing: 10,

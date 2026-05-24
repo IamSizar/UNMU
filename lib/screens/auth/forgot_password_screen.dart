@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 
 import '../../services/auth_service.dart';
 import '../../utils/haptic_utils.dart';
+import '../../utils/responsive.dart';
 import '../../widgets/auth/auth_widgets.dart';
 import '../../widgets/dismiss_keyboard_on_tap.dart';
 import '../social/social_tokens.dart';
@@ -98,7 +99,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         child: DismissKeyboardOnTap(
           child: SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
+            padding: EdgeInsets.fromLTRB(context.centeringHPad(),
+                8, context.centeringHPad(), 28),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [

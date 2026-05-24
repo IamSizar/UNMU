@@ -108,6 +108,11 @@ const Map<String, String> profileAccountEn = {
   'account.notificationPrefs': 'Notification preferences',
   'account.changePassword': 'Change password',
   'account.changeEmail': 'Change email',
+  'account.clearCache': 'Clear cache',
+  'account.clearCacheBody':
+      'This frees @size of cached media & temporary files. Your account and saved data stay safe.',
+  'account.clearCacheConfirm': 'Clear',
+  'account.clearCacheDone': 'Cleared @size',
   'account.deleteAccount': 'Delete account',
 
   // ── Change email flow ──
@@ -236,6 +241,11 @@ const Map<String, String> profileAccountAr = {
   'account.notificationPrefs': 'تفضيلات الإشعارات',
   'account.changePassword': 'تغيير كلمة المرور',
   'account.changeEmail': 'تغيير البريد',
+  'account.clearCache': 'مسح التخزين المؤقت',
+  'account.clearCacheBody':
+      'سيؤدي هذا إلى تحرير @size من الوسائط المؤقتة والملفات المخزّنة مؤقتاً. يبقى حسابك وبياناتك المحفوظة آمنة.',
+  'account.clearCacheConfirm': 'مسح',
+  'account.clearCacheDone': 'تم تحرير @size',
   'account.deleteAccount': 'حذف الحساب',
 
   // ── Change email flow ──

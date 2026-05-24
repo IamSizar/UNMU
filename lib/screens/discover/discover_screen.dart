@@ -6,6 +6,7 @@ import '../../screens/discover/search_screen.dart';
 import '../../screens/social/social_tokens.dart';
 import '../../screens/stock_detail/stock_detail_screen.dart';
 import '../../utils/haptic_utils.dart';
+import '../../utils/responsive.dart';
 import '../../widgets/ads/banner_ad_widget.dart';
 import '../../widgets/stock_card.dart';
 import '../../widgets/skeleton_loaders.dart';
@@ -195,7 +196,10 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                     child: _EmptyState(palette: palette, message: 'common.empty'.tr),
                   )
                 else
-                  SliverList.builder(
+                  // iPad: 2–3 columns of stock cards; phone: unchanged
+                  // single column (helper returns a plain SliverList at 1 col).
+                  sliverResponsiveCards(
+                    context: context,
                     itemCount: provider.stocks.length,
                     itemBuilder: (_, i) {
                       final stock = provider.stocks[i];

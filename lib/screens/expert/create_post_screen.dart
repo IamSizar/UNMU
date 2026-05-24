@@ -7,7 +7,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart';
 import 'package:video_thumbnail/video_thumbnail.dart' as vt;
 
+import '../../controllers/app_config_controller.dart';
 import '../../controllers/auth_controller.dart';
+import '../../controllers/upload_controller.dart';
 import '../../models/expert_post.dart';
 import '../../screens/social/mock_social_data.dart' as mock;
 import '../../screens/social/social_tokens.dart';
@@ -15,6 +17,7 @@ import '../../services/community_service.dart';
 import '../../services/expert_post_service.dart';
 import '../../services/upload_service.dart';
 import '../../utils/haptic_utils.dart';
+import '../../utils/responsive.dart';
 import '../../widgets/dismiss_keyboard_on_tap.dart';
 
 /// Composer for a new expert post — pick **type** first (article / video /
@@ -99,9 +102,35 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   /// picker tile + the "Replace" affordance for overriding it.
   bool _coverIsAuto = false;
 
+  // Global background-upload manager + listeners that mirror its progress
+  // and result back into this screen, so the inline tile and the global
+  // UploadStatusPill stay in sync — and the upload keeps running if the
+  // user leaves this screen mid-upload.
+  late final UploadController _uploadCtrl;
+  Worker? _progWorker;
+  Worker? _phaseWorker;
+
   @override
   void initState() {
     super.initState();
+    _uploadCtrl = Get.find<UploadController>();
+    _uploadingVideo = _uploadCtrl.isActive;
+    _progWorker = ever<double>(_uploadCtrl.progress, (p) {
+      if (mounted) setState(() => _videoUploadProgress = p);
+    });
+    _phaseWorker = ever<UploadPhase>(_uploadCtrl.phase, (ph) {
+      if (!mounted) return;
+      setState(() {
+        _uploadingVideo = _uploadCtrl.isActive;
+        if (ph == UploadPhase.success) {
+          final url = _uploadCtrl.resultUrl.value;
+          if (url != null && url.isNotEmpty) _mediaUrl.text = url;
+        } else if (ph == UploadPhase.failed) {
+          _pickedVideoLocal = null;
+          _mediaPickError = _uploadCtrl.error.value;
+        }
+      });
+    });
     final existing = widget.existingPost;
     if (existing != null) {
       // Edit mode — pre-fill every field from the existing post.
@@ -128,6 +157,12 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   /// metadata. Failure leaves the destination list empty — the
   /// picker degrades to "Profile only" gracefully.
   Future<void> _loadDestinations() async {
+    // Community kill-switch — when communities are disabled, don't offer
+    // any community destinations; the composer degrades to "Profile only".
+    if (!Get.find<AppConfigController>().communityEnabled.value) {
+      if (mounted) setState(() => _destinationsLoaded = true);
+      return;
+    }
     final res = await CommunityService.myCommunityIds();
     if (!mounted) return;
     final ids = res.ids ?? const <String>{};
@@ -143,6 +178,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
   @override
   void dispose() {
+    _progWorker?.dispose();
+    _phaseWorker?.dispose();
     _title.dispose();
     _body.dispose();
     _mediaUrl.dispose();
@@ -167,16 +204,22 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     if (result == null || result.files.single.path == null) return;
     final file = File(result.files.single.path!);
 
+    // Show "Reading video…" in the global pill while we probe duration —
+    // the step that used to feel like a silent freeze.
+    _uploadCtrl.beginReading('Reading video…');
+
     // Inspect duration via video_player itself — works for any container
     // VideoPlayerController can later play back, which is exactly the set
-    // of files we accept anyway.
+    // of files we accept anyway. Time-boxed so a stubborn file can't hang
+    // the picker forever — on timeout we just skip the length check.
     int seconds;
     final probe = VideoPlayerController.file(file);
     try {
-      await probe.initialize();
+      await probe.initialize().timeout(const Duration(seconds: 20));
       final dur = probe.value.duration;
       seconds = dur.inSeconds;
     } catch (e) {
+      _uploadCtrl.cancelReading();
       setState(() => _mediaPickError =
           'createPostX.couldNotReadVideo'.trParams({'error': '$e'}));
       await probe.dispose();
@@ -185,11 +228,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     await probe.dispose();
 
     if (seconds <= 0) {
+      _uploadCtrl.cancelReading();
       setState(() => _mediaPickError =
           'createPostX.couldNotDetectDuration'.tr);
       return;
     }
     if (_type == PostType.reel && seconds > 60) {
+      _uploadCtrl.cancelReading();
       final m = seconds ~/ 60;
       final s = seconds % 60;
       setState(() => _mediaPickError = 'createPostX.reelTooLong'.trParams(
@@ -204,35 +249,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       _duration.text = '$seconds';
     });
 
-    // Direct-to-S3 multipart upload. Bytes stream straight from the
-    // phone to S3 (skipping our backend) in 10 MB parts, 4 in flight
-    // at a time, with MD5 integrity check per part and on-disk resume
-    // state so a network drop / app close / phone lock doesn't
-    // restart the upload from zero. If the server isn't S3-enabled
-    // we fall back to the legacy chunked-through-backend flow
-    // automatically (no caller-visible difference).
-    final res = await UploadService.uploadVideoDirectMultipart(
-      file,
-      onProgress: (p) {
-        if (!mounted) return;
-        setState(() => _videoUploadProgress = p);
-      },
-    );
-    if (!mounted) return;
-    if (res.error != null) {
-      setState(() {
-        _uploadingVideo = false;
-        _videoUploadProgress = 0.0;
-        _pickedVideoLocal = null;
-        _mediaPickError = res.error;
-      });
-      return;
-    }
-    setState(() {
-      _uploadingVideo = false;
-      _videoUploadProgress = 1.0;
-      _mediaUrl.text = res.url ?? '';
-    });
+    // Hand the transfer to the global UploadController. It owns the
+    // direct-to-S3, resumable upload, so it KEEPS RUNNING if the user
+    // leaves this screen — the floating UploadStatusPill shows progress on
+    // every screen. The `ever` listeners wired in initState mirror its
+    // progress + final URL back into this screen (and surface any error on
+    // _mediaPickError). Fire-and-forget so the composer stays interactive.
+    _uploadCtrl.startVideoUpload(file);
 
     // Auto-generate a cover from the video — only when the user hasn't
     // already picked one. Sarah's manual cover always wins.
@@ -582,7 +605,11 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         child: Form(
           key: _formKey,
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            // iPad: center the composer to a comfortable column instead of
+            // full-width fields. Phone: unchanged 16px inset.
+            padding: EdgeInsets.fromLTRB(
+                context.centeringHPad(contentWidth: 680), 12,
+                context.centeringHPad(contentWidth: 680), 24),
             children: [
               // ── Card 1: Format ────────────────────────────────
               // The type picker drives which content fields show

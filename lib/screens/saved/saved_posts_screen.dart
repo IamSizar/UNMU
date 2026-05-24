@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 
 import '../../controllers/saved_controller.dart';
 import '../../models/expert_post.dart';
+import '../../utils/responsive.dart';
 import '../../widgets/social/comment_button.dart';
 import '../../widgets/social/like_button.dart';
 import '../../widgets/social/save_button.dart';
@@ -79,13 +80,18 @@ class SavedPostsScreen extends StatelessWidget {
           return RefreshIndicator(
             color: SocialTokens.cyan,
             onRefresh: ctrl.reload,
-            child: ListView.separated(
+            child: responsiveCardList(
+              context: context,
+              // iPad: 2 columns of saved cards (capped at 2 even on large —
+              // post cards carry media and read better wider). Phone: single
+              // column, identical to the previous ListView.separated.
+              tablet: 2,
+              large: 2,
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
               physics: const AlwaysScrollableScrollPhysics(
                 parent: BouncingScrollPhysics(),
               ),
               itemCount: posts.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
               itemBuilder: (_, i) =>
                   _SavedPostCard(post: posts[i], palette: palette),
             ),
@@ -375,6 +381,7 @@ class _SavedPostCard extends StatelessWidget {
         HapticFeedback.lightImpact();
         Get.to(() => ReelPlayerScreen(
               mediaUrl: post.mediaUrl!,
+              qualityVariants: post.videoVariants,
               coverUrl: post.coverUrl,
               title: post.title,
               authorName: post.authorName,

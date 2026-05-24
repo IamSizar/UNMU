@@ -34,6 +34,10 @@ class ReelPlayerScreen extends StatelessWidget {
   /// legacy behavior of every existing call site.
   final bool loop;
 
+  /// Quality renditions for the in-player quality gear. Maps label → URL
+  /// (e.g. {"720p": "…"}); "Auto" = [mediaUrl]. Empty hides the gear.
+  final Map<String, String> qualityVariants;
+
   const ReelPlayerScreen({
     super.key,
     required this.mediaUrl,
@@ -41,6 +45,7 @@ class ReelPlayerScreen extends StatelessWidget {
     this.coverUrl,
     this.title,
     this.loop = true,
+    this.qualityVariants = const {},
   });
 
   @override
@@ -53,6 +58,7 @@ class ReelPlayerScreen extends StatelessWidget {
         title: title,
         autoPlay: true,
         loop: loop,
+        qualityVariants: qualityVariants,
         onClose: () => Navigator.of(context).pop(),
         bottomOverlay: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),

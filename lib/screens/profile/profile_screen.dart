@@ -31,6 +31,7 @@ import '../subscription/subscription_screen.dart';
 import '../tools/dca_calculator_screen.dart';
 import '../tools/zakat_calculator_screen.dart';
 import 'change_email_screen.dart';
+import '../../services/cache_service.dart';
 import 'change_password_screen.dart';
 import 'delete_account_screen.dart';
 import 'edit_profile_screen.dart';
@@ -1367,6 +1368,51 @@ class _AccountCard extends StatelessWidget {
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => const ChangeEmailScreen(),
+                ),
+              );
+            },
+            trailing: DirectionalIcon(
+              Icons.chevron_right_rounded,
+              color: palette.textMuted,
+            ),
+          ),
+          _Divider(palette: palette),
+          _SettingRow(
+            palette: palette,
+            icon: Icons.cleaning_services_outlined,
+            accent: SocialTokens.cyan,
+            title: 'account.clearCache'.tr,
+            onTap: () async {
+              await HapticUtils.lightTap();
+              if (!context.mounted) return;
+              final size = await CacheService.sizeBytes();
+              if (!context.mounted) return;
+              final ok = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: Text('account.clearCache'.tr),
+                  content: Text('account.clearCacheBody'.trParams(
+                      {'size': CacheService.formatBytes(size)})),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: Text('common.cancel'.tr),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: Text('account.clearCacheConfirm'.tr),
+                    ),
+                  ],
+                ),
+              );
+              if (ok != true || !context.mounted) return;
+              final freed = await CacheService.clear();
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('account.clearCacheDone'.trParams(
+                      {'size': CacheService.formatBytes(freed)})),
+                  behavior: SnackBarBehavior.floating,
                 ),
               );
             },

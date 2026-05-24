@@ -9,6 +9,7 @@ import '../../screens/social/social_tokens.dart';
 import '../../screens/stock_detail/stock_detail_screen.dart';
 import '../../services/api_service.dart';
 import '../../utils/haptic_utils.dart';
+import '../../utils/responsive.dart';
 import '../../widgets/ads/banner_ad_widget.dart';
 import '../../widgets/stock_card.dart';
 
@@ -641,8 +642,9 @@ class _IdleSuggestions extends StatelessWidget {
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            // iPad: more columns, same 2.4 tile shape.
+            crossAxisCount: context.responsive(phone: 2, tablet: 3, large: 4),
             childAspectRatio: 2.4,
             crossAxisSpacing: 10,
             mainAxisSpacing: 10,

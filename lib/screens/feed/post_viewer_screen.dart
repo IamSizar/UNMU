@@ -40,11 +40,17 @@ class PostViewerScreen extends StatefulWidget {
   final ExpertPost? initialPost;
   final int? postId;
 
-  const PostViewerScreen.forPost(ExpertPost post, {super.key})
+  /// When true, renders WITHOUT its own Scaffold/AppBar so it can be
+  /// embedded in a side-pane (iPad split view, P7). Default false keeps the
+  /// standalone full-screen behavior byte-for-byte unchanged.
+  final bool embedded;
+
+  const PostViewerScreen.forPost(ExpertPost post,
+      {super.key, this.embedded = false})
       : initialPost = post,
         postId = null;
 
-  const PostViewerScreen.forId(int id, {super.key})
+  const PostViewerScreen.forId(int id, {super.key, this.embedded = false})
       : initialPost = null,
         postId = id;
 
@@ -86,6 +92,14 @@ class _PostViewerScreenState extends State<PostViewerScreen> {
   @override
   Widget build(BuildContext context) {
     final palette = SocialTheme.of(context);
+    // Embedded (split-view pane): no Scaffold/AppBar — the pane provides
+    // the frame. Just the post body on the screen background.
+    if (widget.embedded) {
+      return ColoredBox(
+        color: palette.background,
+        child: _buildBody(palette),
+      );
+    }
     return Scaffold(
       backgroundColor: palette.background,
       appBar: AppBar(
@@ -293,6 +307,7 @@ class _PostContent extends StatelessWidget {
           : () => Get.to(
                 () => ReelPlayerScreen(
                   mediaUrl: post.mediaUrl!,
+                  qualityVariants: post.videoVariants,
                   coverUrl: post.coverUrl,
                   title: post.title,
                   authorName: post.authorName,

@@ -8,6 +8,7 @@ import 'package:get/get.dart';
 import '../../controllers/auth_controller.dart';
 import '../../screens/social/social_tokens.dart';
 import '../../utils/haptic_utils.dart';
+import '../../utils/responsive.dart';
 import '../../widgets/auth/auth_widgets.dart';
 import '../../widgets/dismiss_keyboard_on_tap.dart';
 import '../../widgets/social/test_account_switcher.dart';
@@ -185,11 +186,19 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
       body: SafeArea(
         child: DismissKeyboardOnTap(
-          child: LayoutBuilder(
+          child: Builder(builder: (ctx) {
+            final form = LayoutBuilder(
             builder: (context, constraints) {
               return SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                // Pane-aware centering: center the form to ~440 within
+                // whatever width it's given (full screen on phone, the
+                // trailing pane on iPad), never less than 20px inset.
+                padding: EdgeInsets.fromLTRB(
+                    ((constraints.maxWidth - 440) / 2).clamp(20.0, 64.0),
+                    0,
+                    ((constraints.maxWidth - 440) / 2).clamp(20.0, 64.0),
+                    24),
                 child: ConstrainedBox(
                   constraints: BoxConstraints(minHeight: constraints.maxHeight),
                   child: IntrinsicHeight(
@@ -332,8 +341,101 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               );
             },
-          ),
+          );
+          // iPad / wide: two-pane — branding hero fills the leading side,
+          // the form sits on the trailing side, so the screen feels full
+          // instead of a narrow column floating in empty space. Phone:
+          // just the form (unchanged).
+          return ctx.isWide
+              ? Row(
+                  children: [
+                    Expanded(flex: 6, child: _LoginHero(palette: palette)),
+                    Expanded(flex: 5, child: form),
+                  ],
+                )
+              : form;
+        }),
         ),
+      ),
+    );
+  }
+}
+
+/// Branding hero shown on the leading side of the iPad two-pane login, so
+/// the screen feels full and intentional instead of a narrow form floating
+/// in empty space. Phone never sees this (single-column form only).
+class _LoginHero extends StatelessWidget {
+  final SocialPalette palette;
+  const _LoginHero({required this.palette});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF0A1628),
+            Color(0xFF103048),
+            Color(0xFF0A1628),
+          ],
+        ),
+      ),
+      child: Stack(
+        children: [
+          // Soft cyan glow orb top-right for depth.
+          Positioned(
+            right: -80,
+            top: -60,
+            child: Container(
+              width: 280,
+              height: 280,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    SocialTokens.cyan.withValues(alpha: 0.22),
+                    SocialTokens.cyan.withValues(alpha: 0.0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 48),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const AuthBrandMark(size: 96),
+                  const SizedBox(height: 28),
+                  Text(
+                    'auth.login.welcomeBack'.tr,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 34,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.6,
+                      height: 1.1,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'auth.login.subtitle'.tr,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 16,
+                      height: 1.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

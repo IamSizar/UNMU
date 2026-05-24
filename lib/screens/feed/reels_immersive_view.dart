@@ -72,6 +72,13 @@ class _ReelsImmersiveViewState extends State<ReelsImmersiveView>
   /// playing in the background.
   bool _visible = true;
 
+  /// True at iPad/tablet width. On iPad, reels open full-screen by default
+  /// (the clip fills the whole screen instead of sitting beside the side
+  /// nav rail), and we NEVER force a device-orientation lock — that's a
+  /// phone-only behavior. Stored (set in didChangeDependencies) so it stays
+  /// readable from dispose() after the element is defunct.
+  bool _isWidePad = false;
+
   /// Snapshot of which controller was playing when visibility was lost,
   /// so we can resume the right one (and only that one) when we come
   /// back into view. Avoids accidentally resuming a manually-paused reel.
@@ -91,7 +98,17 @@ class _ReelsImmersiveViewState extends State<ReelsImmersiveView>
     _pageController = PageController();
     // Spin up the first controllers once the first frame has laid out so
     // we know how many reels exist in FeedController.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _ensureWindow(0));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _ensureWindow(0);
+      // iPad: open reels full-screen by default so the clip fills the
+      // screen (hides the side rail). Reuses the same fullscreen path the
+      // phone uses — including its exit button — so there's always a way
+      // back. Orientation is NOT locked on iPad (guarded below).
+      if (_isWidePad && !_fullscreen && mounted) {
+        setState(() => _fullscreen = true);
+        _enterFullscreenSideEffects(landscape: false);
+      }
+    });
 
     // Watch the Feed-tab-active flag so we pause the moment the user
     // taps a different bottom-nav tab (Profile, Watchlist, etc.). The
@@ -142,6 +159,13 @@ class _ReelsImmersiveViewState extends State<ReelsImmersiveView>
       _exitFullscreenSideEffects();
     }
     super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Width-based: a narrow iPad split-view pane behaves like a phone.
+    _isWidePad = MediaQuery.sizeOf(context).width >= 600;
   }
 
   /// App lifecycle — called when the OS backgrounds / foregrounds us.
@@ -405,6 +429,9 @@ class _ReelsImmersiveViewState extends State<ReelsImmersiveView>
   void _enterFullscreenSideEffects({required bool landscape}) {
     Get.find<FeedController>().reelsFullscreen.value = true;
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    // iPad supports all orientations natively — never force a lock there
+    // (it would wedge the user sideways). Orientation locking is phone-only.
+    if (_isWidePad) return;
     // Landscape clips: allow EITHER landscape side so the user can hold
     // the phone whichever way is comfortable (left- or right-handed),
     // matching YouTube. Portrait/square clips keep portrait lock.
@@ -427,9 +454,12 @@ class _ReelsImmersiveViewState extends State<ReelsImmersiveView>
       SystemUiMode.manual,
       overlays: SystemUiOverlay.values,
     );
-    // Always snap back to portrait when leaving fullscreen — the rest of
-    // the app is portrait-only, so a stray landscape lock would leave
-    // the user wedged sideways on the next screen.
+    // iPad: we never locked orientation on enter, so don't force portrait
+    // on exit either (the iPad should stay in whatever orientation it's in).
+    if (_isWidePad) return;
+    // Phone: always snap back to portrait when leaving fullscreen — the rest
+    // of the app is portrait-only, so a stray landscape lock would leave the
+    // user wedged sideways on the next screen.
     SystemChrome.setPreferredOrientations(
       const [DeviceOrientation.portraitUp],
     );
@@ -794,6 +824,37 @@ class _ReelPageState extends State<_ReelPage> {
         // ── Centered pause overlay when paused ──
         if (ready && !widget.controller!.value.isPlaying)
           Center(child: _fadeChild(_centeredPauseIcon())),
+
+        // ── 2× fast-forward badge — shown in the middle while holding an
+        // edge so the viewer knows playback is sped up. Full opacity (not
+        // faded) so it stays crisp over the video. ──
+        if (_speedMode)
+          Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(22),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.fast_forward_rounded,
+                      color: Colors.white, size: 20),
+                  const SizedBox(width: 6),
+                  Text(
+                    'videoPlayer.speedBadge'.tr,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
 
         // ── Retry overlay (init failed / 10s timeout) OR loading
         // spinner (still initialising). The retry overlay wins

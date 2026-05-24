@@ -7,6 +7,7 @@ import '../../screens/auth/login_screen.dart';
 import '../../screens/social/social_tokens.dart';
 import '../../screens/stock_detail/stock_detail_screen.dart';
 import '../../utils/haptic_utils.dart';
+import '../../utils/responsive.dart';
 import '../../widgets/platform_adaptive/platform_dialog.dart';
 import '../../widgets/stock_card.dart';
 
@@ -150,7 +151,9 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
               child: _NoMatchesState(palette: palette),
             )
           else
-            SliverList.builder(
+            // iPad: 2–3 columns; phone: unchanged single column.
+            sliverResponsiveCards(
+              context: context,
               itemCount: filtered.length,
               itemBuilder: (_, i) {
                 final item = filtered[i];

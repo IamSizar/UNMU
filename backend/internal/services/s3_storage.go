@@ -167,6 +167,45 @@ func (s *S3Storage) MediaURL(value string) string {
 	return signed
 }
 
+// KeyFromValue extracts the raw S3 object key from a stored media value —
+// the inverse of the read-side signing done by [MediaURL]. Handles the
+// same input shapes:
+//
+//   - empty / legacy "/uploads/..." disk path / external http(s) URL → ""
+//     (not an object in our bucket, nothing to transcode/copy)
+//   - our bucket URL (virtual-host or path-style, with or without a
+//     pre-signed query string) → the key
+//   - a bare key → returned as-is
+//
+// Used by the transcode worker to turn a post's stored `media_url` back
+// into the key it needs to PresignGet (as the ffmpeg input) and to derive
+// sibling keys for the generated quality variants.
+func (s *S3Storage) KeyFromValue(value string) string {
+	if s == nil || value == "" {
+		return ""
+	}
+	if strings.HasPrefix(value, "/uploads/") {
+		return ""
+	}
+	bucketHost := s.Bucket + ".s3." + s.Region + ".amazonaws.com"
+	pathStyle := "s3." + s.Region + ".amazonaws.com/" + s.Bucket + "/"
+	if strings.Contains(value, bucketHost) || strings.Contains(value, pathStyle) {
+		u, err := url.Parse(value)
+		if err != nil {
+			return ""
+		}
+		key := strings.TrimPrefix(u.Path, "/")
+		key = strings.TrimPrefix(key, s.Bucket+"/")
+		return key
+	}
+	// Any other absolute URL is an external reference we don't own.
+	if strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://") {
+		return ""
+	}
+	// Otherwise treat it as a bare key.
+	return value
+}
+
 // =============================================================================
 // Multipart upload — Phase A direct-to-S3 flow.
 //

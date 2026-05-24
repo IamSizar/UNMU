@@ -7,6 +7,7 @@ import 'package:get/get.dart';
 import '../../config/api_config.dart';
 import '../../services/community_service.dart';
 import '../../utils/price_format.dart';
+import '../../utils/responsive.dart';
 import 'community_preview_screen.dart';
 import 'social_tokens.dart';
 
@@ -306,10 +307,12 @@ class _CommunityDiscoveryScreenState extends State<CommunityDiscoveryScreen> {
         ),
       );
     }
-    return ListView.separated(
+    return responsiveCardList(
+      context: context,
+      // iPad: 2–3 community cards per row; phone: single column (the helper
+      // returns a ListView.separated with the same 12px gap at 1 column).
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       itemCount: _rows.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
       itemBuilder: (_, i) => _CommunityResultCard(
         row: _rows[i],
         isJoined: _joinedIds.contains(_rows[i].id),

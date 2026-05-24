@@ -9,6 +9,7 @@ import 'package:get/get.dart';
 import '../../controllers/auth_controller.dart';
 import '../../controllers/language_controller.dart';
 import '../../controllers/realtime_controller.dart';
+import '../../controllers/app_config_controller.dart';
 import '../../services/community_service.dart';
 import '../../services/community_subscription_service.dart';
 import '../../utils/platform_utils.dart';
@@ -246,6 +247,10 @@ class _SocialHubScreenState extends State<SocialHubScreen> {
     return Obx(() {
     final auth = Get.find<AuthController>();
     auth.userObservable.value; // tracker
+    // Community kill-switch — hides every community surface on this hub
+    // when the admin disables communities. Read inside this Obx so it
+    // reacts to live flag changes.
+    final communityOn = Get.find<AppConfigController>().communityEnabled.value;
     final userName = (auth.user?.email.split('@').first ?? 'there');
 
     final body = SafeArea(
@@ -392,13 +397,14 @@ class _SocialHubScreenState extends State<SocialHubScreen> {
               //      no crown.
               // The whole section is hidden when the user neither
               // owns nor joins anything (no empty header).
-              ..._buildPinnedSection(
-                context: context,
-                palette: palette,
-                hp: hp,
-                ownedIds: _ownedCommunityIds(auth.user?.id),
-                joinedIds: _joinedCommunityIds(auth.user?.id),
-              ),
+              if (communityOn)
+                ..._buildPinnedSection(
+                  context: context,
+                  palette: palette,
+                  hp: hp,
+                  ownedIds: _ownedCommunityIds(auth.user?.id),
+                  joinedIds: _joinedCommunityIds(auth.user?.id),
+                ),
 
               // ─────── Discover communities (the regular list) ───────
               // Excludes both owned AND joined so the user only sees
@@ -406,6 +412,7 @@ class _SocialHubScreenState extends State<SocialHubScreen> {
               // pinned section above. Hidden entirely when the user
               // toggles "Joined only" — the pinned section above
               // becomes the whole view.
+              if (communityOn)
               SliverToBoxAdapter(
                 child: Padding(
                   padding: EdgeInsets.fromLTRB(hp, 28, hp, 0),
@@ -439,7 +446,7 @@ class _SocialHubScreenState extends State<SocialHubScreen> {
                   ),
                 ),
               ),
-              if (!_joinedOnly)
+              if (communityOn && !_joinedOnly)
                 SliverPadding(
                   padding: EdgeInsets.fromLTRB(hp, 12, hp, 28),
                   sliver: Builder(builder: (_) {
@@ -490,7 +497,7 @@ class _SocialHubScreenState extends State<SocialHubScreen> {
                     );
                   }),
                 ),
-              if (_joinedOnly)
+              if (communityOn && _joinedOnly)
                 // When "Joined only" is on we surface a small empty
                 // hint when the pinned section has nothing — the
                 // pinned section itself returns an empty list when
@@ -556,7 +563,9 @@ class _SocialHubScreenState extends State<SocialHubScreen> {
           // reached via the contextual bottom-nav button-swap (the
           // 2nd slot turns from Indexes → Feed when on Social).
           //
-          // Step-19 (mig 0019, item 2.15) — discovery search.
+          // Step-19 (mig 0019, item 2.15) — community discovery search.
+          // Hidden by the community kill-switch.
+          if (communityOn)
           IconButton(
             tooltip: 'socialHub.discoverTooltip'.tr,
             icon: const Icon(Icons.search_rounded),

@@ -49,6 +49,12 @@ class UnmuVideoPlayer extends StatefulWidget {
   /// finishes initializing (avoids a black frame on slow networks).
   final String? coverUrl;
 
+  /// Quality renditions for the settings-gear quality picker. Maps a label
+  /// (e.g. "720p", "480p") to a playable URL. "Auto" is implicit and always
+  /// maps to [url] (the original). When empty, the gear icon is hidden and
+  /// the player behaves exactly as before.
+  final Map<String, String> qualityVariants;
+
   /// Whether playback should start automatically on init. Single-video
   /// viewers usually want true; admin / preview surfaces want false.
   final bool autoPlay;
@@ -90,6 +96,7 @@ class UnmuVideoPlayer extends StatefulWidget {
     this.aspectRatio,
     this.onClose,
     this.bottomOverlay,
+    this.qualityVariants = const {},
   });
 
   @override
@@ -131,6 +138,8 @@ class _UnmuVideoPlayerState extends State<UnmuVideoPlayer>
 
   // Buffering — true when the controller stalls for > 500 ms.
   bool _buffering = false;
+  // Last-seen play/pause flag, so a flip can trigger an immediate rebuild.
+  bool? _lastIsPlaying;
   Duration? _lastReportedPosition;
   DateTime? _lastPositionTime;
 
@@ -142,9 +151,19 @@ class _UnmuVideoPlayerState extends State<UnmuVideoPlayer>
   // Resume checkpoint timer — saves position every N seconds.
   Timer? _resumeSaveTimer;
 
+  // Quality picker (mig 0046). "Auto" = widget.url (the original); other
+  // labels come from widget.qualityVariants. _activeUrl is whatever is
+  // currently loaded; _switching guards the brief swap while we re-init the
+  // controller at a chosen quality.
+  static const _autoQuality = 'Auto';
+  String _currentQuality = _autoQuality;
+  late String _activeUrl;
+  bool _switching = false;
+
   @override
   void initState() {
     super.initState();
+    _activeUrl = widget.url;
     _chromeFade = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 220),
@@ -154,7 +173,7 @@ class _UnmuVideoPlayerState extends State<UnmuVideoPlayer>
   }
 
   Future<void> _bootController() async {
-    final controller = VideoPlayerController.networkUrl(Uri.parse(widget.url));
+    final controller = VideoPlayerController.networkUrl(Uri.parse(_activeUrl));
     _video = controller;
     try {
       await controller.initialize();
@@ -212,6 +231,17 @@ class _UnmuVideoPlayerState extends State<UnmuVideoPlayer>
       VideoResumeService.clearPosition(widget.url);
     }
 
+    // Rebuild whenever play/pause flips (end-of-video, external pause, …)
+    // so the center button + its icon update immediately instead of
+    // waiting for the next second tick.
+    if (_lastIsPlaying != c.value.isPlaying) {
+      _lastIsPlaying = c.value.isPlaying;
+      if (mounted) setState(() {});
+      // A flip to paused means the auto-hide should stand down so the
+      // resume button stays put; a flip to playing restarts the countdown.
+      _scheduleHide();
+    }
+
     final lastSec = _lastReportedPosition?.inSeconds;
     if (lastSec != null && pos.inSeconds != lastSec && mounted) {
       setState(() {});
@@ -260,17 +290,37 @@ class _UnmuVideoPlayerState extends State<UnmuVideoPlayer>
 
   void _scheduleHide() {
     _hideTimer?.cancel();
+    // While paused, keep the controls (and the center play button) on
+    // screen — auto-hiding them would leave the user staring at a frozen
+    // frame with no obvious way to resume.
+    final c = _video;
+    if (c != null && c.value.isInitialized && !c.value.isPlaying) return;
     _hideTimer = Timer(_kControlsHideAfter, () {
       if (!mounted) return;
       _chromeFade.reverse();
     });
   }
 
+  /// A tap on the video surface no longer pauses playback — that was too
+  /// easy to trigger by accident while watching. Now a tap just toggles the
+  /// on-screen controls; play/pause lives on the dedicated center button
+  /// ([_togglePlayPause]).
   void _handleTap() {
     if (_locked) {
       _showChrome();
       return;
     }
+    if (_chromeVisible) {
+      _hideTimer?.cancel();
+      _chromeFade.reverse();
+    } else {
+      _showChrome();
+    }
+  }
+
+  /// Deliberate play/pause via the big center button.
+  void _togglePlayPause() {
+    if (_locked) return;
     final c = _video;
     if (c == null || !c.value.isInitialized) return;
     HapticFeedback.lightImpact();
@@ -279,6 +329,7 @@ class _UnmuVideoPlayerState extends State<UnmuVideoPlayer>
     } else {
       c.play();
     }
+    if (mounted) setState(() {}); // refresh the play/pause icon immediately
     _showChrome();
   }
 
@@ -404,6 +455,134 @@ class _UnmuVideoPlayerState extends State<UnmuVideoPlayer>
     _showChrome();
   }
 
+  // ─── Quality picker ────────────────────────────────────────────────
+
+  /// Ordered list shown in the sheet: Auto first, then renditions from
+  /// highest to lowest by their numeric prefix (1080p, 720p, 480p…).
+  List<String> _qualityLabels() {
+    final keys = widget.qualityVariants.keys.toList();
+    int rank(String s) =>
+        int.tryParse(s.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+    keys.sort((a, b) => rank(b).compareTo(rank(a)));
+    return [_autoQuality, ...keys];
+  }
+
+  void _openQualitySheet() {
+    _hideTimer?.cancel(); // don't let controls fade while the sheet is up
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF14181F),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                child: Row(
+                  children: [
+                    const Icon(Icons.high_quality_rounded,
+                        color: Colors.cyanAccent, size: 20),
+                    const SizedBox(width: 10),
+                    Text(
+                      'videoPlayer.quality'.tr,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              for (final label in _qualityLabels())
+                ListTile(
+                  dense: true,
+                  leading: Icon(
+                    label == _currentQuality
+                        ? Icons.radio_button_checked_rounded
+                        : Icons.radio_button_unchecked_rounded,
+                    color: label == _currentQuality
+                        ? Colors.cyanAccent
+                        : Colors.white38,
+                  ),
+                  title: Text(
+                    label == _autoQuality ? 'videoPlayer.auto'.tr : label,
+                    style: const TextStyle(color: Colors.white, fontSize: 15),
+                  ),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    _switchQuality(label);
+                  },
+                ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    ).whenComplete(_showChrome);
+  }
+
+  /// Swaps the playing source to the chosen quality, preserving position +
+  /// play/mute state. Re-inits a fresh controller (video_player can't
+  /// retarget an existing one) and only swaps it in once the new source is
+  /// ready, so playback never visibly breaks. On failure we keep the old
+  /// controller and revert the label.
+  Future<void> _switchQuality(String label) async {
+    if (label == _currentQuality) return;
+    final url =
+        label == _autoQuality ? widget.url : widget.qualityVariants[label];
+    if (url == null || url.isEmpty) return;
+
+    final old = _video;
+    final pos = old?.value.position ?? Duration.zero;
+    final wasPlaying = old?.value.isPlaying ?? widget.autoPlay;
+    final prevQuality = _currentQuality;
+    setState(() {
+      _switching = true;
+      _currentQuality = label;
+    });
+
+    final next = VideoPlayerController.networkUrl(Uri.parse(url));
+    try {
+      await next.initialize();
+      await next.setVolume(_appWideMuted ? 0.0 : 1.0);
+      await next.setLooping(widget.loop);
+      if (pos < (next.value.duration - const Duration(milliseconds: 500))) {
+        await next.seekTo(pos);
+      }
+      if (wasPlaying) await next.play();
+    } catch (_) {
+      await next.dispose();
+      if (mounted) {
+        setState(() {
+          _switching = false;
+          _currentQuality = prevQuality; // keep the source that's still playing
+        });
+      }
+      return;
+    }
+
+    old?.removeListener(_onTick);
+    next.addListener(_onTick);
+    if (!mounted) {
+      await next.dispose();
+      return;
+    }
+    setState(() {
+      _video = next;
+      _activeUrl = url;
+      _switching = false;
+      _lastIsPlaying = next.value.isPlaying;
+    });
+    await old?.dispose();
+    HapticFeedback.selectionClick();
+    _showChrome();
+  }
+
   Future<void> _retry() async {
     setState(() {
       _initializing = true;
@@ -472,7 +651,7 @@ class _UnmuVideoPlayerState extends State<UnmuVideoPlayer>
             child: Center(child: _SpeedBadge()),
           ),
 
-        if (_buffering && !_speedMode)
+        if ((_buffering || _switching) && !_speedMode)
           const Center(
             child: SizedBox(
               width: 48,
@@ -480,25 +659,6 @@ class _UnmuVideoPlayerState extends State<UnmuVideoPlayer>
               child: CircularProgressIndicator(
                 strokeWidth: 3,
                 valueColor: AlwaysStoppedAnimation(Colors.white),
-              ),
-            ),
-          ),
-
-        if (ready && !c.value.isPlaying && _chromeVisible && !_speedMode)
-          IgnorePointer(
-            child: Center(
-              child: FadeTransition(
-                opacity: _chromeFade,
-                child: Container(
-                  width: 88,
-                  height: 88,
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.45),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.play_arrow_rounded,
-                      size: 56, color: Colors.white),
-                ),
               ),
             ),
           ),
@@ -536,6 +696,17 @@ class _UnmuVideoPlayerState extends State<UnmuVideoPlayer>
             onToggleLandscape: () =>
                 _isLandscape ? _exitLandscape() : _enterLandscape(),
             onSeekToRatio: _seekToRatio,
+            // While the user is dragging the scrubber, freeze the auto-hide
+            // so the bar can't fade out from under their finger; resume the
+            // normal hide countdown when they let go.
+            onScrubStart: () {
+              _hideTimer?.cancel();
+              if (!_chromeVisible) _chromeFade.forward();
+            },
+            onScrubEnd: _showChrome,
+            onTogglePlayPause: _togglePlayPause,
+            showQuality: widget.qualityVariants.isNotEmpty,
+            onTapQuality: _openQualitySheet,
           ),
         ],
       ],
@@ -905,6 +1076,11 @@ class _BottomChrome extends StatelessWidget {
   final VoidCallback onToggleMute;
   final VoidCallback onToggleLandscape;
   final Future<void> Function(double) onSeekToRatio;
+  final VoidCallback onScrubStart;
+  final VoidCallback onScrubEnd;
+  final VoidCallback onTogglePlayPause;
+  final bool showQuality;
+  final VoidCallback onTapQuality;
 
   const _BottomChrome({
     required this.fade,
@@ -917,15 +1093,17 @@ class _BottomChrome extends StatelessWidget {
     required this.onToggleMute,
     required this.onToggleLandscape,
     required this.onSeekToRatio,
+    required this.onScrubStart,
+    required this.onScrubEnd,
+    required this.onTogglePlayPause,
+    required this.showQuality,
+    required this.onTapQuality,
   });
 
   @override
   Widget build(BuildContext context) {
     final pos = ready ? controller!.value.position : Duration.zero;
     final dur = ready ? controller!.value.duration : Duration.zero;
-    final ratio = (dur.inMilliseconds > 0)
-        ? pos.inMilliseconds / dur.inMilliseconds
-        : 0.0;
 
     return Positioned(
       bottom: 0,
@@ -954,38 +1132,58 @@ class _BottomChrome extends StatelessWidget {
                 bottomOverlay!,
                 const SizedBox(height: 8),
               ],
-              Row(
-                children: [
-                  Text(_fmt(pos),
-                      style: const TextStyle(
-                          color: Colors.white, fontSize: 12)),
-                  Expanded(
-                    child: SliderTheme(
-                      data: SliderTheme.of(context).copyWith(
-                        trackHeight: 3,
-                        activeTrackColor: Colors.cyanAccent,
-                        inactiveTrackColor: Colors.white24,
-                        thumbColor: Colors.white,
-                        thumbShape: const RoundSliderThumbShape(
-                            enabledThumbRadius: 6),
-                        overlayShape: const RoundSliderOverlayShape(
-                            overlayRadius: 12),
-                      ),
-                      child: Slider(
-                        value: ratio.clamp(0.0, 1.0),
-                        onChanged: (locked || !ready)
-                            ? null
-                            : (v) => onSeekToRatio(v),
+              if (ready && controller != null)
+                _Scrubber(
+                  controller: controller!,
+                  enabled: !locked,
+                  onSeek: onSeekToRatio,
+                  onScrubStart: onScrubStart,
+                  onScrubEnd: onScrubEnd,
+                )
+              else
+                // Not-ready placeholder: an inert bar so the layout doesn't
+                // jump when the controller finishes initializing.
+                Row(
+                  children: [
+                    Text(_fmt(pos),
+                        style: const TextStyle(
+                            color: Colors.white, fontSize: 12)),
+                    Expanded(
+                      child: SliderTheme(
+                        data: SliderTheme.of(context).copyWith(
+                          trackHeight: 3,
+                          activeTrackColor: Colors.cyanAccent,
+                          inactiveTrackColor: Colors.white24,
+                          thumbColor: Colors.white,
+                          thumbShape: const RoundSliderThumbShape(
+                              enabledThumbRadius: 6),
+                          overlayShape: const RoundSliderOverlayShape(
+                              overlayRadius: 12),
+                        ),
+                        child: const Slider(value: 0, onChanged: null),
                       ),
                     ),
-                  ),
-                  Text(_fmt(dur),
-                      style: const TextStyle(
-                          color: Colors.white, fontSize: 12)),
-                ],
-              ),
+                    Text(_fmt(dur),
+                        style: const TextStyle(
+                            color: Colors.white, fontSize: 12)),
+                  ],
+                ),
               Row(
                 children: [
+                  // Play/pause now lives here, next to the volume control
+                  // (moved out of the center of the video).
+                  IconButton(
+                    icon: Icon(
+                      (ready && controller!.value.isPlaying)
+                          ? Icons.pause_rounded
+                          : Icons.play_arrow_rounded,
+                      color: Colors.white,
+                    ),
+                    onPressed: (locked || !ready) ? null : onTogglePlayPause,
+                    tooltip: (ready && controller!.value.isPlaying)
+                        ? 'videoPlayer.pause'.tr
+                        : 'videoPlayer.play'.tr,
+                  ),
                   IconButton(
                     icon: Icon(
                       muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
@@ -996,6 +1194,13 @@ class _BottomChrome extends StatelessWidget {
                         muted ? 'videoPlayer.unmute'.tr : 'videoPlayer.mute'.tr,
                   ),
                   const Spacer(),
+                  if (showQuality)
+                    IconButton(
+                      icon: const Icon(Icons.settings_rounded,
+                          color: Colors.white),
+                      onPressed: locked ? null : onTapQuality,
+                      tooltip: 'videoPlayer.quality'.tr,
+                    ),
                   IconButton(
                     icon: Icon(
                       isLandscape
@@ -1022,5 +1227,94 @@ class _BottomChrome extends StatelessWidget {
     final mm = d.inMinutes.remainder(60).toString().padLeft(2, '0');
     final ss = d.inSeconds.remainder(60).toString().padLeft(2, '0');
     return hh > 0 ? '$hh:$mm:$ss' : '$mm:$ss';
+  }
+}
+
+/// Buttery seek bar. The glitch/lag came from seeking the network video on
+/// EVERY drag tick — each `seekTo` forces a re-buffer, so the picture
+/// stuttered seconds behind the finger. The fix is to seek only ONCE, on
+/// release:
+///
+///   * While dragging, only [_dragRatio] moves — the thumb + the left time
+///     label follow the finger instantly with zero network work.
+///   * On release we fire a single `seekTo`, and we HOLD the displayed
+///     ratio at the target until that seek resolves, so the thumb never
+///     snaps back to the old position and then jumps forward.
+class _Scrubber extends StatefulWidget {
+  final VideoPlayerController controller;
+  final bool enabled;
+  final Future<void> Function(double ratio) onSeek;
+  final VoidCallback onScrubStart;
+  final VoidCallback onScrubEnd;
+
+  const _Scrubber({
+    required this.controller,
+    required this.enabled,
+    required this.onSeek,
+    required this.onScrubStart,
+    required this.onScrubEnd,
+  });
+
+  @override
+  State<_Scrubber> createState() => _ScrubberState();
+}
+
+class _ScrubberState extends State<_Scrubber> {
+  double? _dragRatio; // non-null while dragging OR while a release-seek lands
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.controller;
+    final dur = c.value.duration;
+    final liveRatio = dur.inMilliseconds > 0
+        ? c.value.position.inMilliseconds / dur.inMilliseconds
+        : 0.0;
+    final ratio = (_dragRatio ?? liveRatio).clamp(0.0, 1.0);
+    final shownPos =
+        Duration(milliseconds: (dur.inMilliseconds * ratio).round());
+
+    return Row(
+      children: [
+        Text(_BottomChrome._fmt(shownPos),
+            style: const TextStyle(color: Colors.white, fontSize: 12)),
+        Expanded(
+          child: SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 3,
+              activeTrackColor: Colors.cyanAccent,
+              inactiveTrackColor: Colors.white24,
+              thumbColor: Colors.white,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+            ),
+            child: Slider(
+              value: ratio,
+              onChangeStart: widget.enabled
+                  ? (v) {
+                      setState(() => _dragRatio = v);
+                      widget.onScrubStart();
+                    }
+                  : null,
+              // Drag = move the thumb only (no seeking → no stutter).
+              onChanged: widget.enabled
+                  ? (v) => setState(() => _dragRatio = v)
+                  : null,
+              // Release = a single seek; hold the target until it lands so
+              // the thumb doesn't bounce back to the old spot.
+              onChangeEnd: widget.enabled
+                  ? (v) async {
+                      setState(() => _dragRatio = v);
+                      widget.onScrubEnd();
+                      await widget.onSeek(v);
+                      if (mounted) setState(() => _dragRatio = null);
+                    }
+                  : null,
+            ),
+          ),
+        ),
+        Text(_BottomChrome._fmt(dur),
+            style: const TextStyle(color: Colors.white, fontSize: 12)),
+      ],
+    );
   }
 }

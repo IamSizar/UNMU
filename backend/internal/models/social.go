@@ -134,6 +134,14 @@ type Post struct {
 	DurationSeconds *int    `json:"durationSeconds,omitempty"`
 	Visibility      string  `json:"visibility"` // "public" | "subscribers_only"
 
+	// VideoVariants — quality ladder for the in-app quality gear (mig
+	// 0046). Map of label -> URL, e.g. {"auto":"<hls master.m3u8>",
+	// "1080p":"...","720p":"...","480p":"..."}. nil until the transcode
+	// worker fills it; the client falls back to MediaURL in that case.
+	// Omitted from JSON when empty so existing single-file posts are
+	// unchanged on the wire.
+	VideoVariants map[string]string `json:"videoVariants,omitempty"`
+
 	// IsLocked is set by handlers when serving a list to a non-subscriber.
 	// When true, the body / mediaUrl have been stripped to a teaser.
 	IsLocked bool `json:"isLocked"`
@@ -215,6 +223,7 @@ func ScanPost(s postRowScanner) (*Post, error) {
 		coverURL    sql.NullString
 		duration    sql.NullInt32
 		publishAt   sql.NullTime
+		variantsRaw []byte
 	)
 	if err := s.Scan(
 		&p.ID, &p.TargetType, &communityID, &expertID, &p.AuthorID, &p.AuthorName,
@@ -222,9 +231,12 @@ func ScanPost(s postRowScanner) (*Post, error) {
 		&p.Upvotes, &p.Likes, &p.Comments, &p.CreatedAt,
 		&p.PostType, &mediaURL, &coverURL, &duration, &p.Visibility,
 		&p.IsHidden, &p.UpdatedAt,
-		&p.Status, &publishAt,
+		&p.Status, &publishAt, &variantsRaw,
 	); err != nil {
 		return nil, err
+	}
+	if len(variantsRaw) > 0 {
+		_ = json.Unmarshal(variantsRaw, &p.VideoVariants)
 	}
 	if publishAt.Valid {
 		p.PublishAt = &publishAt.Time
@@ -272,6 +284,7 @@ func ScanPost(s postRowScanner) (*Post, error) {
 func (p *Post) LockTeaser() {
 	p.Body = ""
 	p.MediaURL = nil
+	p.VideoVariants = nil
 	p.Tickers = []string{}
 	p.IsLocked = true
 }

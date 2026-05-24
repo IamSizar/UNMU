@@ -642,6 +642,7 @@ class _FeedMediaCard extends StatelessWidget {
         HapticFeedback.lightImpact();
         Get.to(() => ReelPlayerScreen(
               mediaUrl: post.mediaUrl!,
+              qualityVariants: post.videoVariants,
               coverUrl: post.coverUrl,
               title: post.title,
               authorName: post.authorName,

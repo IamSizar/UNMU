@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import '../../controllers/auth_controller.dart';
 import '../../screens/social/social_tokens.dart';
 import '../../utils/haptic_utils.dart';
+import '../../utils/responsive.dart';
 import '../../widgets/auth/auth_widgets.dart';
 import '../../widgets/dismiss_keyboard_on_tap.dart';
 
@@ -127,7 +128,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             builder: (context, constraints) {
               return SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                padding: EdgeInsets.fromLTRB(
+                    context.centeringHPad(), 0, context.centeringHPad(), 24),
                 child: ConstrainedBox(
                   constraints: BoxConstraints(minHeight: constraints.maxHeight),
                   child: IntrinsicHeight(

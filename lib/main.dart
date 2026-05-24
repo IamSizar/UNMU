@@ -13,6 +13,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'firebase_options.dart';
 import 'localization/app_translations.dart';
 
+import 'controllers/app_config_controller.dart';
 import 'controllers/auth_controller.dart';
 import 'controllers/chat_presence_controller.dart';
 import 'controllers/currency_controller.dart';
@@ -23,6 +24,7 @@ import 'controllers/notifications_controller.dart';
 import 'controllers/realtime_controller.dart';
 import 'controllers/saved_controller.dart';
 import 'controllers/stocks_controller.dart';
+import 'controllers/upload_controller.dart';
 import 'controllers/subscription_controller.dart';
 import 'controllers/theme_controller.dart';
 import 'controllers/watchlist_controller.dart';
@@ -36,6 +38,7 @@ import 'services/push_token_service.dart';
 import 'services/tracking_service.dart';
 import 'theme/halal_fintech_theme.dart';
 import 'widgets/social/community_message_banner.dart';
+import 'widgets/upload_status_pill.dart';
 
 Future<void> main() async {
   // Bind the Flutter engine before we await anything — Firebase.initializeApp
@@ -106,6 +109,13 @@ Future<void> main() async {
   // Notifications inbox — bell badge + screen list. Same dependency chain
   // as the Feed controller (realtime + auth).
   Get.put(NotificationsController(), permanent: true);
+  // Global feature flags (community kill-switch) — fetched from
+  // /api/app-config so the app hides community surfaces when the admin
+  // disables them.
+  Get.put(AppConfigController(), permanent: true);
+  // Background upload manager — owns video uploads so they survive
+  // navigation; drives the global UploadStatusPill on every screen.
+  Get.put(UploadController(), permanent: true);
   // Saved posts — single source of truth for "is post X bookmarked?"
   // across every card, plus the saved-posts screen list.
   Get.put(SavedController(), permanent: true);
@@ -158,7 +168,17 @@ class MyApp extends StatelessWidget {
             textDirection: locale.languageCode == 'ar'
                 ? TextDirection.rtl
                 : TextDirection.ltr,
-            child: CommunityMessageBanner(child: child!),
+            child: CommunityMessageBanner(
+              // Global background-upload pill floats over every route, so a
+              // video upload keeps showing its status (and keeps running)
+              // wherever the user navigates.
+              child: Stack(
+                children: [
+                  child!,
+                  const UploadStatusPill(),
+                ],
+              ),
+            ),
           );
         },
         home: const _AppEntry(),

@@ -13,7 +13,7 @@ class ApiConfig {
   /// move to a different Wi-Fi or your router hands out a new DHCP lease.
   /// Used for real-device builds (iPhone / physical Android) so the phone
   /// can reach the laptop on the same Wi-Fi.
-  static const String devMacLanIp = '192.168.1.75';
+  static const String devMacLanIp = '192.168.0.102';
 
   static String get baseUrl {
     if (!useLocalBackend) return railwayUrl;
@@ -25,11 +25,17 @@ class ApiConfig {
     // Real Android device on Wi-Fi: use the Mac's LAN IP instead.
     if (Platform.isAndroid) return 'http://$devMacLanIp:8080/api';
 
-    // iOS simulator can hit localhost. Real iPhone needs the LAN IP.
-    // We can't reliably distinguish "simulator vs device" at runtime
-    // without a platform channel, so default to the LAN IP — the
-    // simulator can also reach it without issue.
-    return 'http://$devMacLanIp:8080/api';
+    // iOS: the SIMULATOR shares the Mac's network stack, so 127.0.0.1
+    // reaches the backend reliably regardless of Wi-Fi / DHCP changes (and
+    // even when the macOS firewall blocks inbound to the LAN IP). A real
+    // iPhone has no localhost route to the Mac, so it falls back to the
+    // Mac's LAN IP. The iOS simulator injects SIMULATOR_* env vars into the
+    // app process, which is how we tell the two apart at runtime.
+    final isIosSimulator =
+        Platform.environment.containsKey('SIMULATOR_DEVICE_NAME');
+    return isIosSimulator
+        ? 'http://127.0.0.1:8080/api'
+        : 'http://$devMacLanIp:8080/api';
   }
 
   // Endpoints

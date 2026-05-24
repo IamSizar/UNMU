@@ -23,7 +23,12 @@ import 'auth_service.dart';
 ///
 /// Kept as a top-level const so a future cellular-aware setter (Phase
 /// C+) can override it dynamically without changing call sites.
-const int _kMultipartConcurrency = 4;
+///
+/// Bumped 4 → 6: on Wi-Fi / good LTE this fills the pipe noticeably
+/// faster, and 6 × 10 MB parts = ~60 MB peak resident, still fine on any
+/// modern phone. Weak-signal devices simply see each PUT take longer;
+/// the semaphore keeps memory bounded either way.
+const int _kMultipartConcurrency = 6;
 
 /// Persistent upload-state lifetime. Backend pre-signed PUT URLs live
 /// for 6 hours; we expire client state 1 hour earlier so a resumed
@@ -233,18 +238,29 @@ class UploadService {
       _initChunked(String token, String filename, int totalSize) async {
     final totalChunks =
         (totalSize / (2 * 1024 * 1024)).ceil(); // optimistic guess
-    final response = await http.post(
-      Uri.parse('$_base/me/uploads/video/init'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-      body: json.encode({
-        'filename': filename,
-        'totalChunks': totalChunks,
-        'totalSize': totalSize,
-      }),
-    );
+    final http.Response response;
+    try {
+      response = await http
+          .post(
+            Uri.parse('$_base/me/uploads/video/init'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: json.encode({
+              'filename': filename,
+              'totalChunks': totalChunks,
+              'totalSize': totalSize,
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
+    } catch (e) {
+      return (
+        uploadId: null,
+        chunkSize: null,
+        error: 'Could not start upload — check your connection.',
+      );
+    }
     if (response.statusCode == 401) {
       await Get.find<AuthController>().handleAuthFailure();
       return (
@@ -279,7 +295,9 @@ class UploadService {
     required int index,
     required List<int> bytes,
   }) async {
-    const maxAttempts = 3;
+    // 5 attempts (was 3) — matches the direct-to-S3 part retry budget so
+    // the chunked fallback is equally resilient to flaky connections.
+    const maxAttempts = 5;
     String? lastError;
     for (var attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
@@ -339,17 +357,24 @@ class UploadService {
     String uploadId,
     String filename,
   ) async {
-    final response = await http.post(
-      Uri.parse('$_base/me/uploads/video/complete'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-      body: json.encode({
-        'uploadId': uploadId,
-        'filename': filename,
-      }),
-    );
+    final http.Response response;
+    try {
+      response = await http
+          .post(
+            Uri.parse('$_base/me/uploads/video/complete'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: json.encode({
+              'uploadId': uploadId,
+              'filename': filename,
+            }),
+          )
+          .timeout(const Duration(seconds: 90));
+    } catch (e) {
+      return (url: null, error: 'Finalize timed out — please try again.');
+    }
     if (response.statusCode == 401) {
       await Get.find<AuthController>().handleAuthFailure();
       return (url: null, error: 'Session expired — please sign in again.');
@@ -473,18 +498,25 @@ class UploadService {
     //
     // Parts that already have an ETag from a previous run are skipped
     // entirely; their bytes never leave the device a second time.
-    final pendingIndexes = state.pendingIndexes;
-    if (pendingIndexes.isNotEmpty) {
+    // Up to [maxDirectPasses] passes over the still-pending parts. Each
+    // pass re-reads state.pendingIndexes, so a part that failed in an
+    // earlier pass is retried while every part that already has an ETag is
+    // skipped (its bytes never leave the phone again). This lets the FAST
+    // direct-to-S3 path heal a flaky part by itself instead of throwing
+    // the whole upload onto the slow chunked-through-backend fallback for
+    // one dropped packet — which is what made it feel "too late".
+    const maxDirectPasses = 3;
+    for (var pass = 1; pass <= maxDirectPasses; pass++) {
+      final pendingIndexes = state.pendingIndexes;
+      if (pendingIndexes.isEmpty) break; // every part already up
+
       final sem = _Semaphore(_kMultipartConcurrency);
-      final failures = <String>[];
-      var done = state.doneCount;
 
       Future<void> uploadOne(int i) async {
-        if (failures.isNotEmpty) return;
         await sem.acquire();
         try {
-          if (failures.isNotEmpty) return;
           final part = state!.parts[i];
+          if (part.etag != null) return; // finished in an earlier pass
           final start = i * state.partSize;
           final end = (start + state.partSize).clamp(0, totalSize);
 
@@ -501,13 +533,11 @@ class UploadService {
           }
 
           final etag = await _putOnePart(url: part.url, bytes: bytes);
-          if (etag == null) {
-            failures.add('Part ${part.partNumber} failed after retries.');
-            return;
-          }
+          if (etag == null) return; // leave pending; a later pass retries it
           part.etag = etag;
-          done++;
-          onProgress?.call(done / state.parts.length);
+          // Recompute progress from authoritative state each time so the
+          // bar never jumps backward across passes.
+          onProgress?.call(state.doneCount / state.parts.length);
           // Persist after every success so a crash here only loses
           // (at most) the part currently mid-flight.
           await _saveUploadState(state);
@@ -516,14 +546,23 @@ class UploadService {
         }
       }
 
+      // Run ALL pending parts this pass (one bad part no longer cancels
+      // its siblings — they finish, and only the stragglers are retried).
       await Future.wait(pendingIndexes.map(uploadOne));
-      if (failures.isNotEmpty) {
-        // Deliberately DON'T abort here — the state on disk now reflects
-        // every part that DID succeed, and a future call resumes from
-        // the same point. The user's caller surfaces the error so they
-        // can retry on their own schedule.
-        return (url: null, error: failures.first);
+
+      if (state.pendingIndexes.isEmpty) break; // all done — go finalize
+
+      if (pass == maxDirectPasses) {
+        // Still missing parts after every direct pass — tear down the
+        // half-done S3 multipart and hand off to the chunked-through-
+        // backend path, which streams 2 MB chunks via the server and
+        // always completes. This is the rare last resort, not the norm.
+        await _abortMultipart(token, state.uploadId, state.key);
+        await _clearUploadState(file.path);
+        return uploadVideoChunked(file, onProgress: onProgress);
       }
+      // Small breather before the next pass so a transient blip clears.
+      await Future<void>.delayed(const Duration(milliseconds: 400));
     }
 
     // ── Step 3: finalize. By this point every part in state.parts has
@@ -538,10 +577,14 @@ class UploadService {
       ],
     );
     if (completeRes.error != null) {
-      // /complete failed but the parts are all up there — leave state
-      // intact so the next call retries just /complete. Most server-side
-      // hiccups here are transient.
-      return (url: null, error: completeRes.error);
+      // /complete failed even though every part uploaded. This is rare
+      // and usually a transient server-side hiccup, but to guarantee the
+      // upload finishes (rather than leaving the user stuck near 100%),
+      // abort the multipart, clear the resume state, and fall back to the
+      // chunked-through-backend path for a clean retry.
+      await _abortMultipart(token, state.uploadId, state.key);
+      await _clearUploadState(file.path);
+      return uploadVideoChunked(file, onProgress: onProgress);
     }
     await _clearUploadState(file.path);
     return (url: completeRes.url, error: null);
@@ -572,14 +615,30 @@ class UploadService {
     String filename,
     int totalSize,
   ) async {
-    final response = await http.post(
-      Uri.parse('$_base/me/uploads/video/multipart/init'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-      body: json.encode({'filename': filename, 'totalSize': totalSize}),
-    );
+    final http.Response response;
+    try {
+      response = await http
+          .post(
+            Uri.parse('$_base/me/uploads/video/multipart/init'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: json.encode({'filename': filename, 'totalSize': totalSize}),
+          )
+          .timeout(const Duration(seconds: 30));
+    } catch (e) {
+      // init stalled — signal a generic error (NOT the 503 fallback flag);
+      // the caller surfaces it and the user can retry.
+      return (
+        uploadId: null,
+        key: null,
+        partSize: null,
+        parts: null,
+        error: 'Could not start upload — check your connection.',
+        fallback: false,
+      );
+    }
     if (response.statusCode == 401) {
       await Get.find<AuthController>().handleAuthFailure();
       return (
@@ -670,6 +729,13 @@ class UploadService {
     // straight into CompleteMultipartUpload's `parts` array.
     final localHex = crypto.md5.convert(bytes).toString().toLowerCase();
 
+    // 3 attempts, 75 s each. The whole point is to FAIL FAST: if a part
+    // can't go up after 3 tries the caller tears down the multipart and
+    // falls back to the chunked-through-backend path, which always works.
+    // The old 5×180 s budget (15 min) is what made the bar look frozen at
+    // 87/93 % — one stuck part held the entire upload hostage. 3×75 s caps
+    // a truly-stalled part at ~3.75 min worst-case, and a part that fails
+    // with a connection reset (the common case) gives up in seconds.
     const maxAttempts = 3;
     for (var attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
@@ -678,15 +744,13 @@ class UploadService {
         // No Content-MD5 either — S3 only accepts it if it was part of
         // the signed headers (see doc comment above).
         //
-        // 180 s per-part timeout. A 10 MB part needs ~0.45 Mbps to fit;
-        // virtually every connection clears that, so this still tolerates
-        // slow cellular — but it recovers from a genuinely STALLED part
-        // (0 bytes moving) in 3 min instead of 5, which is what made the
-        // progress bar look "frozen". The 3-attempt retry + on-disk
-        // resume below pick up any part that does trip the timeout.
+        // 75 s per-part timeout. A 10 MB part needs ~1.1 Mbps to fit that
+        // window; below that we let the chunked fallback (2 MB chunks) take
+        // over, which is gentler on a weak connection. A genuinely STALLED
+        // part (0 bytes moving) is detected in 75 s instead of hanging.
         final response = await http
             .put(Uri.parse(url), body: bytes)
-            .timeout(const Duration(seconds: 180));
+            .timeout(const Duration(seconds: 75));
         if (response.statusCode == 200) {
           final etag = response.headers['etag'];
           if (etag == null || etag.isEmpty) {
@@ -723,14 +787,24 @@ class UploadService {
     required String key,
     required List<Map<String, dynamic>> parts,
   }) async {
-    final response = await http.post(
-      Uri.parse('$_base/me/uploads/video/multipart/complete'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-      body: json.encode({'uploadId': uploadId, 'key': key, 'parts': parts}),
-    );
+    final http.Response response;
+    try {
+      response = await http
+          .post(
+            Uri.parse('$_base/me/uploads/video/multipart/complete'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body:
+                json.encode({'uploadId': uploadId, 'key': key, 'parts': parts}),
+          )
+          .timeout(const Duration(seconds: 90));
+    } catch (e) {
+      // Stall/timeout on finalize — return an error so the caller falls
+      // back to the chunked path instead of hanging the bar at 100 %.
+      return (url: null, error: 'Finalize timed out — retrying.');
+    }
     if (response.statusCode == 401) {
       await Get.find<AuthController>().handleAuthFailure();
       return (url: null, error: 'Session expired — please sign in again.');
@@ -760,14 +834,16 @@ class UploadService {
     String key,
   ) async {
     try {
-      await http.post(
-        Uri.parse('$_base/me/uploads/video/multipart/abort'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: json.encode({'uploadId': uploadId, 'key': key}),
-      );
+      await http
+          .post(
+            Uri.parse('$_base/me/uploads/video/multipart/abort'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: json.encode({'uploadId': uploadId, 'key': key}),
+          )
+          .timeout(const Duration(seconds: 20));
     } catch (_) {
       // Swallow — abort is best-effort cleanup.
     }

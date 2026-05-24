@@ -1,0 +1,21 @@
+-- 0046_post_video_variants.sql
+--
+-- Adaptive / multi-quality video playback (the in-app "quality" gear).
+--
+-- A single uploaded video is transcoded (Q2 worker, FFmpeg) into several
+-- resolutions plus an HLS master playlist for "Auto". The resulting URLs
+-- are stored here as a JSON object keyed by quality label, e.g.
+--
+--   {
+--     "auto":  "https://.../variants/<id>/master.m3u8",
+--     "1080p": "https://.../variants/<id>/1080.mp4",
+--     "720p":  "https://.../variants/<id>/720.mp4",
+--     "480p":  "https://.../variants/<id>/480.mp4"
+--   }
+--
+-- NULL until the transcode job finishes (or when ffmpeg is unavailable /
+-- the source is audio-only). In that case the client simply plays the
+-- original `media_url` — i.e. exactly today's behavior. So this column is
+-- purely additive and safe to ship before the worker exists.
+ALTER TABLE posts
+    ADD COLUMN IF NOT EXISTS video_variants JSONB;

@@ -83,6 +83,13 @@ func (r *SocialRepository) resolvePostURLs(posts []*models.Post) {
 			v := r.s3.MediaURL(*p.CoverURL)
 			p.CoverURL = &v
 		}
+		// Quality variants (mig 0046) are stored as bare S3 keys by the
+		// transcode worker; sign each one fresh on read, same as MediaURL.
+		for label, val := range p.VideoVariants {
+			if val != "" {
+				p.VideoVariants[label] = r.s3.MediaURL(val)
+			}
+		}
 		// Post-attachment URLs (the gallery of extra images stitched on
 		// reels by attachAttachmentsBatch) get the same treatment so
 		// none of them rot.
@@ -1153,7 +1160,7 @@ const postCols = `
 	comments_count, created_at,
 	post_type, media_url, cover_url, duration_seconds, visibility,
 	is_hidden, updated_at,
-	status, publish_at
+	status, publish_at, video_variants
 `
 
 // ListCommunityPublicPosts — used by the pre-join preview endpoint
@@ -2836,6 +2843,7 @@ func scanAdminPostRow(scanner interface {
 		coverURL    sql.NullString
 		duration    sql.NullInt32
 		publishAt   sql.NullTime
+		variantsRaw []byte
 		email, role string
 	)
 	if err := scanner.Scan(
@@ -2845,10 +2853,13 @@ func scanAdminPostRow(scanner interface {
 		&p.Upvotes, &p.Likes, &p.Comments, &p.CreatedAt,
 		&p.PostType, &mediaURL, &coverURL, &duration, &p.Visibility,
 		&p.IsHidden, &p.UpdatedAt,
-		&p.Status, &publishAt,
+		&p.Status, &publishAt, &variantsRaw,
 		&email, &role,
 	); err != nil {
 		return nil, "", "", err
+	}
+	if len(variantsRaw) > 0 {
+		_ = json.Unmarshal(variantsRaw, &p.VideoVariants)
 	}
 	if publishAt.Valid {
 		p.PublishAt = &publishAt.Time
@@ -2902,5 +2913,5 @@ func postColsQualified(alias string) string {
 		alias + ".post_type, " + alias + ".media_url, " + alias + ".cover_url, " + alias + ".duration_seconds, " +
 		alias + ".visibility, " +
 		alias + ".is_hidden, " + alias + ".updated_at, " +
-		alias + ".status, " + alias + ".publish_at"
+		alias + ".status, " + alias + ".publish_at, " + alias + ".video_variants"
 }

@@ -3,6 +3,7 @@ import '../../widgets/directional_icon.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
+import '../../controllers/app_config_controller.dart';
 import '../../controllers/expert_dashboard_controller.dart';
 import '../../localization/locale_format.dart';
 import '../../models/community_proposal.dart';
@@ -353,6 +354,7 @@ class _PostTile extends StatelessWidget {
                   HapticFeedback.lightImpact();
                   Get.to(() => ReelPlayerScreen(
                         mediaUrl: post.mediaUrl!,
+                        qualityVariants: post.videoVariants,
                         coverUrl: post.coverUrl,
                         title: post.title,
                         authorName: post.authorName,
@@ -793,6 +795,11 @@ class _ProposalsSectionState extends State<_ProposalsSection> {
 
   @override
   Widget build(BuildContext context) {
+    // Community kill-switch — hide the whole "create community" section
+    // (CTA + my-proposals) when the admin has disabled communities.
+    if (!Get.find<AppConfigController>().communityEnabled.value) {
+      return const SizedBox.shrink();
+    }
     final cs = Theme.of(context).colorScheme;
 
     return Column(

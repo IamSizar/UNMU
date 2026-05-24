@@ -144,6 +144,13 @@ class HalalFintechTheme {
         ),
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       ),
+      // iPad: cap modal bottom sheets to a centered column instead of
+      // stretching them edge-to-edge. 640 is wider than any phone in
+      // portrait, so phones are unaffected; on a wide canvas the sheet
+      // centers (Flutter centers a width-constrained sheet automatically).
+      bottomSheetTheme: const BottomSheetThemeData(
+        constraints: BoxConstraints(maxWidth: 640),
+      ),
       appBarTheme: AppBarTheme(
         backgroundColor: backgroundLight,
         elevation: 0,
@@ -320,6 +327,10 @@ class HalalFintechTheme {
           side: BorderSide(color: cardBorderDark, width: 1),
         ),
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      ),
+      // iPad: cap modal bottom sheets to a centered column (see lightTheme).
+      bottomSheetTheme: const BottomSheetThemeData(
+        constraints: BoxConstraints(maxWidth: 640),
       ),
       appBarTheme: AppBarTheme(
         backgroundColor: backgroundDark,

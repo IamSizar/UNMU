@@ -4,6 +4,7 @@ import '../../controllers/auth_controller.dart';
 import '../../localization/locale_format.dart';
 import '../../services/api_service.dart';
 import '../../theme/halal_fintech_theme.dart';
+import '../../utils/responsive.dart';
 import '../../widgets/platform_adaptive/platform_app_bar.dart';
 import '../../screens/stock_detail/stock_detail_screen.dart';
 import '../../utils/haptic_utils.dart';
@@ -109,7 +110,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               : RefreshIndicator(
                   onRefresh: _loadNotifications,
                   child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
+                    // iPad: center the inbox to a single comfortable column
+                    // (a 2-up grid reads wrong for notifications). Phone:
+                    // unchanged 16px inset.
+                    padding: EdgeInsets.symmetric(
+                      horizontal: context.centeringHPad(contentWidth: 640),
+                      vertical: 16,
+                    ),
                     itemCount: _notifications.length,
                     itemBuilder: (context, index) {
                       final notification = _notifications[index];

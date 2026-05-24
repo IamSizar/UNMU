@@ -203,6 +203,15 @@ class ExpertPost {
   final String body;
   final String? mediaUrl;
   final String? coverUrl;
+
+  /// Quality ladder for the in-app quality gear (mig 0046). Maps a label
+  /// to a playable URL, e.g. {"720p": "https://…", "480p": "https://…"}.
+  /// "Auto" is implicit and always equals [mediaUrl] (the original). Empty
+  /// when the post has no transcoded renditions — small/short clips, or
+  /// videos the backend worker hasn't processed yet — in which case the
+  /// player just shows no gear and plays the original.
+  final Map<String, String> videoVariants;
+
   final int? durationSeconds;
   final List<String> tickers;
   final PostVisibility visibility;
@@ -267,6 +276,7 @@ class ExpertPost {
     this.title,
     this.mediaUrl,
     this.coverUrl,
+    this.videoVariants = const {},
     this.durationSeconds,
     this.targetType = '',
     this.communityId,
@@ -294,6 +304,7 @@ class ExpertPost {
       // ApiConfig.baseUrl origin.
       mediaUrl: resolveUrl(json['mediaUrl'] as String?),
       coverUrl: resolveUrl(json['coverUrl'] as String?),
+      videoVariants: _parseVariants(json['videoVariants']),
       durationSeconds: (json['durationSeconds'] as num?)?.toInt(),
       tickers: (json['tickers'] as List<dynamic>? ?? [])
           .map((e) => e.toString())
@@ -322,6 +333,18 @@ class ExpertPost {
           .map((e) => PostAttachment.fromJson(e as Map<String, dynamic>))
           .toList(),
     );
+  }
+
+  /// Parses the backend `videoVariants` JSON object into a label→URL map,
+  /// normalising each URL through [resolveUrl] and dropping empties.
+  static Map<String, String> _parseVariants(dynamic raw) {
+    if (raw is! Map) return const {};
+    final out = <String, String>{};
+    raw.forEach((k, v) {
+      final url = resolveUrl(v as String?);
+      if (url != null && url.isNotEmpty) out[k.toString()] = url;
+    });
+    return out;
   }
 
   /// True iff this post has been edited at least once after creation.
