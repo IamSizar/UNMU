@@ -1,6 +1,5 @@
-# Railway only builds the Go backend (backend/Dockerfile, context = repo root).
-# Exclude everything else so `railway up` uploads a tiny, drive-safe context.
-/admin-dashboard
+# Trim the upload context for `railway up`. (admin-dashboard IS included — the
+# dashboard service builds it via source.rootDirectory=admin-dashboard.)
 /lib
 /ios
 /android
