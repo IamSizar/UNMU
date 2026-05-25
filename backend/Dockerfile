@@ -1,5 +1,6 @@
 # Stage 1: Build the Go binary and download golang-migrate
-FROM golang:1.21-alpine AS builder
+# go.mod requires Go >= 1.25, so the builder image must match.
+FROM golang:1.25-alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache git ca-certificates wget tar
@@ -14,7 +15,7 @@ RUN go mod download
 COPY backend/ .
 
 # Build the main API binary
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o api cmd/api/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -o api ./cmd/api
 
 # Download golang-migrate
 RUN wget https://github.com/golang-migrate/migrate/releases/download/v4.16.2/migrate.linux-amd64.tar.gz && \

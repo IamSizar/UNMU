@@ -3,12 +3,13 @@
 .env.*
 !.env.example
 
-# Compiled binaries
-api
-daily_update
-ingest
-rescreen
-screen
+# Compiled binaries (anchored with leading slash so these only match binaries
+# built in the backend root — NOT source dirs like cmd/api/, cmd/ingest_*/).
+/api
+/daily_update
+/ingest
+/rescreen
+/screen
 *.exe
 *.exe~
 *.dll

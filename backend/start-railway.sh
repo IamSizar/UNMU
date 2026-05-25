@@ -22,10 +22,14 @@ if [ -n "$PGHOST" ]; then
     # Construct postgres connection string for migrations
     DB_URL="postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=${DB_SSLMODE}"
     
-    echo "Running database migrations..."
-    # Apply migrations
-    migrate -path /app/migrations -database "$DB_URL" up || true
-    echo "Migrations check complete."
+    # NOTE: golang-migrate is intentionally DISABLED. This repo's migrations mix
+    # naming conventions (000001_*.up.sql vs plain 0007_*.sql); golang-migrate
+    # only applies the .up.sql ones, leaving a partial schema. The schema is
+    # instead loaded directly from a pg_dump of the known-good local DB. Once
+    # migrations are normalized to the .up.sql/.down.sql convention this can be
+    # re-enabled.
+    echo "Skipping golang-migrate (schema managed out-of-band via pg_dump)."
+    # migrate -path /app/migrations -database "$DB_URL" up || true
 else
     echo "WARNING: PGHOST is not set. Assuming database is managed externally or connection vars are set manually."
 fi

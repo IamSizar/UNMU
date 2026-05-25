@@ -1,0 +1,24 @@
+# Railway only builds the Go backend (backend/Dockerfile, context = repo root).
+# Exclude everything else so `railway up` uploads a tiny, drive-safe context.
+/admin-dashboard
+/lib
+/ios
+/android
+/macos
+/web
+/windows
+/linux
+/test
+/integration_test
+/StockAnalyzer-real-stack
+/assets
+/fonts
+/screenshots
+/build
+/.dart_tool
+/.git
+/well-known
+*.md
+*.png
+*.jpg
+*.jpeg
