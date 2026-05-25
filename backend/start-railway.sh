@@ -30,7 +30,20 @@ else
     echo "WARNING: PGHOST is not set. Assuming database is managed externally or connection vars are set manually."
 fi
 
-# The SERVER_PORT handles the dynamic $PORT injected by Railway. 
+# Firebase service account: the SDK reads GOOGLE_APPLICATION_CREDENTIALS as a
+# FILE PATH, but on Railway there is no local file. So when the JSON is provided
+# inline via FIREBASE_SERVICE_ACCOUNT_JSON, write it to disk and point the SDK at
+# it. Enables Google/Apple OAuth + FCM "send to all" / per-user push. When the
+# var is unset both subsystems soft-fail (email/password auth still works).
+if [ -n "$FIREBASE_SERVICE_ACCOUNT_JSON" ]; then
+    printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > /app/firebase-sa.json
+    export GOOGLE_APPLICATION_CREDENTIALS=/app/firebase-sa.json
+    echo "Firebase service account written to /app/firebase-sa.json"
+else
+    echo "FIREBASE_SERVICE_ACCOUNT_JSON not set — OAuth + FCM disabled."
+fi
+
+# The SERVER_PORT handles the dynamic $PORT injected by Railway.
 # Go API uses SERVER_PORT variable.
 export SERVER_PORT=${PORT:-8080}
 
