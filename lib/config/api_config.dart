@@ -1,13 +1,14 @@
 import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, kReleaseMode;
 
 class ApiConfig {
-  // Toggle this to false when you deploy to Railway
-  static const bool useLocalBackend = true;
-  
-  // Replace this with your actual Railway app URL once deployed
-  // e.g., 'https://halalstocks-production.up.railway.app'
-  static const String railwayUrl = 'https://humble-consideration-production-b17c.up.railway.app/api';
+  // Debug & profile builds (flutter run) talk to the LOCAL dev backend.
+  // RELEASE builds (TestFlight / App Store / `flutter build`) automatically
+  // use Railway — so an archived build never ships pointing at localhost.
+  static bool get useLocalBackend => !kReleaseMode;
+
+  // Live Railway backend (project UNMU).
+  static const String railwayUrl = 'https://backend-production-c908.up.railway.app/api';
 
   /// LAN IP of the dev Mac running the Go backend. Replace this when you
   /// move to a different Wi-Fi or your router hands out a new DHCP lease.
