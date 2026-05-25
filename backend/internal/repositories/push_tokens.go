@@ -193,3 +193,27 @@ func (r *PushTokenRepository) DeleteToken(token string) error {
 	)
 	return err
 }
+
+// ResolveTokens returns the device tokens for a broadcast target spec.
+// Shared by the immediate admin send (handlers.PushHandler.AdminSend) and
+// the background scheduled-push sender so both honor the exact same
+// targeting (all | ios | android | web | user | role | community). Assumes
+// the spec was already validated by the caller (the HTTP layer).
+func (r *PushTokenRepository) ResolveTokens(
+	target string, userID int64, role, communityID string,
+) ([]string, error) {
+	switch strings.ToLower(strings.TrimSpace(target)) {
+	case "", "all":
+		return r.ListAllTokens("")
+	case "ios", "android", "web":
+		return r.ListAllTokens(strings.ToLower(strings.TrimSpace(target)))
+	case "user":
+		return r.ListForUser(userID)
+	case "role":
+		return r.ListForRole(strings.ToUpper(strings.TrimSpace(role)))
+	case "community":
+		return r.ListForCommunity(strings.TrimSpace(communityID))
+	default:
+		return nil, fmt.Errorf("unknown target %q", target)
+	}
+}

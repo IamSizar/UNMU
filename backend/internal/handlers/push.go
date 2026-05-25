@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,6 +22,48 @@ type PushHandler struct {
 	// Wired post-construction for the temporary test-all endpoint.
 	notifier *services.Notifier
 	users    *repositories.UserRepository
+	// Scheduled "countdown" pushes (mig 0048). Wired post-construction.
+	scheduled *repositories.ScheduledPushRepository
+}
+
+// SetScheduledRepo wires the scheduled-push store used by the schedule
+// endpoints. Safe to leave nil (then those endpoints 503).
+func (h *PushHandler) SetScheduledRepo(r *repositories.ScheduledPushRepository) {
+	h.scheduled = r
+}
+
+// normalizeTarget lower-cases + defaults the broadcast target to "all".
+func normalizeTarget(t string) string {
+	t = strings.ToLower(strings.TrimSpace(t))
+	if t == "" {
+		return "all"
+	}
+	return t
+}
+
+// validateSendTarget returns a 400 message if the target spec is invalid,
+// or "" when it's good. Shared by AdminSend + ScheduleSend.
+func validateSendTarget(b sendBody) string {
+	switch normalizeTarget(b.Target) {
+	case "all", "ios", "android", "web":
+		return ""
+	case "user":
+		if b.UserID <= 0 {
+			return "target=user requires userId"
+		}
+	case "role":
+		role := strings.ToUpper(strings.TrimSpace(b.Role))
+		if role != "USER" && role != "EXPERT" && role != "ADMIN" {
+			return "target=role requires role=USER|EXPERT|ADMIN"
+		}
+	case "community":
+		if strings.TrimSpace(b.CommunityID) == "" {
+			return "target=community requires communityId"
+		}
+	default:
+		return "target must be all|ios|android|web|user|role|community"
+	}
+	return ""
 }
 
 func NewPushHandler(
@@ -168,60 +211,24 @@ func (h *PushHandler) AdminSend(c *gin.Context) {
 		return
 	}
 
-	target := strings.ToLower(strings.TrimSpace(body.Target))
-	if target == "" {
-		target = "all"
-	}
-
-	var tokens []string
-	var err error
-	switch target {
-	case "all":
-		tokens, err = h.tokens.ListAllTokens("")
-	case "ios", "android", "web":
-		tokens, err = h.tokens.ListAllTokens(target)
-	case "user":
-		if body.UserID <= 0 {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "target=user requires userId",
-			})
-			return
-		}
-		tokens, err = h.tokens.ListForUser(body.UserID)
-	case "role":
-		role := strings.ToUpper(strings.TrimSpace(body.Role))
-		if role != "USER" && role != "EXPERT" && role != "ADMIN" {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "target=role requires role=USER|EXPERT|ADMIN",
-			})
-			return
-		}
-		tokens, err = h.tokens.ListForRole(role)
-	case "community":
-		cid := strings.TrimSpace(body.CommunityID)
-		if cid == "" {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "target=community requires communityId",
-			})
-			return
-		}
-		tokens, err = h.tokens.ListForCommunity(cid)
-	default:
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "target must be all|ios|android|web|user|role|community",
-		})
+	if msg := validateSendTarget(body); msg != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
 		return
 	}
+	target := normalizeTarget(body.Target)
+	tokens, err := h.tokens.ResolveTokens(
+		target, body.UserID, body.Role, body.CommunityID,
+	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	if len(tokens) == 0 {
 		c.JSON(http.StatusOK, gin.H{
-			"success_count":  0,
-			"failure_count":  0,
-			"recipients":     0,
-			"target":         target,
+			"success_count": 0,
+			"failure_count": 0,
+			"recipients":    0,
+			"target":        target,
 		})
 		return
 	}
@@ -254,4 +261,166 @@ func (h *PushHandler) AdminSend(c *gin.Context) {
 		"target":         target,
 		"invalid_tokens": result.InvalidTokens,
 	})
+}
+
+// scheduleBody = sendBody + when to fire it. The dashboard sends
+// `sendInSeconds` (total countdown from now, computed from its
+// days/hours/minutes/seconds picker); an absolute RFC3339 `sendAt` is also
+// accepted as an alternative.
+type scheduleBody struct {
+	sendBody
+	SendInSeconds int64  `json:"sendInSeconds,omitempty"`
+	SendAt        string `json:"sendAt,omitempty"`
+	// Recurrence (optional). Repeat: none|minutely|hourly|daily|weekly|monthly.
+	// RepeatDays: weekdays 0=Sun…6=Sat, required when Repeat="weekly".
+	Repeat     string `json:"repeat,omitempty"`
+	RepeatDays []int  `json:"repeatDays,omitempty"`
+}
+
+// validRepeatKinds is the closed set the scheduler knows how to advance.
+var validRepeatKinds = map[string]bool{
+	"none": true, "minutely": true, "hourly": true,
+	"daily": true, "weekly": true, "monthly": true,
+}
+
+// ScheduleSend — POST /api/admin/push/schedule
+//
+// Queues a push to fire at a future time. A background sender
+// (services.ScheduledPushSender) delivers it when due, so it survives the
+// dashboard being closed. Admin-only (route under admin middleware).
+func (h *PushHandler) ScheduleSend(c *gin.Context) {
+	if h.scheduled == nil {
+		c.JSON(http.StatusServiceUnavailable,
+			gin.H{"error": "scheduling not configured"})
+		return
+	}
+	var b scheduleBody
+	if err := c.ShouldBindJSON(&b); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
+		return
+	}
+	b.Title = strings.TrimSpace(b.Title)
+	b.Body = strings.TrimSpace(b.Body)
+	if b.Title == "" || b.Body == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "title and body required"})
+		return
+	}
+	if msg := validateSendTarget(b.sendBody); msg != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+		return
+	}
+
+	var sendAt time.Time
+	switch {
+	case b.SendInSeconds > 0:
+		sendAt = time.Now().Add(time.Duration(b.SendInSeconds) * time.Second)
+	case b.SendAt != "":
+		t, err := time.Parse(time.RFC3339, b.SendAt)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid sendAt (use RFC3339)"})
+			return
+		}
+		sendAt = t
+	default:
+		c.JSON(http.StatusBadRequest,
+			gin.H{"error": "sendInSeconds or sendAt required"})
+		return
+	}
+	if sendAt.Before(time.Now().Add(2 * time.Second)) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "send time must be in the future"})
+		return
+	}
+
+	// Recurrence (optional). Default to one-shot.
+	repeat := strings.ToLower(strings.TrimSpace(b.Repeat))
+	if repeat == "" {
+		repeat = "none"
+	}
+	if !validRepeatKinds[repeat] {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid repeat kind"})
+		return
+	}
+	var repeatDays []int64
+	if repeat == "weekly" {
+		seen := map[int]bool{}
+		for _, d := range b.RepeatDays {
+			if d < 0 || d > 6 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "repeatDays must be 0–6 (Sun–Sat)"})
+				return
+			}
+			if !seen[d] {
+				seen[d] = true
+				repeatDays = append(repeatDays, int64(d))
+			}
+		}
+		if len(repeatDays) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "weekly repeat needs at least one weekday"})
+			return
+		}
+	}
+
+	rec := repositories.ScheduledPush{
+		Title:      b.Title,
+		Body:       b.Body,
+		Data:       b.Data,
+		Target:     normalizeTarget(b.Target),
+		SendAt:     sendAt,
+		RepeatKind: repeat,
+		RepeatDays: repeatDays,
+	}
+	if b.UserID > 0 {
+		rec.UserID = &b.UserID
+	}
+	if role := strings.ToUpper(strings.TrimSpace(b.Role)); role != "" {
+		rec.Role = &role
+	}
+	if cid := strings.TrimSpace(b.CommunityID); cid != "" {
+		rec.CommunityID = &cid
+	}
+	saved, err := h.scheduled.Create(rec)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, saved)
+}
+
+// ListScheduled — GET /api/admin/push/scheduled
+func (h *PushHandler) ListScheduled(c *gin.Context) {
+	if h.scheduled == nil {
+		c.JSON(http.StatusServiceUnavailable,
+			gin.H{"error": "scheduling not configured"})
+		return
+	}
+	list, err := h.scheduled.List(100)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"items": list})
+}
+
+// CancelScheduled — DELETE /api/admin/push/scheduled/:id
+func (h *PushHandler) CancelScheduled(c *gin.Context) {
+	if h.scheduled == nil {
+		c.JSON(http.StatusServiceUnavailable,
+			gin.H{"error": "scheduling not configured"})
+		return
+	}
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+	ok, err := h.scheduled.Cancel(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if !ok {
+		c.JSON(http.StatusConflict,
+			gin.H{"error": "not pending (already sent or cancelled)"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"cancelled": true})
 }

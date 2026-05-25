@@ -250,6 +250,32 @@ class PushTokenService {
     }
   }
 
+  /// Force-register the device's current token with the backend.
+  ///
+  /// Call this right after a successful sign-in / sign-up / email-verify /
+  /// OAuth. The FCM token is fetched at app boot — almost always BEFORE the
+  /// user authenticates — so the boot-time [_sendTokenToBackend] no-ops with
+  /// "not signed in yet" and the token never reaches the server. Without a
+  /// re-send on auth, a freshly-registered device is never mapped to the
+  /// user and pushes silently never arrive.
+  ///
+  /// Unlike [_handleNewToken] this deliberately does NOT dedupe against
+  /// [_lastToken]: the token value is usually unchanged across a login — it's
+  /// the *auth state* that changed — so we must send it anyway. The backend
+  /// upserts, so a duplicate POST is harmless.
+  ///
+  /// If no token has resolved yet (e.g. the user signed in on a fast first
+  /// launch before APNs landed), we kick off a fresh fetch instead; the user
+  /// is authenticated by then, so [_handleNewToken] will send it on arrival.
+  Future<void> registerWithBackend() async {
+    final token = _lastToken;
+    if (token != null && token.isNotEmpty) {
+      await _sendTokenToBackend(token);
+    } else {
+      await _refreshAndPrint();
+    }
+  }
+
   /// Exposed for the upcoming "send to backend" phase. Returns null
   /// until [bootstrap] has run + iOS has issued an APNs token.
   String? get currentToken => _lastToken;

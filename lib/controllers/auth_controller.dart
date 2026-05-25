@@ -15,6 +15,7 @@ import '../models/user.dart';
 import '../services/auth_service.dart';
 import '../services/dev_service.dart';
 import '../services/locale_sync_service.dart';
+import '../services/push_token_service.dart';
 
 /// Authentication + per-user profile state. Replaces the old `AuthProvider`.
 ///
@@ -72,6 +73,20 @@ class AuthController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    // Whenever we become authenticated — fresh login / signup / email-verify
+    // / OAuth, OR a restored session at app launch — make sure THIS device's
+    // push token is registered with the backend. The FCM token is fetched at
+    // boot, usually BEFORE the user signs in, so the boot-time send no-ops
+    // ("not signed in yet"); without this re-send the backend never learns
+    // the device→user mapping and notifications never arrive on new sign-ins.
+    // Registered before _loadSession() so the restored-session token is
+    // caught. Guarded against null (logout); the backend upserts so repeats
+    // are harmless.
+    ever<String?>(_token, (t) {
+      if (t != null && t.isNotEmpty) {
+        PushTokenService.instance.registerWithBackend();
+      }
+    });
     _loadSession();
   }
 
