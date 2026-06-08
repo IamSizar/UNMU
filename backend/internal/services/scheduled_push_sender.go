@@ -81,18 +81,23 @@ func (s *ScheduledPushSender) send(ctx context.Context, p repositories.Scheduled
 	if p.CommunityID != nil {
 		cid = *p.CommunityID
 	}
-	tokens, err := s.tokens.ResolveTokens(p.Target, userID, role, cid)
+	recipients, err := s.tokens.ResolveTokensWithLocale(p.Target, userID, role, cid)
 	if err != nil {
 		s.finishFailed(p, err.Error())
 		return
 	}
-	if len(tokens) == 0 {
+	if len(recipients) == 0 {
 		s.finishSent(p, 0, 0, 0) // nothing to send, but it "ran"
 		return
 	}
 	sctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
-	res, sendErr := s.fcm.SendToTokens(sctx, tokens, p.Title, p.Body, p.Data)
+	// Each recipient gets the copy in their own language (Arabic users the
+	// Arabic copy, everyone else English; Arabic falls back to English when
+	// the scheduled row has no Arabic text).
+	res, sendErr := s.fcm.SendLocalized(
+		sctx, recipients, p.Title, p.Body, p.TitleAr, p.BodyAr, p.Data,
+	)
 	for _, t := range res.InvalidTokens {
 		_ = s.tokens.DeleteToken(t)
 	}
@@ -100,7 +105,7 @@ func (s *ScheduledPushSender) send(ctx context.Context, p repositories.Scheduled
 		s.finishFailed(p, sendErr.Error())
 		return
 	}
-	s.finishSent(p, res.SuccessCount, res.FailureCount, len(tokens))
+	s.finishSent(p, res.SuccessCount, res.FailureCount, len(recipients))
 	log.Printf("[scheduled_push] fired #%d → %d ok / %d fail",
 		p.ID, res.SuccessCount, res.FailureCount)
 }

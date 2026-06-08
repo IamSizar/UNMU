@@ -217,3 +217,76 @@ func (r *PushTokenRepository) ResolveTokens(
 		return nil, fmt.Errorf("unknown target %q", target)
 	}
 }
+
+// TokenLocale pairs a device token with its owner's UI language ('en' / 'ar').
+// Used to localize a broadcast: the admin writes both languages and each
+// device is sent the copy matching the user's chosen language.
+type TokenLocale struct {
+	Token  string
+	Locale string
+}
+
+// ResolveTokensWithLocale is the locale-aware sibling of [ResolveTokens]: it
+// returns each target device's token together with its owner's locale, so the
+// caller can split a broadcast and send each user the copy in their language.
+//
+// One unified query with a target-specific predicate. It always JOINs users
+// (for locale + the soft-delete filter) and LEFT JOINs notification prefs to
+// honor the per-user push_enabled opt-out — the same filtering the per-target
+// list methods use. Unknown/missing locale falls back to 'en'.
+func (r *PushTokenRepository) ResolveTokensWithLocale(
+	target string, userID int64, role, communityID string,
+) ([]TokenLocale, error) {
+	base := `
+		SELECT t.token, COALESCE(NULLIF(u.locale, ''), 'en')
+		FROM user_push_tokens t
+		JOIN users u ON u.id = t.user_id
+		LEFT JOIN user_notification_prefs p ON p.user_id = t.user_id
+		WHERE COALESCE(p.push_enabled, TRUE) = TRUE
+		  AND u.deleted_at IS NULL`
+
+	var (
+		where string
+		arg   any
+	)
+	switch strings.ToLower(strings.TrimSpace(target)) {
+	case "", "all":
+		// no extra predicate
+	case "ios", "android", "web":
+		where, arg = " AND t.platform = $1", strings.ToLower(strings.TrimSpace(target))
+	case "user":
+		where, arg = " AND t.user_id = $1", userID
+	case "role":
+		where, arg = " AND u.role = $1", strings.ToUpper(strings.TrimSpace(role))
+	case "community":
+		base += " JOIN community_members m ON m.user_id = t.user_id"
+		where, arg = " AND m.community_id = $1", strings.TrimSpace(communityID)
+	default:
+		return nil, fmt.Errorf("unknown target %q", target)
+	}
+
+	query := base + where + " ORDER BY t.last_seen DESC"
+	var (
+		rows *sql.Rows
+		err  error
+	)
+	if arg == nil {
+		rows, err = r.db.Query(query)
+	} else {
+		rows, err = r.db.Query(query, arg)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]TokenLocale, 0, 128)
+	for rows.Next() {
+		var tl TokenLocale
+		if err := rows.Scan(&tl.Token, &tl.Locale); err != nil {
+			return nil, err
+		}
+		out = append(out, tl)
+	}
+	return out, rows.Err()
+}

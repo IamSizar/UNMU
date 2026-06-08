@@ -31,6 +31,20 @@ type CommunitySubscriptionsHandler struct {
 	hub        *realtime.Hub
 	userNotifs *repositories.UserNotificationsRepository // optional, set via SetUserNotifications
 	notifier   *services.Notifier                        // optional, set via SetNotifier
+	// promos + promoAudits power server-authoritative promo discounts at
+	// checkout. Wired via SetPromo. Both nil = promo codes ignored.
+	promos      *repositories.PromoCodeRepository
+	promoAudits *repositories.AuditRepository
+}
+
+// SetPromo wires the promo-code repo (+ audit repo for the admin alert) so a
+// community subscription can apply a discount and record the redemption.
+func (h *CommunitySubscriptionsHandler) SetPromo(
+	promos *repositories.PromoCodeRepository,
+	audits *repositories.AuditRepository,
+) {
+	h.promos = promos
+	h.promoAudits = audits
 }
 
 func NewCommunitySubscriptionsHandler(
@@ -109,6 +123,7 @@ func (h *CommunitySubscriptionsHandler) Subscribe(c *gin.Context) {
 		PaymentRef    string `json:"paymentRef"`
 		ReceiptURL    string `json:"receiptUrl"`
 		UserNote      string `json:"userNote"`
+		PromoCode     string `json:"promoCode"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
@@ -146,6 +161,22 @@ func (h *CommunitySubscriptionsHandler) Subscribe(c *gin.Context) {
 		currency = "usd"
 	}
 
+	// Promo code (optional), applied server-side. Invalid → 400 so the user
+	// isn't silently charged full price.
+	userNote := body.UserNote
+	if pc, note, msg, derr := applyPromoAtCheckout(
+		h.promos, h.promoAudits, body.PromoCode, "community", userID, body.PaymentMethod, priceCents, userNote,
+	); derr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to apply promo code"})
+		return
+	} else if msg != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": msg, "code": "PROMO_INVALID"})
+		return
+	} else {
+		priceCents = pc
+		userNote = note
+	}
+
 	sub, err := h.subs.Create(repositories.CreateCommSubParams{
 		UserID:        userID,
 		CommunityID:   communityID,
@@ -153,7 +184,7 @@ func (h *CommunitySubscriptionsHandler) Subscribe(c *gin.Context) {
 		PaymentMethod: body.PaymentMethod,
 		PaymentRef:    body.PaymentRef,
 		ReceiptURL:    body.ReceiptURL,
-		UserNote:      body.UserNote,
+		UserNote:      userNote,
 		PriceCents:    priceCents,
 		Currency:      currency,
 	})

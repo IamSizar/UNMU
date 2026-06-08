@@ -38,6 +38,10 @@ class ReelPlayerScreen extends StatelessWidget {
   /// (e.g. {"720p": "…"}); "Auto" = [mediaUrl]. Empty hides the gear.
   final Map<String, String> qualityVariants;
 
+  /// Post's recorded duration (seconds), forwarded to [UnmuVideoPlayer] so it
+  /// can reject a truncated transcoded variant and fall back to [mediaUrl].
+  final int? expectedDurationSeconds;
+
   const ReelPlayerScreen({
     super.key,
     required this.mediaUrl,
@@ -46,6 +50,7 @@ class ReelPlayerScreen extends StatelessWidget {
     this.title,
     this.loop = true,
     this.qualityVariants = const {},
+    this.expectedDurationSeconds,
   });
 
   @override
@@ -59,6 +64,7 @@ class ReelPlayerScreen extends StatelessWidget {
         autoPlay: true,
         loop: loop,
         qualityVariants: qualityVariants,
+        expectedDurationSeconds: expectedDurationSeconds,
         onClose: () => Navigator.of(context).pop(),
         bottomOverlay: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),

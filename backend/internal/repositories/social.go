@@ -63,6 +63,16 @@ func (r *SocialRepository) resolveURL(value string) string {
 	return r.s3.MediaURL(value)
 }
 
+// SignMediaURL re-signs a single stored media value (e.g. a user's
+// avatar_url) for a read response — the same fresh-presign treatment post and
+// community media get. Exported so handlers in other packages can sign a
+// one-off value; signing the stored (possibly already-expired) URL works
+// because MediaURL extracts the object key and presigns anew. Safe when S3
+// isn't wired (returns the input unchanged).
+func (r *SocialRepository) SignMediaURL(value string) string {
+	return r.resolveURL(value)
+}
+
 // resolvePostURLs walks a batch of posts and rewrites their MediaURL and
 // CoverURL through [resolveURL]. Called at the same enrichment seam as
 // [attachAttachmentsBatch] so every Post-returning function gets the fix

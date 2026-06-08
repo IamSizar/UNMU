@@ -9,6 +9,7 @@ import '../../models/expert_post.dart';
 import '../../services/events_service.dart';
 import '../../services/expert_post_service.dart';
 import '../../utils/haptic_utils.dart';
+import '../../widgets/common/app_network_image.dart';
 import '../../widgets/social/like_button.dart';
 import '../../widgets/social/comment_button.dart';
 import '../../widgets/social/markdown_body.dart';
@@ -308,6 +309,7 @@ class _PostContent extends StatelessWidget {
                 () => ReelPlayerScreen(
                   mediaUrl: post.mediaUrl!,
                   qualityVariants: post.videoVariants,
+                  expectedDurationSeconds: post.durationSeconds,
                   coverUrl: post.coverUrl,
                   title: post.title,
                   authorName: post.authorName,
@@ -324,10 +326,11 @@ class _PostContent extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              Image.network(
+              AppNetworkImage(
                 url,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
+                placeholderColor: palette.surfaceElevated,
+                errorWidget: Container(
                   color: palette.surfaceElevated,
                   child: Icon(
                     Icons.image_outlined,

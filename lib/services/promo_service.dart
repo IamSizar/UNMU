@@ -7,8 +7,15 @@ import '../config/api_config.dart';
 class PromoService {
   static String get baseUrl => '${ApiConfig.baseUrl}/promo';
 
-  // Validate promo code
-  static Future<Map<String, dynamic>> validatePromo(String code) async {
+  // Validate promo code. [context] ('expert' | 'community') lets the server
+  // enforce a scoped code so an expert-only code is rejected on a community
+  // purchase and vice-versa. The validate is a PREVIEW only — the actual
+  // discount + redemption happen server-side when the subscription is created
+  // (the subscribe endpoint takes the same code).
+  static Future<Map<String, dynamic>> validatePromo(
+    String code, {
+    String context = '',
+  }) async {
     try {
       final token = await AuthService.getToken();
       if (token == null) {
@@ -21,7 +28,10 @@ class PromoService {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
-        body: json.encode({'code': code}),
+        body: json.encode({
+          'code': code,
+          if (context.isNotEmpty) 'context': context,
+        }),
       );
 
       if (response.statusCode == 200) {

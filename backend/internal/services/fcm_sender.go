@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 
+	"halalstocks/internal/repositories"
+
 	firebase "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/messaging"
 	"google.golang.org/api/option"
@@ -72,6 +74,65 @@ type SendResult struct {
 	// caller (admin handler) deletes those from the DB so the next
 	// broadcast doesn't waste a quota slot.
 	InvalidTokens []string `json:"invalid_tokens,omitempty"`
+}
+
+// isArabicLocale reports whether a stored user locale denotes Arabic. We match
+// on the "ar" prefix so regional tags ("ar-SA", "ar_EG") all count.
+func isArabicLocale(loc string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(loc)), "ar")
+}
+
+// SendLocalized fans a bilingual broadcast out by recipient language: a device
+// whose owner chose Arabic gets (titleAr, bodyAr); every other device gets
+// (titleEn, bodyEn). This is what makes an admin push arrive in each user's
+// own language automatically — the operator writes both copies once and never
+// picks a single language for everyone.
+//
+// The English copy is the default/mandatory one; when an Arabic copy is blank
+// it falls back to English, so a one-language send still reaches all users.
+// Results from both language batches are merged into a single SendResult.
+func (s *FCMSender) SendLocalized(
+	ctx context.Context,
+	recipients []repositories.TokenLocale,
+	titleEn, bodyEn, titleAr, bodyAr string,
+	data map[string]string,
+) (SendResult, error) {
+	if s == nil {
+		return SendResult{}, fmt.Errorf("fcm: nil sender")
+	}
+	if strings.TrimSpace(titleAr) == "" {
+		titleAr = titleEn
+	}
+	if strings.TrimSpace(bodyAr) == "" {
+		bodyAr = bodyEn
+	}
+
+	var arTokens, enTokens []string
+	for _, r := range recipients {
+		if isArabicLocale(r.Locale) {
+			arTokens = append(arTokens, r.Token)
+		} else {
+			enTokens = append(enTokens, r.Token)
+		}
+	}
+
+	var merged SendResult
+	var firstErr error
+	send := func(tokens []string, title, body string) {
+		if len(tokens) == 0 {
+			return
+		}
+		res, err := s.SendToTokens(ctx, tokens, title, body, data)
+		merged.SuccessCount += res.SuccessCount
+		merged.FailureCount += res.FailureCount
+		merged.InvalidTokens = append(merged.InvalidTokens, res.InvalidTokens...)
+		if err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	send(enTokens, titleEn, bodyEn)
+	send(arTokens, titleAr, bodyAr)
+	return merged, firstErr
 }
 
 // SendToTokens broadcasts a single (title, body, data) payload to

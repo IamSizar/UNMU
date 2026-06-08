@@ -6,6 +6,7 @@ import '../../screens/social/community_detail_screen.dart';
 import '../../screens/social/expert_profile_screen.dart';
 import '../../screens/social/mock_social_data.dart';
 import '../../screens/social/social_tokens.dart';
+import '../platform_adaptive/platform_dialog.dart';
 
 /// Source-attribution pill rendered on reels, posts, and videos.
 ///
@@ -212,11 +213,13 @@ class _CommunityVariant extends StatelessWidget {
       }
     }
     if (c == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('sourceBadge.communityUnavailable'.tr),
-          duration: const Duration(seconds: 2),
-        ),
+      // Community hidden/removed by an admin — show a clear modal instead of
+      // a transient snackbar.
+      PlatformDialog.show(
+        context: context,
+        title: 'sourceBadge.communityUnavailableTitle'.tr,
+        content: 'sourceBadge.communityUnavailable'.tr,
+        confirmText: 'common.ok'.tr,
       );
       return;
     }

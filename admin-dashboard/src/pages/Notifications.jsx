@@ -5,7 +5,6 @@ import {
   ShieldCheck,
   TrendingUp,
   AlertCircle,
-  Smartphone,
   Crown,
   GraduationCap,
   Loader2,
@@ -63,8 +62,6 @@ const SEGMENTS = [
   { key: 'admins', target: 'role', role: 'ADMIN', labelKey: 'notifications.segAdmins', subKey: 'notifications.segAdminsSub', icon: ShieldCheck },
   { key: 'community', target: 'community', labelKey: 'notifications.segCommunity', subKey: 'notifications.segCommunitySub', icon: MessageSquare },
   { key: 'user', target: 'user', labelKey: 'notifications.segUser', subKey: 'notifications.segUserSub', icon: UserSearch },
-  { key: 'ios', target: 'ios', labelKey: 'notifications.segIos', subKey: 'notifications.segIosSub', icon: Smartphone },
-  { key: 'android', target: 'android', labelKey: 'notifications.segAndroid', subKey: 'notifications.segAndroidSub', icon: Smartphone },
 ]
 
 // Recommended ready-to-send templates — bilingual. Clicking one fills the
@@ -489,9 +486,13 @@ export default function Notifications() {
   const { t } = useI18n()
   const [mode, setMode] = useState('send') // 'send' | 'scheduled'
   const [segment, setSegment] = useState('all')
-  const [lang, setLang] = useState('en') // 'en' | 'ar' — language of the push content
+  // Bilingual content. The admin writes BOTH the English and the Arabic copy;
+  // delivery is split by each user's chosen language on the server, so there
+  // is no per-send language choice. title/body = English, titleAr/bodyAr = Arabic.
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
+  const [titleAr, setTitleAr] = useState('')
+  const [bodyAr, setBodyAr] = useState('')
   const [sending, setSending] = useState(false)
   const [result, setResult] = useState(null) // { ok, success_count, failure_count, recipients } | { ok:false, error }
   const [communities, setCommunities] = useState([])
@@ -629,18 +630,22 @@ export default function Notifications() {
     }
   }
 
-  const isRTL = lang === 'ar'
   const needsCommunity = segment === 'community'
   const communityReady = !needsCommunity || Boolean(communityId)
   const needsUser = segment === 'user'
   const userReady = !needsUser || Boolean(selectedUser)
-  const canSend =
-    title.trim().length > 0 && body.trim().length > 0 && communityReady && userReady && !sending
+  // English copy is mandatory; Arabic is optional and falls back to English on
+  // the server when blank, so a one-language send still reaches every user.
+  const contentReady = title.trim().length > 0 && body.trim().length > 0
+  const canSend = contentReady && communityReady && userReady && !sending
 
+  // Fill both languages at once from a preset so the admin never has to pick a
+  // language — the user's device decides which copy it shows.
   function applyTemplate(tpl) {
-    const v = tpl[lang] ?? tpl.en
-    setTitle(v.title)
-    setBody(v.body)
+    setTitle(tpl.en?.title ?? '')
+    setBody(tpl.en?.body ?? '')
+    setTitleAr(tpl.ar?.title ?? '')
+    setBodyAr(tpl.ar?.body ?? '')
     setResult(null)
   }
 
@@ -663,7 +668,13 @@ export default function Notifications() {
     setSending(true)
     setResult(null)
     const seg = SEGMENTS.find((s) => s.key === segment) ?? SEGMENTS[0]
-    const payload = { title: title.trim(), body: body.trim(), target: seg.target }
+    const payload = {
+      title: title.trim(),
+      body: body.trim(),
+      titleAr: titleAr.trim(),
+      bodyAr: bodyAr.trim(),
+      target: seg.target,
+    }
     if (seg.role) payload.role = seg.role
     if (seg.target === 'community') payload.communityId = communityId
     if (seg.target === 'user' && selectedUser) payload.userId = selectedUser.id
@@ -677,6 +688,8 @@ export default function Notifications() {
       })
       setTitle('')
       setBody('')
+      setTitleAr('')
+      setBodyAr('')
     } catch (err) {
       const message =
         err instanceof ApiError
@@ -697,14 +710,20 @@ export default function Notifications() {
       : mode === 'repeat' ? repeatReady
       : false
   const canSchedule =
-    title.trim().length > 0 && body.trim().length > 0 && communityReady && userReady && timeReady && !scheduling
+    contentReady && communityReady && userReady && timeReady && !scheduling
 
   async function handleSchedule() {
     if (!canSchedule) return
     setScheduling(true)
     setResult(null)
     const seg = SEGMENTS.find((s) => s.key === segment) ?? SEGMENTS[0]
-    const payload = { title: title.trim(), body: body.trim(), target: seg.target }
+    const payload = {
+      title: title.trim(),
+      body: body.trim(),
+      titleAr: titleAr.trim(),
+      bodyAr: bodyAr.trim(),
+      target: seg.target,
+    }
     if (seg.role) payload.role = seg.role
     if (seg.target === 'community') payload.communityId = communityId
     if (seg.target === 'user' && selectedUser) payload.userId = selectedUser.id
@@ -731,6 +750,8 @@ export default function Notifications() {
       }
       setTitle('')
       setBody('')
+      setTitleAr('')
+      setBodyAr('')
       await loadScheduled()
     } catch (err) {
       const message =
@@ -921,13 +942,12 @@ export default function Notifications() {
             </div>
           )}
 
-          <div className="flex items-center justify-between mb-2">
+          <div className="mb-2">
             <label className="text-xs uppercase tracking-wider text-slate-500">{t('notifications.recommended')}</label>
-            <LanguageToggle lang={lang} setLang={setLang} />
           </div>
-          <div className="flex flex-wrap gap-2 mb-4">
+          <div className="flex flex-wrap gap-2 mb-3">
             {templates.map((tpl) => {
-              const v = tpl[lang] ?? tpl.en
+              const v = tpl.en
               const TplIcon = tpl.icon
               return (
                 <button
@@ -945,25 +965,58 @@ export default function Notifications() {
             })}
           </div>
 
-          <label className="block text-xs uppercase tracking-wider text-slate-500 mb-2">{t('notifications.titleLabel')}</label>
+          {/* Both languages are written once; the server sends each user the
+              copy matching their chosen app language automatically. */}
+          <p className="text-[11px] text-slate-500 mb-4 leading-relaxed">
+            {t('notifications.bilingualHint')}
+          </p>
+
+          {/* English copy */}
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-cyan-300/80">English</span>
+            <span className="h-px flex-1 bg-white/10" />
+          </div>
           <input
-            className={`input mb-3 ${isRTL ? 'text-right' : ''}`}
-            dir={isRTL ? 'rtl' : 'ltr'}
-            placeholder={isRTL ? 'عيد أضحى مبارك...' : 'Eid Mubarak special...'}
+            className="input mb-3"
+            dir="ltr"
+            placeholder="Notification title…"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             maxLength={120}
             disabled={sending}
           />
-
-          <label className="block text-xs uppercase tracking-wider text-slate-500 mb-2">{t('notifications.messageLabel')}</label>
           <textarea
-            rows={4}
-            className={`input mb-4 resize-none ${isRTL ? 'text-right' : ''}`}
-            dir={isRTL ? 'rtl' : 'ltr'}
-            placeholder={isRTL ? 'اكتب نص الإشعار...' : 'Write your notification body...'}
+            rows={3}
+            className="input mb-4 resize-none"
+            dir="ltr"
+            placeholder="Write your notification message…"
             value={body}
             onChange={(e) => setBody(e.target.value)}
+            maxLength={500}
+            disabled={sending}
+          />
+
+          {/* Arabic copy */}
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-cyan-300/80">العربية</span>
+            <span className="h-px flex-1 bg-white/10" />
+          </div>
+          <input
+            className="input mb-3 text-right"
+            dir="rtl"
+            placeholder="عنوان الإشعار…"
+            value={titleAr}
+            onChange={(e) => setTitleAr(e.target.value)}
+            maxLength={120}
+            disabled={sending}
+          />
+          <textarea
+            rows={3}
+            className="input mb-4 resize-none text-right"
+            dir="rtl"
+            placeholder="اكتب نص الإشعار…"
+            value={bodyAr}
+            onChange={(e) => setBodyAr(e.target.value)}
             maxLength={500}
             disabled={sending}
           />
@@ -1398,31 +1451,6 @@ function TimeField({ label, value, setValue, max, disabled }) {
         }}
         className="input text-center tabular-nums px-1"
       />
-    </div>
-  )
-}
-
-function LanguageToggle({ lang, setLang }) {
-  return (
-    <div className="inline-flex rounded-lg bg-white/[0.03] ring-1 ring-white/10 p-0.5">
-      <button
-        type="button"
-        onClick={() => setLang('en')}
-        className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
-          lang === 'en' ? 'bg-cyan-500/20 text-cyan-300' : 'text-slate-400 hover:text-slate-200'
-        }`}
-      >
-        EN
-      </button>
-      <button
-        type="button"
-        onClick={() => setLang('ar')}
-        className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
-          lang === 'ar' ? 'bg-cyan-500/20 text-cyan-300' : 'text-slate-400 hover:text-slate-200'
-        }`}
-      >
-        العربية
-      </button>
     </div>
   )
 }

@@ -8,6 +8,7 @@ import 'package:get/get.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../services/video_resume_service.dart';
+import '../common/app_network_image.dart';
 
 /// Shared, self-contained video player used by every "watch a single
 /// video" surface — VideoPlayerScreen (long-form), post viewer, expert
@@ -85,6 +86,14 @@ class UnmuVideoPlayer extends StatefulWidget {
   /// reel-specific fields. Fades in/out with the rest of the chrome.
   final Widget? bottomOverlay;
 
+  /// The post's recorded duration in seconds, used to detect a TRUNCATED
+  /// transcoded variant (the backend worker has emitted renditions far
+  /// shorter than the source). When a variant comes back materially shorter
+  /// than this, the player falls back to the original [url] so it never
+  /// silently plays a cut-off clip. Null disables the check (a variant is
+  /// then only rejected if it fails to initialise at all).
+  final int? expectedDurationSeconds;
+
   const UnmuVideoPlayer({
     super.key,
     required this.url,
@@ -97,6 +106,7 @@ class UnmuVideoPlayer extends StatefulWidget {
     this.onClose,
     this.bottomOverlay,
     this.qualityVariants = const {},
+    this.expectedDurationSeconds,
   });
 
   @override
@@ -142,6 +152,11 @@ class _UnmuVideoPlayerState extends State<UnmuVideoPlayer>
   bool? _lastIsPlaying;
   Duration? _lastReportedPosition;
   DateTime? _lastPositionTime;
+  // Last whole second we rebuilt the chrome at. Kept SEPARATE from
+  // _lastReportedPosition (which the stall detector rewrites every frame) so
+  // the time label + scrubber actually advance once per second during
+  // playback instead of freezing until the next play/pause flip.
+  int? _lastRenderedSec;
 
   // Seek ripples — keyed by an incrementing id so multiple in-flight
   // ripples don't collide on the screen.
@@ -160,10 +175,31 @@ class _UnmuVideoPlayerState extends State<UnmuVideoPlayer>
   late String _activeUrl;
   bool _switching = false;
 
+  /// Quality to start playback at. The original master (widget.url, shown in
+  /// the gear as "Auto") is high-bitrate and slow to begin over the network —
+  /// the main reason a video "takes forever to load". When transcoded
+  /// renditions exist we boot at 720p (crisp on a phone, a fraction of the
+  /// master's bytes, so the first frame arrives far sooner); the viewer can
+  /// still bump to Auto / 1080p from the quality gear. Falls back to the
+  /// original whenever no renditions exist — i.e. the previous behaviour, so
+  /// this is purely additive.
+  static const List<String> _initialQualityPreference = ['720p', '480p', '1080p'];
+
+  (String, String) _initialQuality() {
+    final variants = widget.qualityVariants;
+    for (final label in _initialQualityPreference) {
+      final url = variants[label]?.trim();
+      if (url != null && url.isNotEmpty) return (label, url);
+    }
+    return (_autoQuality, widget.url);
+  }
+
   @override
   void initState() {
     super.initState();
-    _activeUrl = widget.url;
+    final initial = _initialQuality();
+    _currentQuality = initial.$1;
+    _activeUrl = initial.$2;
     _chromeFade = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 220),
@@ -177,6 +213,21 @@ class _UnmuVideoPlayerState extends State<UnmuVideoPlayer>
     _video = controller;
     try {
       await controller.initialize();
+      // Reject a truncated transcode before wiring anything up. This
+      // backend's worker has emitted variants far shorter than the source
+      // (e.g. a 6s "720p" of a 59s clip); playing one would silently cut
+      // the video off. Throwing here drops into the catch block's
+      // original-master fallback below. Only applies to a variant boot
+      // (_activeUrl != widget.url) and only when we know the expected length.
+      final expected = widget.expectedDurationSeconds ?? 0;
+      if (_activeUrl != widget.url &&
+          expected > 0 &&
+          controller.value.duration.inSeconds < expected - 2) {
+        throw StateError(
+          'transcoded variant is ${controller.value.duration.inSeconds}s, '
+          'expected ~${expected}s — treating as truncated',
+        );
+      }
       controller.addListener(_onTick);
       await controller.setVolume(_appWideMuted ? 0.0 : 1.0);
       await controller.setLooping(widget.loop);
@@ -193,6 +244,23 @@ class _UnmuVideoPlayerState extends State<UnmuVideoPlayer>
       _scheduleHide();
       _startResumeCheckpointer();
     } catch (e) {
+      // The chosen quality failed to initialise. If we booted from a
+      // transcoded variant (the fast-start default), fall back to the
+      // original master ONCE before surfacing an error — a missing or
+      // half-written rendition must never make a video unplayable when the
+      // original would have worked. Bounded: the retry sets _activeUrl to
+      // the original, so a second failure lands in the error branch below.
+      if (_activeUrl != widget.url) {
+        try {
+          controller.removeListener(_onTick);
+          await controller.dispose();
+        } catch (_) {/* already dead */}
+        if (!mounted) return;
+        _activeUrl = widget.url;
+        _currentQuality = _autoQuality;
+        await _bootController();
+        return;
+      }
       if (!mounted) return;
       setState(() {
         _initializing = false;
@@ -208,22 +276,26 @@ class _UnmuVideoPlayerState extends State<UnmuVideoPlayer>
 
     final pos = c.value.position;
     final now = DateTime.now();
-    if (_lastReportedPosition == null || _lastPositionTime == null) {
+
+    // ── Buffering indicator ──
+    // Trust the platform's own isBuffering flag first: it flips the instant a
+    // seek needs to fetch data, so jumping to a far point reads as "loading"
+    // right away instead of a frozen frame. The position-stall heuristic (no
+    // progress for >500ms while playing) is a backstop for platforms that
+    // under-report isBuffering.
+    final stalled = c.value.isPlaying &&
+        _lastReportedPosition != null &&
+        _lastPositionTime != null &&
+        pos == _lastReportedPosition &&
+        now.difference(_lastPositionTime!) > _kBufferingShowDelay;
+    final wantBuffering = c.value.isBuffering || stalled;
+    if (wantBuffering != _buffering && mounted) {
+      setState(() => _buffering = wantBuffering);
+    }
+    // Advance the stall-heuristic tracking whenever the position moves.
+    if (_lastReportedPosition == null || pos != _lastReportedPosition) {
       _lastReportedPosition = pos;
       _lastPositionTime = now;
-    } else {
-      final dt = now.difference(_lastPositionTime!);
-      if (c.value.isPlaying && pos == _lastReportedPosition) {
-        if (dt > _kBufferingShowDelay && !_buffering) {
-          if (mounted) setState(() => _buffering = true);
-        }
-      } else {
-        _lastReportedPosition = pos;
-        _lastPositionTime = now;
-        if (_buffering) {
-          if (mounted) setState(() => _buffering = false);
-        }
-      }
     }
 
     if (c.value.duration > Duration.zero &&
@@ -242,8 +314,14 @@ class _UnmuVideoPlayerState extends State<UnmuVideoPlayer>
       _scheduleHide();
     }
 
-    final lastSec = _lastReportedPosition?.inSeconds;
-    if (lastSec != null && pos.inSeconds != lastSec && mounted) {
+    // Tick the time label + scrubber forward once per second during normal
+    // playback. This must NOT key off _lastReportedPosition: the buffering
+    // branch above rewrites that to the current position on every advancing
+    // frame, so the comparison was always equal and the UI never refreshed
+    // (the "timer frozen at 00:13 while the picture keeps playing" bug).
+    final sec = pos.inSeconds;
+    if (_lastRenderedSec != sec && mounted) {
+      _lastRenderedSec = sec;
       setState(() {});
     }
   }
@@ -618,7 +696,7 @@ class _UnmuVideoPlayerState extends State<UnmuVideoPlayer>
           )
         else if (widget.coverUrl != null && widget.coverUrl!.isNotEmpty)
           Positioned.fill(
-            child: Image.network(widget.coverUrl!, fit: BoxFit.cover),
+            child: AppNetworkImage(widget.coverUrl!, fit: BoxFit.cover),
           ),
 
         Positioned.fill(
@@ -1262,6 +1340,23 @@ class _Scrubber extends StatefulWidget {
 class _ScrubberState extends State<_Scrubber> {
   double? _dragRatio; // non-null while dragging OR while a release-seek lands
 
+  /// Keep the thumb pinned at the released ratio [target] until the
+  /// controller's reported position actually reaches it, so it never snaps
+  /// back to the pre-seek spot for a frame. Polls at ~frame cadence and
+  /// gives up after 700ms in case the position never lands exactly
+  /// (keyframe snap / rounding), so this can't hang the release.
+  Future<void> _settleThumb(double target) async {
+    final c = widget.controller;
+    final durMs = c.value.duration.inMilliseconds;
+    if (durMs <= 0) return;
+    final deadline = DateTime.now().add(const Duration(milliseconds: 700));
+    while (mounted && DateTime.now().isBefore(deadline)) {
+      final live = c.value.position.inMilliseconds / durMs;
+      if ((live - target).abs() < 0.02) return; // within 2% → close enough
+      await Future<void>.delayed(const Duration(milliseconds: 16));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = widget.controller;
@@ -1306,6 +1401,13 @@ class _ScrubberState extends State<_Scrubber> {
                       setState(() => _dragRatio = v);
                       widget.onScrubEnd();
                       await widget.onSeek(v);
+                      // seekTo's future resolves a beat before the
+                      // controller's reported position updates. Releasing the
+                      // hold right away let the thumb snap to the pre-seek
+                      // spot for one frame — the visible glitch. Keep it
+                      // pinned until the live position actually reaches the
+                      // target (bounded, so we never hang).
+                      await _settleThumb(v);
                       if (mounted) setState(() => _dragRatio = null);
                     }
                   : null,

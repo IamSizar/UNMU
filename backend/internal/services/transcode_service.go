@@ -3,7 +3,9 @@ package services
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"path"
@@ -24,6 +26,13 @@ const (
 	transcodeSweepEvery = 30 * time.Second
 	transcodeProbeTTL   = 60 * time.Second
 	transcodeEncodeTTL  = 30 * time.Minute
+	transcodeFetchTTL   = 20 * time.Minute
+	// A variant whose duration is more than this much shorter than the
+	// source is treated as a truncated (failed) encode. The old worker fed
+	// ffmpeg the S3 URL directly; a dropped HTTP read mid-encode produced a
+	// short file that still exited 0, so 6-second "720p" copies of 59-second
+	// videos were silently accepted. We now download first and verify length.
+	transcodeDurationSlackSec = 2.0
 )
 
 // Transcoder is the background worker behind the in-app video quality
@@ -117,11 +126,6 @@ func (t *Transcoder) process(ctx context.Context, job *repositories.TranscodeJob
 		return fmt.Errorf("presign source: %w", err)
 	}
 
-	height, err := t.probeHeight(ctx, srcURL)
-	if err != nil {
-		return fmt.Errorf("probe height: %w", err)
-	}
-
 	// Derive sibling keys, e.g. videos/<rand>.mp4 -> videos/<rand>_720p.mp4
 	dir := path.Dir(key)
 	base := strings.TrimSuffix(path.Base(key), path.Ext(key))
@@ -132,14 +136,44 @@ func (t *Transcoder) process(ctx context.Context, job *repositories.TranscodeJob
 	}
 	defer os.RemoveAll(tmp)
 
+	// Download the source to local disk FIRST, then transcode from the file.
+	// Streaming the S3 URL straight into ffmpeg meant a dropped HTTP read
+	// mid-encode produced a silently-truncated output (ffmpeg treats early
+	// EOF as end-of-stream and exits 0). A local file can't truncate
+	// mid-read, and download() verifies the full byte count.
+	srcPath := path.Join(tmp, "source"+path.Ext(key))
+	if err := t.download(ctx, srcURL, srcPath); err != nil {
+		return fmt.Errorf("download source: %w", err)
+	}
+
+	height, err := t.probeHeight(ctx, srcPath)
+	if err != nil {
+		return fmt.Errorf("probe height: %w", err)
+	}
+	srcDur, err := t.probeDuration(ctx, srcPath)
+	if err != nil {
+		return fmt.Errorf("probe duration: %w", err)
+	}
+
 	variants := map[string]string{}
 	for _, h := range transcodeRungs {
 		if h >= height {
 			continue // no upscaling; "Auto" (the original) already covers it
 		}
 		outPath := path.Join(tmp, fmt.Sprintf("%dp.mp4", h))
-		if err := t.encode(ctx, srcURL, outPath, h); err != nil {
+		if err := t.encode(ctx, srcPath, outPath, h); err != nil {
 			return fmt.Errorf("encode %dp: %w", h, err)
+		}
+		// Reject a truncated encode before it can be recorded. Returning an
+		// error marks the job failed so it retries, instead of shipping a
+		// broken variant the client would have to detect and skip.
+		outDur, err := t.probeDuration(ctx, outPath)
+		if err != nil {
+			return fmt.Errorf("probe %dp output: %w", h, err)
+		}
+		if srcDur > 0 && outDur < srcDur-transcodeDurationSlackSec {
+			return fmt.Errorf("%dp encode truncated: %.1fs of %.1fs source",
+				h, outDur, srcDur)
 		}
 		variantKey := dir + "/" + base + "_" + strconv.Itoa(h) + "p.mp4"
 		f, err := os.Open(outPath)
@@ -189,14 +223,15 @@ func (t *Transcoder) probeHeight(ctx context.Context, url string) (int, error) {
 }
 
 // encode runs ffmpeg to produce one H.264/AAC MP4 scaled to `height`
-// (width auto, kept even via scale=-2). +faststart moves the moov atom to
-// the front so the file starts playing before it's fully downloaded.
-func (t *Transcoder) encode(ctx context.Context, srcURL, outPath string, height int) error {
+// (width auto, kept even via scale=-2) from a LOCAL source file. +faststart
+// moves the moov atom to the front so the file starts playing before it's
+// fully downloaded.
+func (t *Transcoder) encode(ctx context.Context, srcPath, outPath string, height int) error {
 	c, cancel := context.WithTimeout(ctx, transcodeEncodeTTL)
 	defer cancel()
 	cmd := exec.CommandContext(c, t.ffmpeg,
 		"-y",
-		"-i", srcURL,
+		"-i", srcPath,
 		"-vf", fmt.Sprintf("scale=-2:%d", height),
 		"-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
 		"-c:a", "aac", "-b:a", "128k",
@@ -207,6 +242,64 @@ func (t *Transcoder) encode(ctx context.Context, srcURL, outPath string, height 
 		return fmt.Errorf("%v: %s", err, truncate(string(out), 400))
 	}
 	return nil
+}
+
+// download fetches `url` to local `dest`, failing on a short read — the exact
+// failure mode (a partial source) that the old direct-to-ffmpeg path silently
+// tolerated. A complete local copy is the precondition for a non-truncated
+// encode.
+func (t *Transcoder) download(ctx context.Context, url, dest string) error {
+	c, cancel := context.WithTimeout(ctx, transcodeFetchTTL)
+	defer cancel()
+	req, err := http.NewRequestWithContext(c, http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("source GET %d", resp.StatusCode)
+	}
+	f, err := os.Create(dest)
+	if err != nil {
+		return err
+	}
+	n, copyErr := io.Copy(f, resp.Body)
+	closeErr := f.Close()
+	if copyErr != nil {
+		return fmt.Errorf("copy: %w", copyErr)
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	if resp.ContentLength > 0 && n != resp.ContentLength {
+		return fmt.Errorf("short download: %d of %d bytes", n, resp.ContentLength)
+	}
+	return nil
+}
+
+// probeDuration returns the media's duration in seconds via ffprobe.
+func (t *Transcoder) probeDuration(ctx context.Context, pathOrURL string) (float64, error) {
+	c, cancel := context.WithTimeout(ctx, transcodeProbeTTL)
+	defer cancel()
+	out, err := exec.CommandContext(c, t.ffprobe,
+		"-v", "error",
+		"-show_entries", "format=duration",
+		"-of", "csv=p=0",
+		pathOrURL,
+	).Output()
+	if err != nil {
+		return 0, err
+	}
+	s := strings.TrimSpace(string(out))
+	d, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0, fmt.Errorf("unexpected ffprobe duration %q", string(out))
+	}
+	return d, nil
 }
 
 func truncate(s string, n int) string {

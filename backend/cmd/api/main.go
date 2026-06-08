@@ -208,6 +208,7 @@ func main() {
 	toolsHandler := handlers.NewToolsHandler(portfolioRepo, stockRepo, shariahRepo, fundamentalRepo)
 	adsHandler := handlers.NewAdsHandler(adRepo)
 	promoHandler := handlers.NewPromoHandler(promoRepo)
+	promoHandler.SetAudits(auditRepo)
 	marketHandler := handlers.NewMarketHandler(marketProvider)
 	// SocialHandler needs the post-interactions + post-saves repos (used
 	// by fillUserState) — declare them inline-early so we can pass them.
@@ -239,6 +240,7 @@ func main() {
 	expertAppHandler := handlers.NewExpertApplicationHandler(expertAppRepo, userRepo)
 	adminUsersHandler := handlers.NewAdminUsersHandler(userRepo, socialRepo)
 	expertSubHandler := handlers.NewExpertSubscriptionHandler(expertSubRepo, userRepo, socialRepo)
+	expertSubHandler.SetPromo(promoRepo, auditRepo)
 
 	// Apple In-App-Purchase verification (mig 0035). Soft-fails to nil
 	// when APPLE_IAP_SHARED_SECRET is unset — the /me/iap/apple/verify
@@ -407,6 +409,7 @@ func main() {
 	// matching the expert-subscription handler's behaviour.
 	communitySubsHandler.SetUserNotifications(userNotificationsRepo)
 	communitySubsHandler.SetNotifier(notifier)
+	communitySubsHandler.SetPromo(promoRepo, auditRepo)
 	communitySubsExpirer := services.NewCommunitySubscriptionExpirer(
 		communitySubsRepo, hub, userNotificationsRepo,
 	)
@@ -596,6 +599,7 @@ func main() {
 
 		// Promo codes
 		protected.POST("/promo/validate", promoHandler.ValidatePromo)
+		protected.POST("/promo/redeem", promoHandler.RedeemPromo)
 
 		// Tier upgrades go through the expert-subscription + community-subscription
 		// flows (with their own IAP / admin-verified payment paths). The legacy

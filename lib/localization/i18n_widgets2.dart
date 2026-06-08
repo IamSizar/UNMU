@@ -9,7 +9,8 @@ const Map<String, String> widgets2En = {
   'sourceBadge.aMember': 'a member',
   'sourceBadge.communityFallback': 'Community',
   'sourceBadge.expertFallback': 'Expert',
-  'sourceBadge.communityUnavailable': 'Community not available yet.',
+  'sourceBadge.communityUnavailableTitle': 'Community Unavailable',
+  'sourceBadge.communityUnavailable': 'This community is currently unavailable.',
 
   // Poll creator sheet
   'pollCreator.title': 'Create a poll',
@@ -87,7 +88,8 @@ const Map<String, String> widgets2Ar = {
   'sourceBadge.aMember': 'عضو',
   'sourceBadge.communityFallback': 'مجتمع',
   'sourceBadge.expertFallback': 'خبير',
-  'sourceBadge.communityUnavailable': 'المجتمع غير متاح بعد.',
+  'sourceBadge.communityUnavailableTitle': 'المجتمع غير متاح',
+  'sourceBadge.communityUnavailable': 'هذا المجتمع غير متاح حاليًا.',
 
   // Poll creator sheet
   'pollCreator.title': 'إنشاء استطلاع',

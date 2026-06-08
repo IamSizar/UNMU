@@ -111,6 +111,7 @@ class SubscriptionController extends GetxController {
     String? paymentRef,
     String? receiptUrl,
     String? note,
+    String? promoCode,
   }) async {
     if (_busy.contains(expertId)) {
       return (sub: null, error: 'Please wait — request in progress');
@@ -124,6 +125,7 @@ class SubscriptionController extends GetxController {
         paymentRef: paymentRef,
         receiptUrl: receiptUrl,
         note: note,
+        promoCode: promoCode,
       );
       if (result.sub != null) {
         _byExpert[expertId] = result.sub;

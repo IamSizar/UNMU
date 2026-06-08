@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import '../../controllers/saved_controller.dart';
 import '../../models/expert_post.dart';
 import '../../utils/responsive.dart';
+import '../../widgets/common/app_network_image.dart';
 import '../../widgets/social/comment_button.dart';
 import '../../widgets/social/like_button.dart';
 import '../../widgets/social/save_button.dart';
@@ -344,11 +345,11 @@ class _SavedPostCard extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             if (cover.isNotEmpty)
-              Image.network(
+              AppNetworkImage(
                 cover,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) =>
-                    Container(color: palette.surfaceElevated),
+                placeholderColor: palette.surfaceElevated,
+                errorWidget: Container(color: palette.surfaceElevated),
               )
             else
               Container(color: palette.surfaceElevated),
@@ -382,6 +383,7 @@ class _SavedPostCard extends StatelessWidget {
         Get.to(() => ReelPlayerScreen(
               mediaUrl: post.mediaUrl!,
               qualityVariants: post.videoVariants,
+              expectedDurationSeconds: post.durationSeconds,
               coverUrl: post.coverUrl,
               title: post.title,
               authorName: post.authorName,

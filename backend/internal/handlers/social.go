@@ -332,10 +332,18 @@ func (h *SocialHandler) Me(c *gin.Context) {
 	if subs == nil {
 		subs = []string{}
 	}
+	// Avatar is stored as an S3 value; sign it fresh on read so it never
+	// 403s on an expired pre-signed URL — and so the field is present at all
+	// (the admin dashboard's profile form reads avatarUrl from /me on load).
+	avatarURL := ""
+	if user.AvatarURL.Valid && user.AvatarURL.String != "" {
+		avatarURL = h.social.SignMediaURL(user.AvatarURL.String)
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"id":        user.ID,
 		"email":     user.Email,
 		"name":      nullStr(user.Name.String, user.Name.Valid),
+		"avatarUrl": avatarURL,
 		"role":      user.Role,
 		"expertId":  nullStr(user.ExpertID.String, user.ExpertID.Valid),
 		"tier":      user.SubscriptionTier,

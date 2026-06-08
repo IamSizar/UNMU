@@ -146,6 +146,9 @@ const Map<String, String> subscriptionsEn = {
   'subscribe.receiptLabel': 'Cash receipt photo (optional)',
   'subscribe.noteLabel': 'Note for the admin (optional)',
   'subscribe.noteHint': 'e.g. paid this morning at the office',
+  'subscribe.promoLabel': 'Promo code (optional)',
+  'subscribe.promoHint': 'Enter a code',
+  'subscribe.promoApply': 'Apply',
   // Receipt picker tile
   'subscribe.receipt.addTitle': 'Add a photo of your receipt',
   'subscribe.receipt.addSub': 'Helps the admin verify cash payments',
@@ -291,6 +294,9 @@ const Map<String, String> subscriptionsAr = {
   'subscribe.receiptLabel': 'صورة إيصال الدفع النقدي (اختياري)',
   'subscribe.noteLabel': 'ملاحظة للمشرف (اختياري)',
   'subscribe.noteHint': 'مثال: دفعت هذا الصباح في المكتب',
+  'subscribe.promoLabel': 'رمز ترويجي (اختياري)',
+  'subscribe.promoHint': 'أدخل الرمز',
+  'subscribe.promoApply': 'تطبيق',
   // Receipt picker tile
   'subscribe.receipt.addTitle': 'أضف صورة لإيصالك',
   'subscribe.receipt.addSub': 'يساعد المشرف على التحقق من المدفوعات النقدية',

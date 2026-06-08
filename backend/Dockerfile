@@ -25,7 +25,11 @@ RUN wget https://github.com/golang-migrate/migrate/releases/download/v4.16.2/mig
 # Stage 2: Create the final lightweight image
 FROM alpine:3.18
 
-RUN apk add --no-cache ca-certificates bash postgresql-client
+# ffmpeg bundles ffprobe — both are required by the background video
+# transcode worker (internal/services/transcode_service.go). Without them the
+# worker logs "disabled" and every video plays only from its full-size
+# original, which is what made videos slow to load/seek on Railway.
+RUN apk add --no-cache ca-certificates bash postgresql-client ffmpeg
 
 WORKDIR /app
 

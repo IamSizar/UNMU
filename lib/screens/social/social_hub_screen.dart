@@ -17,6 +17,9 @@ import '../../widgets/social/community_avatar.dart';
 import '../../widgets/social/community_card.dart';
 import '../../widgets/social/greeting_hero.dart';
 import '../../widgets/social/leaderboard_row.dart';
+import '../../widgets/social/market_pulse.dart';
+import '../../widgets/social/market_ticker_bar.dart';
+import '../../widgets/platform_adaptive/platform_dialog.dart';
 import 'all_experts_screen.dart';
 import 'community_detail_screen.dart';
 import 'community_discovery_screen.dart';
@@ -167,9 +170,14 @@ class _SocialHubScreenState extends State<SocialHubScreen> {
           .toList();
       _loading = false;
     });
-    // Surface a non-blocking snackbar if either fetch failed. The page
-    // still renders the cached/empty state so the user can scroll.
-    final err = experts.error ?? communities.error;
+    // Surface a non-blocking snackbar only for a genuine experts-fetch
+    // failure. We deliberately do NOT surface a communities error: it's
+    // almost always the admin having disabled the community feature (the
+    // backend's community gate returns "Communities are currently
+    // unavailable."), and the community sections are already hidden via
+    // communityOn — so popping that snackbar on every visit to the Social
+    // tab is just noise.
+    final err = experts.error;
     if (err != null && mounted) {
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(content: Text(err)),
@@ -265,18 +273,14 @@ class _SocialHubScreenState extends State<SocialHubScreen> {
               parent: BouncingScrollPhysics(),
             ),
             slivers: [
-              // ─────── Live ticker tape (was marquee of mock prices)
-              // Replaced with a "coming soon" pill until we have a real
-              // intraday quote feed.
+              // ─────── Market ticker — REAL data ───────
+              // Live index quotes (S&P 500, Nasdaq, regional benchmarks) as a
+              // continuously-scrolling news bar, sourced from
+              // GET /api/market/indexes. Replaced the old "coming soon" pill.
               SliverToBoxAdapter(
                 child: Padding(
                   padding: EdgeInsets.fromLTRB(hp, 12, hp, 0),
-                  child: _ComingSoonCard(
-                    icon: Icons.show_chart_rounded,
-                    title: 'socialHub.liveTickerTitle'.tr,
-                    body: 'socialHub.comingSoon'.tr,
-                    compact: true,
-                  ),
+                  child: const MarketTickerBar(),
                 ),
               ),
 
@@ -287,42 +291,6 @@ class _SocialHubScreenState extends State<SocialHubScreen> {
                   child: GreetingHero(
                     userName: userName,
                     isArabic: isArabic,
-                  ),
-                ),
-              ),
-
-              // ─────── Stories rail — coming soon ───────
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(hp, 22, hp, 0),
-                  child: _ComingSoonCard(
-                    icon: Icons.auto_stories_rounded,
-                    title: 'socialHub.liveStoriesTitle'.tr,
-                    body: 'socialHub.liveStoriesBody'.tr,
-                  ),
-                ),
-              ),
-
-              // ─────── Featured expert — coming soon ───────
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(hp, 22, hp, 0),
-                  child: _ComingSoonCard(
-                    icon: Icons.star_rounded,
-                    title: 'socialHub.featuredExpertTitle'.tr,
-                    body: 'socialHub.featuredExpertBody'.tr,
-                  ),
-                ),
-              ),
-
-              // ─────── Top movers — coming soon ───────
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(hp, 22, hp, 0),
-                  child: _ComingSoonCard(
-                    icon: Icons.trending_up_rounded,
-                    title: 'socialHub.topMovers'.tr,
-                    body: 'socialHub.topMoversBody'.tr,
                   ),
                 ),
               ),
@@ -387,6 +355,29 @@ class _SocialHubScreenState extends State<SocialHubScreen> {
                     ),
                   ),
                 ),
+
+              // ─────── Market pulse — REAL data (sentiment + indices) ───────
+              // Fills the space the old "coming soon" cards left under the
+              // experts leaderboard with a live Fear & Greed gauge + index
+              // spotlight cards (GET /api/market/{fear-greed,indexes}).
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(hp, 26, hp, 0),
+                  child: _SectionHeader(
+                    palette: palette,
+                    title: 'socialHub.marketPulse'.tr,
+                    subtitle: 'socialHub.marketPulseSub'.tr,
+                    accent: SocialTokens.cyan,
+                    showViewAll: false,
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(hp, 12, hp, 0),
+                  child: MarketPulse(isArabic: isArabic),
+                ),
+              ),
 
               // ─────── pinned "Your communities" section ───────
               // Two buckets, one shared header:
@@ -629,6 +620,19 @@ class _SocialHubScreenState extends State<SocialHubScreen> {
     final membership = results[0]
         as ({CommunityMembership? membership, String? error});
     final meta = results[1] as ({CommunityMeta? meta, String? error});
+    // Community hidden/removed by an admin (the metadata endpoint returns a
+    // non-200, so meta is null) → show a clear modal and stop, instead of
+    // pushing a broken/empty detail screen or flashing a snackbar.
+    if (meta.meta == null) {
+      if (!context.mounted) return;
+      await PlatformDialog.show(
+        context: context,
+        title: 'socialHub.communityUnavailableTitle'.tr,
+        content: 'socialHub.communityUnavailable'.tr,
+        confirmText: 'common.ok'.tr,
+      );
+      return;
+    }
     final isMember = membership.membership?.member ?? false;
     final isOwner = membership.membership?.owner ?? false;
     final isPaid = meta.meta?.isPaid ?? false;
@@ -914,145 +918,6 @@ class _SectionHeader extends StatelessWidget {
             ),
           ),
       ],
-    );
-  }
-}
-
-// =============================================================================
-// _ComingSoonCard — soft outlined card with sparkle icon + short copy.
-// Used to fill the slots where we previously rendered fake / mock data
-// (marquee, stories, featured expert, top movers, etc.) until the real
-// backend source exists for that feature.
-// =============================================================================
-class _ComingSoonCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String body;
-  final bool compact;
-  const _ComingSoonCard({
-    required this.icon,
-    required this.title,
-    required this.body,
-    this.compact = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = SocialTheme.of(context);
-    // Pill label localized via GetX i18n — Arabic users see "قريباً"
-    // instead of "SOON". Matches the body-copy localization on the
-    // cards above.
-    final pillLabel = 'socialHub.soon'.tr;
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: 14,
-        vertical: compact ? 10 : 14,
-      ),
-      decoration: BoxDecoration(
-        // Subtle cyan→violet brand wash on top of the surface so
-        // "coming soon" placeholders feel intentional (part of the
-        // brand) instead of skeleton-loading squares.
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            SocialTokens.cyan.withValues(
-              alpha: palette.isDark ? 0.08 : 0.05,
-            ),
-            SocialTokens.violet.withValues(
-              alpha: palette.isDark ? 0.07 : 0.04,
-            ),
-            palette.surface,
-          ],
-          stops: const [0.0, 0.45, 1.0],
-        ),
-        borderRadius: BorderRadius.circular(compact ? 12 : 16),
-        border: Border.all(
-          color: SocialTokens.cyan.withValues(alpha: 0.30),
-        ),
-      ),
-      child: Row(
-        children: [
-          // Icon tile picks up a small gradient too so the eye notices
-          // the placeholder is brand-styled, not bare.
-          Container(
-            width: compact ? 30 : 36,
-            height: compact ? 30 : 36,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  SocialTokens.cyan.withValues(alpha: 0.20),
-                  SocialTokens.violet.withValues(alpha: 0.20),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: SocialTokens.cyan.withValues(alpha: 0.30),
-                width: 0.8,
-              ),
-            ),
-            alignment: Alignment.center,
-            child: Icon(
-              icon,
-              color: SocialTokens.cyan,
-              size: compact ? 16 : 18,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: palette.textPrimary,
-                    fontWeight: FontWeight.w800,
-                    fontSize: compact ? 13 : 14,
-                    letterSpacing: -0.2,
-                  ),
-                ),
-                if (!compact) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    body,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: palette.textMuted,
-                      fontSize: 11.5,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: SocialTokens.cyan.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(
-                color: SocialTokens.cyan.withValues(alpha: 0.35),
-              ),
-            ),
-            child: Text(
-              pillLabel,
-              style: const TextStyle(
-                color: SocialTokens.cyan,
-                fontSize: 9.5,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 0.8,
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

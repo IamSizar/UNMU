@@ -221,6 +221,13 @@ export default function Promos() {
                             <Copy className="w-3.5 h-3.5" />
                           </button>
                         </div>
+                        {p.scope && p.scope !== 'all' && (
+                          <span className="inline-block mt-1 text-[10px] uppercase tracking-wide font-bold text-cyan-300/80">
+                            {p.scope === 'expert'
+                              ? t('promos.scope.expert')
+                              : t('promos.scope.community')}
+                          </span>
+                        )}
                       </td>
                       <td className="px-3 sm:px-5 py-3">
                         <span className="chip bg-gold-500/15 text-gold-400 ring-gold-500/20 font-bold whitespace-nowrap">
@@ -315,6 +322,8 @@ function PromoEditor({ initial, onCancel, onSaved }) {
   const [discountValue, setDiscountValue] = useState(
     initial?.discountValue?.toString() ?? '',
   )
+  // Scope — which kind of purchase the code applies to.
+  const [scope, setScope] = useState(initial?.scope ?? 'all')
   const [maxUses, setMaxUses] = useState(
     initial?.maxUses?.toString() ?? '',
   )
@@ -356,6 +365,7 @@ function PromoEditor({ initial, onCancel, onSaved }) {
         code: codeTrimmed.toUpperCase(),
         discountType,
         discountValue: value,
+        scope,
         maxUses: maxUsesParsed === null ? 0 : maxUsesParsed,
         isActive,
         validFrom,
@@ -427,6 +437,17 @@ function PromoEditor({ initial, onCancel, onSaved }) {
               />
             </Field>
           </div>
+          <Field label={t('promos.field.scope')}>
+            <select
+              value={scope}
+              onChange={(e) => setScope(e.target.value)}
+              className="input"
+            >
+              <option value="all">{t('promos.scope.all')}</option>
+              <option value="expert">{t('promos.scope.expert')}</option>
+              <option value="community">{t('promos.scope.community')}</option>
+            </select>
+          </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label={t('promos.field.maxUses')}>
               <input

@@ -12,6 +12,7 @@ import 'package:visibility_detector/visibility_detector.dart';
 import '../../controllers/feed_controller.dart';
 import '../../controllers/saved_controller.dart';
 import '../../models/expert_post.dart';
+import '../../widgets/common/app_network_image.dart';
 import '../../services/events_service.dart';
 import '../../services/post_interaction_service.dart';
 import '../../utils/haptic_utils.dart';
@@ -268,43 +269,134 @@ class _ReelsImmersiveViewState extends State<ReelsImmersiveView>
     _syncPlayback();
   }
 
+  /// Pick the playback URL for a reel in the swipe feed, preferring a
+  /// lightweight transcoded rendition over the full-res original.
+  ///
+  /// Reels are short vertical clips swiped through quickly on a phone, so
+  /// the only thing that matters on open is how fast the FIRST frame
+  /// decodes. The original [ExpertPost.mediaUrl] is the un-throttled master
+  /// (often 1080p+ at a high bitrate) — initializing it over the network is
+  /// what made the first reel slow to load. A 480p rendition starts playing
+  /// far sooner and is visually indistinguishable at reel size; 720p is the
+  /// next-best balance. We fall back to the original whenever no transcoded
+  /// renditions exist yet (very short clips, or uploads the worker hasn't
+  /// processed) — i.e. the previous behaviour, so this is purely additive.
+  ///
+  /// Order is a one-line tweak. 720p leads (not 480p) because it's the
+  /// rendition the transcode worker most reliably completes; a truncated or
+  /// corrupt pick is caught and replaced by the original at init time anyway.
+  static const List<String> _reelQualityPreference = ['720p', '480p', '1080p'];
+
+  String _reelPlaybackUrl(ExpertPost post) {
+    final variants = post.videoVariants;
+    if (variants.isNotEmpty) {
+      // Exact preferred labels first (480p → 720p → 1080p).
+      for (final label in _reelQualityPreference) {
+        final hit = variants[label]?.trim();
+        if (hit != null && hit.isNotEmpty) return hit;
+      }
+      // Non-standard labels: take the lowest resolution by numeric prefix
+      // so we still start light even if the worker emitted, say, "540".
+      final entries = variants.entries
+          .where((e) => e.value.trim().isNotEmpty)
+          .toList()
+        ..sort((a, b) => _resolutionRank(a.key).compareTo(_resolutionRank(b.key)));
+      if (entries.isNotEmpty) return entries.first.value.trim();
+    }
+    return post.mediaUrl?.trim() ?? '';
+  }
+
+  /// Numeric resolution embedded in a quality label ("480p" → 480).
+  /// Unknown labels sort last so they're only chosen as a last resort.
+  int _resolutionRank(String label) {
+    final m = RegExp(r'(\d+)').firstMatch(label);
+    return m == null ? 1 << 30 : int.parse(m.group(1)!);
+  }
+
+  /// True when an initialised variant controller [c] is materially shorter
+  /// than the post's recorded [ExpertPost.durationSeconds] — the signature of
+  /// a transcode that was cut short. A 2s slack absorbs rounding / trailing
+  /// frames. Returns false when the expected length is unknown, so a missing
+  /// field can never wrongly reject a perfectly good variant.
+  bool _isTruncatedVariant(VideoPlayerController c, ExpertPost post) {
+    final expected = post.durationSeconds ?? 0;
+    if (expected <= 0) return false;
+    return c.value.duration.inSeconds < expected - 2;
+  }
+
   /// Initialize one controller for reel index [i]. Adds the controller
   /// to [_controllers] eagerly so concurrent [_ensureWindow] calls see
   /// it and don't double-init. On error or [_initTimeout] exceeded the
   /// index is added to [_failedIndices] so the page can render a
   /// tap-to-retry overlay instead of spinning forever.
   Future<void> _spinUpController(int i, ExpertPost post) async {
-    final url = post.mediaUrl?.trim() ?? '';
-    if (url.isEmpty) return;
+    final preferred = _reelPlaybackUrl(post);
+    if (preferred.isEmpty) return;
     // Clear any prior failure flag — this might be a retry.
     _failedIndices.remove(i);
-    final c = VideoPlayerController.networkUrl(Uri.parse(url));
-    _controllers[i] = c;
-    try {
-      // Race init against a 10s wall clock. If init never completes
-      // (broken stream, DNS storm, etc.) we throw and fall through to
-      // the "failed" branch instead of leaving the user staring at a
-      // forever-spinner.
-      await c.initialize().timeout(_initTimeout);
-      await c.setLooping(true);
-      await c.setVolume(_muted ? 0.0 : 1.0);
-      // Seek to the start so the first frame is decoded right now —
-      // when the user swipes here later, playback resumes from a
-      // fully-rendered frame instead of black.
-      await c.seekTo(Duration.zero);
-    } catch (e) {
-      // Network / codec / timeout. Mark this index failed so the page
-      // shows a retry chip; keep the controller in the map (disposed
-      // on retry) so we know we already tried.
-      _failedIndices.add(i);
-      // Best-effort admin instrumentation — surfaces "this reel won't
-      // load" trends in the dashboard. Errors here are swallowed
-      // inside EventsService.
-      unawaited(EventsService.logReelLoadFailed(
-        postId: post.id,
-        errorKind: e is TimeoutException ? 'timeout' : 'init',
-      ));
+
+    // Try the lightweight variant first, then fall back to the original
+    // master ONCE. A missing / half-written rendition must never make a
+    // reel unplayable when the original would have worked — so the change to
+    // prefer a light variant can only ever help, never regress.
+    final original = post.mediaUrl?.trim() ?? '';
+    final sources = <String>[preferred];
+    if (original.isNotEmpty && original != preferred) sources.add(original);
+
+    Object? lastErr;
+    for (final url in sources) {
+      final isVariant = url != original;
+      final c = VideoPlayerController.networkUrl(Uri.parse(url));
+      // Replace eagerly (disposing any prior failed attempt) so the map is
+      // never momentarily empty for [i] — that's what stops a concurrent
+      // _ensureWindow from double-initialising the same index.
+      final prior = _controllers[i];
+      _controllers[i] = c;
+      if (prior != null) {
+        try {
+          await prior.dispose();
+        } catch (_) {/* already disposed */}
+      }
+      try {
+        // Race init against a 10s wall clock. If init never completes
+        // (broken stream, DNS storm, etc.) we throw and try the next
+        // source instead of leaving the user staring at a forever-spinner.
+        await c.initialize().timeout(_initTimeout);
+        // Reject a truncated transcode (the worker has emitted variants far
+        // shorter than the source); fall through to the original so the reel
+        // is never silently cut off.
+        if (isVariant && _isTruncatedVariant(c, post)) {
+          throw StateError('variant truncated');
+        }
+        await c.setLooping(true);
+        await c.setVolume(_muted ? 0.0 : 1.0);
+        // Seek to the start so the first frame is decoded right now — when
+        // the user swipes here later, playback resumes from a fully-rendered
+        // frame instead of black.
+        await c.seekTo(Duration.zero);
+        if (mounted) setState(() {});
+        return; // success — done.
+      } catch (e) {
+        lastErr = e;
+        // Fall through to the next source (or the failure path below).
+      }
     }
+
+    // Every source failed — drop the dead controller, mark this index so
+    // the page shows a tap-to-retry chip, and instrument the failure.
+    final dead = _controllers.remove(i);
+    if (dead != null) {
+      try {
+        await dead.dispose();
+      } catch (_) {/* already disposed */}
+    }
+    _failedIndices.add(i);
+    // Best-effort admin instrumentation — surfaces "this reel won't load"
+    // trends in the dashboard. Errors here are swallowed inside EventsService.
+    unawaited(EventsService.logReelLoadFailed(
+      postId: post.id,
+      errorKind: lastErr is TimeoutException ? 'timeout' : 'init',
+    ));
     if (mounted) setState(() {});
   }
 
@@ -727,10 +819,11 @@ class _ReelPageState extends State<_ReelPage> {
             widget.post.coverUrl != null &&
             widget.post.coverUrl!.isNotEmpty)
           Positioned.fill(
-            child: Image.network(
+            child: AppNetworkImage(
               widget.post.coverUrl!,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(color: Colors.black),
+              placeholderColor: Colors.black,
+              errorWidget: Container(color: Colors.black),
             ),
           )
         else if (!ready)

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Camera,
   Moon,
@@ -15,46 +15,21 @@ import {
 import { api, ApiError, getToken } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { useI18n } from '../i18n/I18nContext'
+import { useTheme } from '../theme/ThemeContext'
 
-// ────────────────────────────────────────────────────────────────────
-// useAdminLang — minimal i18n hook for the admin dashboard.
-//
-// Storage: `localStorage.adminLang` ('en' | 'ar'). The hook returns
-// `[lang, setLang]`, and every component that calls it re-renders
-// whenever the value changes (via a tiny event listener so changes in
-// one tab/panel propagate to every other call site immediately).
-// ────────────────────────────────────────────────────────────────────
-const LANG_EVT = 'admin-lang-change'
-export function useAdminLang() {
-  const [lang, setLangState] = useState(() => {
-    try {
-      return localStorage.getItem('adminLang') || 'en'
-    } catch {
-      return 'en'
-    }
-  })
-  useEffect(() => {
-    function onChange(e) {
-      setLangState(e.detail || 'en')
-    }
-    window.addEventListener(LANG_EVT, onChange)
-    return () => window.removeEventListener(LANG_EVT, onChange)
-  }, [])
-  function setLang(next) {
-    try {
-      localStorage.setItem('adminLang', next)
-    } catch {
-      // ignore — storage might be blocked (rare); the in-memory state
-      // still updates so the panel responds to the toggle for this
-      // session at least.
-    }
-    window.dispatchEvent(new CustomEvent(LANG_EVT, { detail: next }))
-  }
-  return [lang, setLang]
+// Resolve a server-relative upload path (`/uploads/images/x.jpg`, returned by
+// the local-disk fallback) into something the browser can load. Absolute S3
+// URLs (the Railway path) are returned unchanged.
+function absoluteUrl(path) {
+  if (!path) return ''
+  if (path.startsWith('http')) return path
+  const base = import.meta.env?.VITE_API_BASE_URL ?? ''
+  const origin = base.replace(/\/api\/?$/, '')
+  return `${origin}${path}`
 }
 
-// Same persistent-via-localStorage + event-bus pattern as useAdminLang,
-// applied to the "default region filter" preference. Other admin pages
+// Persistent-via-localStorage + event-bus pattern for the "default region
+// filter" preference. Other admin pages
 // (Stocks, Users) can read this when they mount to set their starting
 // region filter.
 const REGION_KEY = 'adminDefaultRegion'
@@ -160,6 +135,67 @@ function ProfileForm() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const [savedFlash, setSavedFlash] = useState(false)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const fileRef = useRef(null)
+
+  // Upload a freshly-picked image to /me/uploads/image, then persist the
+  // returned URL onto users.avatar_url via PATCH /me/profile. Mirrors the
+  // Flutter app's avatar flow and CommunityDetail's uploader. FormData must
+  // go through raw fetch (the api wrapper JSON-encodes bodies, which would
+  // mangle multipart).
+  async function uploadAvatar(file) {
+    if (!file) return
+    setUploadingAvatar(true)
+    setError(null)
+    setSavedFlash(false)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const base = import.meta.env?.VITE_API_BASE_URL ?? 'http://localhost:8080/api'
+      const token = getToken()
+      const up = await fetch(`${base}/me/uploads/image`, {
+        method: 'POST',
+        body: fd,
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      if (!up.ok) {
+        let msg = `${t('settings.avatarUploadFailed')} (${up.status})`
+        try {
+          const j = await up.json()
+          if (j?.error) msg = j.error
+        } catch { /* keep default */ }
+        throw new Error(msg)
+      }
+      const { url } = await up.json()
+      // Persist on the user row so it survives a reload / shows app-side.
+      const res = await api.patch('/me/profile', { avatarUrl: url })
+      const persisted = res?.avatarUrl || url
+      setAvatarUrl(persisted)
+      updateUser({ avatarUrl: persisted })
+      setSavedFlash(true)
+      setTimeout(() => setSavedFlash(false), 2400)
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : (e?.message ?? t('settings.avatarUploadFailed')))
+    } finally {
+      setUploadingAvatar(false)
+      if (fileRef.current) fileRef.current.value = '' // allow re-picking same file
+    }
+  }
+
+  // Clear the avatar — PATCH with an empty avatarUrl nulls the column.
+  async function removeAvatar() {
+    setUploadingAvatar(true)
+    setError(null)
+    try {
+      await api.patch('/me/profile', { avatarUrl: '' })
+      setAvatarUrl('')
+      updateUser({ avatarUrl: '' })
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : t('settings.avatarUploadFailed'))
+    } finally {
+      setUploadingAvatar(false)
+    }
+  }
 
   // Pull the full user record once so we can pre-fill avatar +
   // confirm the email shown matches the backend. AuthContext caches
@@ -226,7 +262,7 @@ function ProfileForm() {
         <div className="relative shrink-0">
           {avatarUrl ? (
             <img
-              src={avatarUrl}
+              src={absoluteUrl(avatarUrl)}
               className="w-16 h-16 sm:w-20 sm:h-20 rounded-full ring-2 ring-cyan-500/40 object-cover"
               alt=""
             />
@@ -235,18 +271,52 @@ function ProfileForm() {
               {initialsOf(fullName || user?.email || '?')}
             </div>
           )}
-          <span
-            className="absolute -bottom-1 -end-1 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-700 text-slate-400 flex items-center justify-center cursor-not-allowed"
-            title={t('settings.avatarSoon')}
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => uploadAvatar(e.target.files?.[0])}
+          />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={uploadingAvatar || saving}
+            title={t('settings.profilePhoto')}
+            className="absolute -bottom-1 -end-1 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-cyan-600 hover:bg-cyan-500 text-white flex items-center justify-center transition-colors shadow disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <Camera className="w-4 h-4" />
-          </span>
+            {uploadingAvatar ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Camera className="w-4 h-4" />
+            )}
+          </button>
         </div>
         <div className="min-w-0">
           <h3 className="font-semibold text-white">{t('settings.profilePhoto')}</h3>
           <p className="text-sm text-slate-400">
             {t('settings.profilePhotoHint')}
           </p>
+          <div className="flex items-center gap-3 mt-2">
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={uploadingAvatar || saving}
+              className="text-xs font-semibold text-cyan-300 hover:text-cyan-200 disabled:opacity-50"
+            >
+              {avatarUrl ? t('settings.avatarChange') : t('settings.avatarUpload')}
+            </button>
+            {avatarUrl && (
+              <button
+                type="button"
+                onClick={removeAvatar}
+                disabled={uploadingAvatar || saving}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-rose-300 hover:text-rose-200 disabled:opacity-50"
+              >
+                <X className="w-3.5 h-3.5" /> {t('settings.avatarRemove')}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -330,28 +400,17 @@ function ProfileForm() {
 // ────────────────────────────────────────────────────────────────────
 
 function PreferencesForm() {
-  const { t } = useI18n()
-  // Theme is stored under the same localStorage key the ThemeContext
-  // writes to. Reading it lets the picker show the current value on
-  // mount.
-  const [theme, setTheme] = useState(() => {
-    try {
-      return localStorage.getItem('theme') || 'dark'
-    } catch {
-      return 'dark'
-    }
-  })
-  const [lang, setLang] = useAdminLang()
+  // Drive the SAME contexts the header uses so the picks actually apply
+  // live: ThemeContext flips the <html> class (dark/light), I18nContext
+  // swaps translations and flips <html dir> for Arabic RTL. Previously this
+  // form wrote its own disconnected localStorage keys, so nothing changed.
+  const { t, locale, setLocale } = useI18n()
+  const { theme, setTheme } = useTheme()
   const [region, setRegion] = useAdminDefaultRegion()
   const [savedFlash, setSavedFlash] = useState(false)
 
   function applyTheme(next) {
     setTheme(next)
-    try {
-      localStorage.setItem('theme', next)
-    } catch {
-      // ignore
-    }
   }
 
   function save() {
@@ -392,15 +451,15 @@ function PreferencesForm() {
         <p className="text-sm text-slate-400 mb-3">{t('settings.languageHint')}</p>
         <div className="grid grid-cols-2 gap-3">
           <LangOption
-            active={lang === 'en'}
-            onClick={() => setLang('en')}
+            active={locale === 'en'}
+            onClick={() => setLocale('en')}
             flag="🇬🇧"
             label={t('settings.langEnglish')}
             sub={t('settings.langEnglishSub')}
           />
           <LangOption
-            active={lang === 'ar'}
-            onClick={() => setLang('ar')}
+            active={locale === 'ar'}
+            onClick={() => setLocale('ar')}
             flag="🇸🇦"
             label={t('settings.langArabic')}
             sub={t('settings.langArabicSub')}
@@ -958,11 +1017,10 @@ function initialsOf(s) {
 // ────────────────────────────────────────────────────────────────────
 
 function BackupExport() {
-  const { t } = useI18n()
+  const { t, isRTL, setLocale } = useI18n()
   const [busy, setBusy] = useState(null)
   const [error, setError] = useState(null)
-  const [lang, setLang] = useAdminLang()
-  const isArabic = lang === 'ar'
+  const isArabic = isRTL
 
   async function download(kind) {
     setBusy(kind)
@@ -1015,7 +1073,7 @@ function BackupExport() {
         </div>
         <div className="flex items-center gap-1 rounded-md bg-white/[0.04] ring-1 ring-white/10 p-0.5">
           <button
-            onClick={() => setLang('en')}
+            onClick={() => setLocale('en')}
             className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors ${
               !isArabic
                 ? 'bg-cyan-500/20 text-cyan-300'
@@ -1025,7 +1083,7 @@ function BackupExport() {
             EN
           </button>
           <button
-            onClick={() => setLang('ar')}
+            onClick={() => setLocale('ar')}
             className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors ${
               isArabic
                 ? 'bg-cyan-500/20 text-cyan-300'

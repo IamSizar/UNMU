@@ -24,14 +24,15 @@ var ErrPromoCodeExists = errors.New("promo: code already exists")
 // promoCols — one column list shared by every SELECT path. Update
 // scanPromo() in lockstep if you add a column.
 const promoCols = `id, code, discount_type, discount_value, max_uses,
-	used_count, is_active, valid_from, valid_until, created_at`
+	used_count, is_active, valid_from, valid_until, created_at,
+	COALESCE(scope, 'all')`
 
 func scanPromo(row interface{ Scan(dest ...any) error }) (*models.PromoCode, error) {
 	p := &models.PromoCode{}
 	if err := row.Scan(
 		&p.ID, &p.Code, &p.DiscountType, &p.DiscountValue,
 		&p.MaxUses, &p.UsedCount, &p.IsActive,
-		&p.ValidFrom, &p.ValidUntil, &p.CreatedAt,
+		&p.ValidFrom, &p.ValidUntil, &p.CreatedAt, &p.Scope,
 	); err != nil {
 		return nil, err
 	}
@@ -112,6 +113,7 @@ type PromoMutation struct {
 	Code          string  // required on create; "" on update means "leave alone"
 	DiscountType  string  // "PERCENTAGE" or "FIXED"
 	DiscountValue float64
+	Scope         string  // "all" | "expert" | "community"; "" = leave alone (update) / default 'all' (create)
 	MaxUses       *int64   // nil = no cap, &0 = capped at 0 (effectively disabled)
 	IsActive      *bool
 	ValidFrom     *time.Time
@@ -145,13 +147,17 @@ func (r *PromoCodeRepository) Create(m PromoMutation) (*models.PromoCode, error)
 	if m.IsActive != nil {
 		isActive = *m.IsActive
 	}
+	scope := strings.ToLower(strings.TrimSpace(m.Scope))
+	if scope == "" {
+		scope = "all"
+	}
 	row := r.db.QueryRow(`
 		INSERT INTO promo_codes
-		    (code, discount_type, discount_value, max_uses,
+		    (code, discount_type, discount_value, scope, max_uses,
 		     is_active, valid_from, valid_until)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING `+promoCols,
-		code, m.DiscountType, m.DiscountValue,
+		code, m.DiscountType, m.DiscountValue, scope,
 		nullableInt64(m.MaxUses), isActive,
 		nullableTime(m.ValidFrom), nullableTime(m.ValidUntil),
 	)
@@ -180,12 +186,17 @@ func (r *PromoCodeRepository) Update(id int64, m PromoMutation) (*models.PromoCo
 	if m.DiscountValue > 0 {
 		discountValuePresent = m.DiscountValue
 	}
+	var scopePresent any
+	if s := strings.ToLower(strings.TrimSpace(m.Scope)); s != "" {
+		scopePresent = s
+	}
 
 	row := r.db.QueryRow(`
 		UPDATE promo_codes SET
 		    code           = COALESCE($1, code),
 		    discount_type  = COALESCE($2, discount_type),
 		    discount_value = COALESCE($3, discount_value),
+		    scope          = COALESCE($12, scope),
 		    max_uses       = CASE WHEN $4::boolean THEN $5 ELSE max_uses END,
 		    is_active      = COALESCE($6, is_active),
 		    valid_from     = CASE WHEN $7::boolean THEN $8 ELSE valid_from END,
@@ -198,6 +209,7 @@ func (r *PromoCodeRepository) Update(id int64, m PromoMutation) (*models.PromoCo
 		m.TouchValidFrom, nullableTime(m.ValidFrom),
 		m.TouchValidUntil, nullableTime(m.ValidUntil),
 		id,
+		scopePresent,
 	)
 	p, err := scanPromo(row)
 	if errors.Is(err, sql.ErrNoRows) {

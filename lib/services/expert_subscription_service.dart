@@ -31,6 +31,7 @@ class ExpertSubscriptionService {
     String? paymentRef,
     String? receiptUrl,
     String? note,
+    String? promoCode,
   }) async {
     try {
       final response = await http.post(
@@ -42,6 +43,7 @@ class ExpertSubscriptionService {
           if (paymentRef != null && paymentRef.isNotEmpty) 'paymentRef': paymentRef,
           if (receiptUrl != null && receiptUrl.isNotEmpty) 'receiptUrl': receiptUrl,
           if (note != null && note.isNotEmpty) 'userNote': note,
+          if (promoCode != null && promoCode.isNotEmpty) 'promoCode': promoCode,
         }),
       );
       if (response.statusCode == 201) {

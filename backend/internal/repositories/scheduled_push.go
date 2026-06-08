@@ -23,9 +23,13 @@ func NewScheduledPushRepository(db *sql.DB) *ScheduledPushRepository {
 // ScheduledPush is one queued notification. JSON tags match what the admin
 // dashboard sends/reads.
 type ScheduledPush struct {
-	ID           int64             `json:"id"`
-	Title        string            `json:"title"`
-	Body         string            `json:"body"`
+	ID    int64  `json:"id"`
+	Title string `json:"title"`
+	Body  string `json:"body"`
+	// Arabic copy. Empty = fall back to Title/Body for Arabic users. The
+	// background sender splits delivery by each recipient's locale.
+	TitleAr      string            `json:"titleAr,omitempty"`
+	BodyAr       string            `json:"bodyAr,omitempty"`
 	Data         map[string]string `json:"data,omitempty"`
 	Target       string            `json:"target"`
 	UserID       *int64            `json:"userId,omitempty"`
@@ -51,7 +55,8 @@ type ScheduledPush struct {
 const scheduledPushCols = `
 	id, title, body, data, target, user_id, role, community_id, send_at,
 	status, success_count, failure_count, recipients, error, created_by,
-	created_at, sent_at, repeat_kind, repeat_days, repeat_count`
+	created_at, sent_at, repeat_kind, repeat_days, repeat_count,
+	COALESCE(title_ar, ''), COALESCE(body_ar, '')`
 
 // (rowScanner is already declared in this package — reuse it.)
 
@@ -71,6 +76,7 @@ func scanScheduledPush(s rowScanner) (*ScheduledPush, error) {
 		&communityID, &p.SendAt, &p.Status, &p.SuccessCount, &p.FailureCount,
 		&p.Recipients, &errMsg, &createdBy, &p.CreatedAt, &sentAt,
 		&p.RepeatKind, pq.Array(&p.RepeatDays), &p.RepeatCount,
+		&p.TitleAr, &p.BodyAr,
 	); err != nil {
 		return nil, err
 	}
@@ -117,11 +123,11 @@ func (r *ScheduledPushRepository) Create(p ScheduledPush) (*ScheduledPush, error
 	row := r.db.QueryRow(
 		`INSERT INTO scheduled_pushes
 		   (title, body, data, target, user_id, role, community_id, send_at,
-		    created_by, repeat_kind, repeat_days)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+		    created_by, repeat_kind, repeat_days, title_ar, body_ar)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
 		 RETURNING `+scheduledPushCols,
 		p.Title, p.Body, dataArg, p.Target, p.UserID, p.Role, p.CommunityID,
-		p.SendAt, p.CreatedBy, kind, daysArg,
+		p.SendAt, p.CreatedBy, kind, daysArg, p.TitleAr, p.BodyAr,
 	)
 	return scanScheduledPush(row)
 }

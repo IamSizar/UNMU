@@ -12,6 +12,8 @@ import '../../models/expert_subscription.dart';
 import '../../services/community_service.dart';
 import 'community_detail_screen.dart';
 import 'expert_paywall_screen.dart';
+import '../../widgets/platform_adaptive/platform_dialog.dart';
+import '../../widgets/common/app_network_image.dart';
 import '../../widgets/social/comment_button.dart';
 import '../../widgets/social/like_button.dart';
 import '../../widgets/social/save_button.dart';
@@ -167,11 +169,13 @@ class _ExpertProfileScreenState extends State<ExpertProfileScreen>
     if (!context.mounted) return;
     final meta = res.meta;
     if (meta == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('expertProfile.communityUnavailable'.tr),
-          duration: const Duration(seconds: 2),
-        ),
+      // Community was hidden/removed by an admin — show a clear modal
+      // instead of a transient snackbar.
+      await PlatformDialog.show(
+        context: context,
+        title: 'expertProfile.communityUnavailableTitle'.tr,
+        content: 'expertProfile.communityUnavailable'.tr,
+        confirmText: 'common.ok'.tr,
       );
       return;
     }
@@ -965,25 +969,11 @@ class _LivePostCard extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             if (cover.isNotEmpty)
-              Image.network(
+              AppNetworkImage(
                 cover,
                 fit: BoxFit.cover,
-                loadingBuilder: (ctx, child, progress) {
-                  if (progress == null) return child;
-                  return Container(
-                    color: palette.surfaceElevated,
-                    alignment: Alignment.center,
-                    child: SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: accent,
-                      ),
-                    ),
-                  );
-                },
-                errorBuilder: (_, __, ___) => Container(
+                placeholderColor: palette.surfaceElevated,
+                errorWidget: Container(
                   color: palette.surfaceElevated,
                   alignment: Alignment.center,
                   child: Icon(
@@ -1078,6 +1068,7 @@ class _LivePostCard extends StatelessWidget {
         Get.to(() => ReelPlayerScreen(
               mediaUrl: post.mediaUrl!,
               qualityVariants: post.videoVariants,
+              expectedDurationSeconds: post.durationSeconds,
               coverUrl: post.coverUrl,
               title: post.title,
               authorName: post.authorName,
@@ -1439,15 +1430,11 @@ class _LockedPostCard extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             if (cover.isNotEmpty)
-              Image.network(
+              AppNetworkImage(
                 cover,
                 fit: BoxFit.cover,
-                loadingBuilder: (ctx, child, progress) {
-                  if (progress == null) return child;
-                  return Container(color: palette.surfaceElevated);
-                },
-                errorBuilder: (_, __, ___) =>
-                    Container(color: palette.surfaceElevated),
+                placeholderColor: palette.surfaceElevated,
+                errorWidget: Container(color: palette.surfaceElevated),
               )
             else
               Container(color: palette.surfaceElevated),

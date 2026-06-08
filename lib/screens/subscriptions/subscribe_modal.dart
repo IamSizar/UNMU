@@ -9,6 +9,7 @@ import '../../controllers/subscription_controller.dart';
 import '../../models/expert_subscription.dart';
 import '../../services/expert_subscription_service.dart';
 import '../../services/iap_service.dart';
+import '../../services/promo_service.dart';
 import '../../services/upload_service.dart';
 import '../../widgets/dismiss_keyboard_on_tap.dart';
 
@@ -71,6 +72,17 @@ class _SubscribeModalState extends State<SubscribeModal> {
   String? _receiptUrl;
   bool _receiptUploading = false;
 
+  /// Promo code state. The validate is a PREVIEW; the real discount +
+  /// redemption happen server-side when the subscription is created (the
+  /// applied code is sent in the subscribe request).
+  final _promoController = TextEditingController();
+  bool _promoChecking = false;
+  String? _appliedPromoCode; // non-null once a valid code is applied
+  String? _promoDiscountType; // PERCENTAGE | FIXED (for the price preview)
+  double _promoDiscountValue = 0;
+  String? _promoMessage;
+  bool _promoOk = false;
+
   @override
   void initState() {
     super.initState();
@@ -97,6 +109,7 @@ class _SubscribeModalState extends State<SubscribeModal> {
   void dispose() {
     _refController.dispose();
     _noteController.dispose();
+    _promoController.dispose();
     super.dispose();
   }
 
@@ -125,6 +138,47 @@ class _SubscribeModalState extends State<SubscribeModal> {
     });
   }
 
+  /// Preview-validate the typed promo code against the server (scoped to
+  /// "expert"). Stores the discount so the CTA can show the reduced price;
+  /// the authoritative discount is applied server-side at subscribe time.
+  Future<void> _applyPromo() async {
+    final code = _promoController.text.trim();
+    if (code.isEmpty) return;
+    setState(() {
+      _promoChecking = true;
+      _promoMessage = null;
+    });
+    final res = await PromoService.validatePromo(code, context: 'expert');
+    if (!mounted) return;
+    setState(() {
+      _promoChecking = false;
+      _promoOk = res['valid'] == true;
+      _promoMessage = res['message']?.toString();
+      if (_promoOk) {
+        _appliedPromoCode = code.toUpperCase();
+        _promoDiscountType = res['discount_type']?.toString();
+        _promoDiscountValue = (res['discount_value'] as num?)?.toDouble() ?? 0;
+      } else {
+        _appliedPromoCode = null;
+        _promoDiscountValue = 0;
+      }
+    });
+  }
+
+  /// Cents to show on the CTA — the discounted amount once a valid promo is
+  /// applied (preview math; server is authoritative).
+  int _displayCents(ExpertPricing pricing) {
+    final base = pricing.centsForPlan(_plan);
+    if (_appliedPromoCode == null) return base;
+    if (_promoDiscountType == 'PERCENTAGE') {
+      return (base * (1 - _promoDiscountValue / 100)).round().clamp(0, base);
+    }
+    if (_promoDiscountType == 'FIXED') {
+      return (base - (_promoDiscountValue * 100).round()).clamp(0, base);
+    }
+    return base;
+  }
+
   Future<void> _submit() async {
     setState(() {
       _submitting = true;
@@ -151,6 +205,7 @@ class _SubscribeModalState extends State<SubscribeModal> {
       note: _noteController.text.trim().isEmpty
           ? null
           : _noteController.text.trim(),
+      promoCode: _appliedPromoCode,
     );
 
     if (!mounted) return;
@@ -231,11 +286,19 @@ class _SubscribeModalState extends State<SubscribeModal> {
     final cs = Theme.of(context).colorScheme;
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final pricing = _pricing;
+    // Cap the sheet so it never becomes a full-screen takeover. With
+    // isScrollControlled the bottom sheet would otherwise grow to the full
+    // height of its (tall) content; capping at ~90% leaves the dimmed
+    // background peeking at the top so it clearly reads as a modal, and the
+    // inner SingleChildScrollView scrolls when the form is longer than that.
+    final maxHeight = MediaQuery.sizeOf(context).height * 0.9;
 
     return Padding(
       padding: EdgeInsets.only(bottom: bottomInset),
       child: DismissKeyboardOnTap(
-      child: Container(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        child: Container(
         decoration: BoxDecoration(
           color: cs.surface,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -383,6 +446,79 @@ class _SubscribeModalState extends State<SubscribeModal> {
                   ),
                 ],
 
+                // ── Promo code (cash/FIB only — IAP price is fixed) ──
+                if (_method != PaymentMethod.appleIap) ...[
+                  const SizedBox(height: 16),
+                  _SectionLabel('subscribe.promoLabel'.tr),
+                  const SizedBox(height: 6),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _promoController,
+                          textCapitalization: TextCapitalization.characters,
+                          decoration: InputDecoration(
+                            hintText: 'subscribe.promoHint'.tr,
+                          ),
+                          enabled: !_submitting && !_promoChecking,
+                          onChanged: (_) {
+                            if (_appliedPromoCode != null) {
+                              setState(() {
+                                _appliedPromoCode = null;
+                                _promoMessage = null;
+                              });
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        height: 52,
+                        child: FilledButton.tonal(
+                          onPressed: (_submitting || _promoChecking)
+                              ? null
+                              : _applyPromo,
+                          child: _promoChecking
+                              ? const SizedBox(
+                                  width: 18, height: 18,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : Text('subscribe.promoApply'.tr),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_promoMessage != null) ...[
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Icon(
+                          _promoOk
+                              ? Icons.check_circle_rounded
+                              : Icons.info_outline_rounded,
+                          size: 16,
+                          color: _promoOk
+                              ? Colors.green.shade600
+                              : cs.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            _promoMessage!,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: _promoOk
+                                  ? Colors.green.shade600
+                                  : cs.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+
                 if (_error != null) ...[
                   const SizedBox(height: 14),
                   Container(
@@ -418,7 +554,7 @@ class _SubscribeModalState extends State<SubscribeModal> {
                       : Text('subscribe.submit'.trParams({
                           'price': pricing == null
                               ? ''
-                              : pricing.formatCents(pricing.centsForPlan(_plan)),
+                              : pricing.formatCents(_displayCents(pricing)),
                         })),
                 ),
                 const SizedBox(height: 10),
@@ -435,6 +571,7 @@ class _SubscribeModalState extends State<SubscribeModal> {
             ),
           ),
         ),
+      ),
       ),
       ),
     );

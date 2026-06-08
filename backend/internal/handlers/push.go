@@ -174,8 +174,15 @@ func (h *PushHandler) RegisterToken(c *gin.Context) {
 //	"role"      — every user whose role == Role ("USER"/"EXPERT"/"ADMIN")
 //	"community" — every member of the community named by CommunityID
 type sendBody struct {
+	// Title/Body are the default (English) copy. TitleAr/BodyAr are the
+	// Arabic copy; when present, users whose chosen language is Arabic
+	// receive that version instead — so the admin writes both once and each
+	// user is sent the push in their own language automatically. When the
+	// Arabic copy is omitted, Arabic users fall back to the English copy.
 	Title       string            `json:"title"`
 	Body        string            `json:"body"`
+	TitleAr     string            `json:"titleAr,omitempty"`
+	BodyAr      string            `json:"bodyAr,omitempty"`
 	Data        map[string]string `json:"data,omitempty"`
 	Target      string            `json:"target,omitempty"`
 	UserID      int64             `json:"userId,omitempty"`
@@ -206,6 +213,8 @@ func (h *PushHandler) AdminSend(c *gin.Context) {
 	}
 	body.Title = strings.TrimSpace(body.Title)
 	body.Body = strings.TrimSpace(body.Body)
+	body.TitleAr = strings.TrimSpace(body.TitleAr)
+	body.BodyAr = strings.TrimSpace(body.BodyAr)
 	if body.Title == "" || body.Body == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "title and body required"})
 		return
@@ -216,14 +225,16 @@ func (h *PushHandler) AdminSend(c *gin.Context) {
 		return
 	}
 	target := normalizeTarget(body.Target)
-	tokens, err := h.tokens.ResolveTokens(
+	// Resolve tokens WITH each owner's locale so the broadcast can be split
+	// by language (Arabic users get the Arabic copy, everyone else English).
+	recipients, err := h.tokens.ResolveTokensWithLocale(
 		target, body.UserID, body.Role, body.CommunityID,
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	if len(tokens) == 0 {
+	if len(recipients) == 0 {
 		c.JSON(http.StatusOK, gin.H{
 			"success_count": 0,
 			"failure_count": 0,
@@ -239,7 +250,11 @@ func (h *PushHandler) AdminSend(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Minute)
 	defer cancel()
 
-	result, sendErr := h.fcm.SendToTokens(ctx, tokens, body.Title, body.Body, body.Data)
+	result, sendErr := h.fcm.SendLocalized(
+		ctx, recipients,
+		body.Title, body.Body, body.TitleAr, body.BodyAr,
+		body.Data,
+	)
 	// Prune invalid tokens regardless of partial errors — they'll
 	// just keep failing on every future broadcast otherwise.
 	for _, t := range result.InvalidTokens {
@@ -257,7 +272,7 @@ func (h *PushHandler) AdminSend(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success_count":  result.SuccessCount,
 		"failure_count":  result.FailureCount,
-		"recipients":     len(tokens),
+		"recipients":     len(recipients),
 		"target":         target,
 		"invalid_tokens": result.InvalidTokens,
 	})
@@ -301,6 +316,8 @@ func (h *PushHandler) ScheduleSend(c *gin.Context) {
 	}
 	b.Title = strings.TrimSpace(b.Title)
 	b.Body = strings.TrimSpace(b.Body)
+	b.TitleAr = strings.TrimSpace(b.TitleAr)
+	b.BodyAr = strings.TrimSpace(b.BodyAr)
 	if b.Title == "" || b.Body == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "title and body required"})
 		return
@@ -362,6 +379,8 @@ func (h *PushHandler) ScheduleSend(c *gin.Context) {
 	rec := repositories.ScheduledPush{
 		Title:      b.Title,
 		Body:       b.Body,
+		TitleAr:    b.TitleAr,
+		BodyAr:     b.BodyAr,
 		Data:       b.Data,
 		Target:     normalizeTarget(b.Target),
 		SendAt:     sendAt,

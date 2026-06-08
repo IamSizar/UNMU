@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../controllers/auth_controller.dart';
 import '../../controllers/feed_controller.dart';
+import '../../widgets/common/app_network_image.dart';
 import '../../localization/locale_format.dart';
 import '../../models/expert_post.dart';
 import '../../services/events_service.dart';
@@ -576,15 +577,11 @@ class _FeedMediaCard extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             if (cover.isNotEmpty)
-              Image.network(
+              AppNetworkImage(
                 cover,
                 fit: BoxFit.cover,
-                loadingBuilder: (ctx, child, progress) {
-                  if (progress == null) return child;
-                  return Container(color: palette.surfaceElevated);
-                },
-                errorBuilder: (_, __, ___) =>
-                    Container(color: palette.surfaceElevated),
+                placeholderColor: palette.surfaceElevated,
+                errorWidget: Container(color: palette.surfaceElevated),
               )
             else
               Container(color: palette.surfaceElevated),
@@ -643,6 +640,7 @@ class _FeedMediaCard extends StatelessWidget {
         Get.to(() => ReelPlayerScreen(
               mediaUrl: post.mediaUrl!,
               qualityVariants: post.videoVariants,
+              expectedDurationSeconds: post.durationSeconds,
               coverUrl: post.coverUrl,
               title: post.title,
               authorName: post.authorName,

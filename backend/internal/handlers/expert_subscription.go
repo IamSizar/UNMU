@@ -43,6 +43,21 @@ type ExpertSubscriptionHandler struct {
 	// notifier sends localized device pushes for lifecycle events.
 	// Wired post-construction via SetNotifier. May be nil.
 	notifier *services.Notifier
+	// promos + promoAudits power server-authoritative promo discounts at
+	// checkout. Wired post-construction via SetPromo. Both nil = promo codes
+	// are ignored (subscription proceeds at full price).
+	promos      *repositories.PromoCodeRepository
+	promoAudits *repositories.AuditRepository
+}
+
+// SetPromo wires the promo-code repo (+ audit repo for the admin alert) so
+// the Subscribe endpoint can apply a discount and record the redemption.
+func (h *ExpertSubscriptionHandler) SetPromo(
+	promos *repositories.PromoCodeRepository,
+	audits *repositories.AuditRepository,
+) {
+	h.promos = promos
+	h.promoAudits = audits
 }
 
 func NewExpertSubscriptionHandler(
@@ -87,6 +102,10 @@ type subscribeRequest struct {
 	PaymentRef    string `json:"paymentRef"`
 	ReceiptURL    string `json:"receiptUrl"`
 	UserNote      string `json:"userNote"`
+	// PromoCode — optional. When supplied (and valid for an expert sub) the
+	// server applies its discount to the stored price and records the
+	// redemption. Ignored for Apple/Google IAP (fixed store pricing).
+	PromoCode string `json:"promoCode"`
 }
 
 // Subscribe — POST /api/experts/:id/subscribe
@@ -164,6 +183,25 @@ func (h *ExpertSubscriptionHandler) Subscribe(c *gin.Context) {
 	if currency == "" {
 		currency = "usd"
 	}
+
+	// Promo code (optional). Applied server-side so the stored price is the
+	// real discounted amount and the redemption is recorded + admin-alerted.
+	// An invalid code is a hard 400 so the user is never silently charged
+	// full price after expecting a discount.
+	userNote := req.UserNote
+	if pc, note, msg, derr := applyPromoAtCheckout(
+		h.promos, h.promoAudits, req.PromoCode, "expert", userID, method, priceCents, userNote,
+	); derr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to apply promo code"})
+		return
+	} else if msg != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": msg, "code": "PROMO_INVALID"})
+		return
+	} else {
+		priceCents = pc
+		userNote = note
+	}
+
 	sub, err := h.subs.Create(repositories.CreateExpertSubParams{
 		UserID:        userID,
 		ExpertID:      expertID,
@@ -173,7 +211,7 @@ func (h *ExpertSubscriptionHandler) Subscribe(c *gin.Context) {
 		Currency:      currency,
 		PaymentRef:    req.PaymentRef,
 		ReceiptURL:    req.ReceiptURL,
-		UserNote:      req.UserNote,
+		UserNote:      userNote,
 	})
 	if err != nil {
 		switch {

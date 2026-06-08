@@ -12,6 +12,7 @@ import '../../services/community_proposal_service.dart';
 import '../../services/expert_post_service.dart';
 import '../../services/studio_service.dart';
 import '../../utils/haptic_utils.dart';
+import '../../widgets/common/app_network_image.dart';
 import '../interactions/post_interactions_screen.dart';
 import '../reels/reel_player_screen.dart';
 import 'create_post_screen.dart';
@@ -355,6 +356,7 @@ class _PostTile extends StatelessWidget {
                   Get.to(() => ReelPlayerScreen(
                         mediaUrl: post.mediaUrl!,
                         qualityVariants: post.videoVariants,
+                        expectedDurationSeconds: post.durationSeconds,
                         coverUrl: post.coverUrl,
                         title: post.title,
                         authorName: post.authorName,
@@ -368,10 +370,11 @@ class _PostTile extends StatelessWidget {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    Image.network(
+                    AppNetworkImage(
                       post.coverUrl!,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(color: cs.surface),
+                      placeholderColor: cs.surface,
+                      errorWidget: Container(color: cs.surface),
                     ),
                     if (isVideo || isReel)
                       const Center(

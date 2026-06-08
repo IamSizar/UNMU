@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import '../../config/api_config.dart';
 import '../../services/community_service.dart';
 import '../../services/community_subscription_service.dart';
+import '../../widgets/common/app_network_image.dart';
 import '../../widgets/social/community_payment_sheet.dart';
 import '../../widgets/social/community_pricing_card.dart';
 import 'social_tokens.dart';
@@ -212,7 +213,7 @@ class _CommunityPreviewScreenState extends State<CommunityPreviewScreen> {
                       ),
                     ),
                   )
-                : Image.network(coverAbs, fit: BoxFit.cover),
+                : AppNetworkImage(coverAbs, fit: BoxFit.cover),
             collapseMode: CollapseMode.parallax,
           ),
         ),

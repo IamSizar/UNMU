@@ -109,6 +109,7 @@ class CommunitySubscriptionService {
     String? paymentRef,
     String? receiptUrl,
     String? userNote,
+    String? promoCode,
   }) async {
     try {
       final res = await http.post(
@@ -122,6 +123,7 @@ class CommunitySubscriptionService {
           if (receiptUrl != null && receiptUrl.isNotEmpty)
             'receiptUrl': receiptUrl,
           if (userNote != null && userNote.isNotEmpty) 'userNote': userNote,
+          if (promoCode != null && promoCode.isNotEmpty) 'promoCode': promoCode,
         }),
       );
       if (res.statusCode == 401) {

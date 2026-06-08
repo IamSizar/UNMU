@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../config/api_config.dart';
 import '../../screens/social/social_tokens.dart';
 import '../../services/community_subscription_service.dart';
+import '../../services/promo_service.dart';
 import '../../services/upload_service.dart';
 
 /// Bottom-sheet payment composer for paid community memberships
@@ -77,6 +78,14 @@ class _CommunityPaymentSheetState extends State<CommunityPaymentSheet> {
   String? _receiptUrl;
   bool _receiptUploading = false;
 
+  /// Promo code state (preview-validated against scope "community"; the
+  /// discount is applied server-side at subscribe time).
+  final _promo = TextEditingController();
+  bool _promoChecking = false;
+  String? _appliedPromoCode;
+  String? _promoMessage;
+  bool _promoOk = false;
+
   /// Submitted-success snapshot — when non-null we render the
   /// confirmation step instead of the form.
   CommunitySubscriptionRow? _submitted;
@@ -85,7 +94,27 @@ class _CommunityPaymentSheetState extends State<CommunityPaymentSheet> {
   void dispose() {
     _ref.dispose();
     _note.dispose();
+    _promo.dispose();
     super.dispose();
+  }
+
+  /// Preview-validate the typed promo code (scope "community"). The real
+  /// discount + redemption happen server-side when the subscription posts.
+  Future<void> _applyPromo() async {
+    final code = _promo.text.trim();
+    if (code.isEmpty) return;
+    setState(() {
+      _promoChecking = true;
+      _promoMessage = null;
+    });
+    final res = await PromoService.validatePromo(code, context: 'community');
+    if (!mounted) return;
+    setState(() {
+      _promoChecking = false;
+      _promoOk = res['valid'] == true;
+      _promoMessage = res['message']?.toString();
+      _appliedPromoCode = _promoOk ? code.toUpperCase() : null;
+    });
   }
 
   Future<void> _pickReceipt() async {
@@ -126,6 +155,7 @@ class _CommunityPaymentSheetState extends State<CommunityPaymentSheet> {
       paymentRef: _ref.text.trim(),
       receiptUrl: _receiptUrl,
       userNote: _note.text.trim(),
+      promoCode: _appliedPromoCode,
     );
     if (!mounted) return;
     if (res.error != null || res.sub == null) {
@@ -261,6 +291,45 @@ class _CommunityPaymentSheetState extends State<CommunityPaymentSheet> {
                         hint: 'paymentSheet.noteHint'.tr,
                         maxLines: 3,
                       ),
+                      const SizedBox(height: 14),
+                      _label(palette, 'subscribe.promoLabel'.tr),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: _textField(
+                              palette,
+                              _promo,
+                              hint: 'subscribe.promoHint'.tr,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          FilledButton.tonal(
+                            onPressed: (_busy || _promoChecking)
+                                ? null
+                                : _applyPromo,
+                            child: _promoChecking
+                                ? const SizedBox(
+                                    width: 16, height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : Text('subscribe.promoApply'.tr),
+                          ),
+                        ],
+                      ),
+                      if (_promoMessage != null) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          _promoMessage!,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: _promoOk
+                                ? SocialTokens.up
+                                : palette.textMuted,
+                          ),
+                        ),
+                      ],
                       if (_error != null) ...[
                         const SizedBox(height: 12),
                         Text(

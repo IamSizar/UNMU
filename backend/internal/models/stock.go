@@ -183,8 +183,11 @@ func (a *Ad) ToJSON() AdJSON {
 type PromoCode struct {
 	ID            int64         `json:"id"`
 	Code          string        `json:"code"`
-	DiscountType  string        `json:"discountType"`  // PERCENTAGE, FIXED
+	DiscountType  string        `json:"discountType"` // PERCENTAGE, FIXED
 	DiscountValue float64       `json:"discountValue"`
+	// Scope — which kind of purchase the code applies to:
+	// "all" (default), "expert", or "community".
+	Scope         string        `json:"scope"`
 	MaxUses       sql.NullInt64 `json:"-"`
 	UsedCount     int64         `json:"usedCount"`
 	IsActive      bool          `json:"isActive"`
@@ -199,6 +202,7 @@ type PromoCodeJSON struct {
 	Code          string     `json:"code"`
 	DiscountType  string     `json:"discountType"`
 	DiscountValue float64    `json:"discountValue"`
+	Scope         string     `json:"scope"`
 	MaxUses       *int64     `json:"maxUses,omitempty"`
 	UsedCount     int64      `json:"usedCount"`
 	IsActive      bool       `json:"isActive"`
@@ -208,11 +212,16 @@ type PromoCodeJSON struct {
 }
 
 func (p *PromoCode) ToJSON() PromoCodeJSON {
+	scope := p.Scope
+	if scope == "" {
+		scope = "all"
+	}
 	out := PromoCodeJSON{
 		ID:            p.ID,
 		Code:          p.Code,
 		DiscountType:  p.DiscountType,
 		DiscountValue: p.DiscountValue,
+		Scope:         scope,
 		UsedCount:     p.UsedCount,
 		IsActive:      p.IsActive,
 		CreatedAt:     p.CreatedAt,

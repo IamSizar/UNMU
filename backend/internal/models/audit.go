@@ -31,6 +31,9 @@ const (
 	// records both old and new prices so the audit-log detail page
 	// can render a diff.
 	AuditExpertPricingUpdated  = "EXPERT_PRICING_UPDATED"
+	// A user redeemed a promo code at checkout — written by
+	// PromoHandler.RedeemPromo so admins see codes being used.
+	AuditPromoRedeemed = "PROMO_REDEEMED"
 )
 
 // Severity levels.
