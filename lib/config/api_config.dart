@@ -1,11 +1,11 @@
 import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb, kReleaseMode;
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class ApiConfig {
-  // Debug & profile builds (flutter run) talk to the LOCAL dev backend.
-  // RELEASE builds (TestFlight / App Store / `flutter build`) automatically
-  // use Railway — so an archived build never ships pointing at localhost.
-  static bool get useLocalBackend => !kReleaseMode;
+  // Always use the live Railway backend (real production data) for EVERY build
+  // — device, simulator, debug, release, and TestFlight. Set to `true` only if
+  // you want to develop against the local Mac backend instead.
+  static const bool useLocalBackend = false;
 
   // Live Railway backend (project UNMU).
   static const String railwayUrl = 'https://backend-production-c908.up.railway.app/api';
