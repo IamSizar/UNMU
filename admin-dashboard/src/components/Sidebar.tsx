@@ -33,7 +33,6 @@ import {
   Flag,
   Wallet,
   Upload,
-  Stethoscope,
   Newspaper,
   Users2,
   Lightbulb,
@@ -173,7 +172,6 @@ function systemItems(pendingReportsCount: number | null): NavItem[] {
     },
     { to: '/audit-log', label: 'nav.auditLog', icon: Activity },
     { to: '/uploads', label: 'nav.uploads', icon: Upload },
-    { to: '/diagnostics', label: 'nav.diagnostics', icon: Stethoscope },
     { to: '/settings', label: 'nav.settings', icon: SettingsIcon },
   ]
 }

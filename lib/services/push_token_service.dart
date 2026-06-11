@@ -200,14 +200,16 @@ class PushTokenService {
     if (token == _lastToken) return; // dedupe identical refreshes
     _lastToken = token;
     // FCM tokens are ~163 chars. `debugPrint` rate-limits long strings
-    // and `flutter run`'s console truncates wrapped lines, so we use
-    // raw `print` with a banner that's impossible to miss when scrolling
-    // the log. The banner makes it trivial to grep / copy in one swoop.
-    // ignore: avoid_print
-    print('\n'
-        '╔════════════ FCM TOKEN ════════════╗\n'
-        '$token\n'
-        '╚═══════════════════════════════════╝\n');
+    // and `flutter run`'s console truncates wrapped lines, so in DEBUG we
+    // use a raw `print` banner that's trivial to grep / copy. Gated behind
+    // kDebugMode so release builds neither spam the console nor log a token.
+    if (kDebugMode) {
+      // ignore: avoid_print
+      print('\n'
+          '╔════════════ FCM TOKEN ════════════╗\n'
+          '$token\n'
+          '╚═══════════════════════════════════╝\n');
+    }
     // Fire-and-forget upload to the backend so the admin "Send to all"
     // broadcast can fan out to this device. Failure is non-fatal — on
     // next launch / token refresh we'll try again.

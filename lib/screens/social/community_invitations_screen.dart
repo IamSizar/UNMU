@@ -121,7 +121,7 @@ class _CommunityInvitationsScreenState
           ),
         ),
       ),
-      body: RefreshIndicator(
+      body: RefreshIndicator.adaptive(
         onRefresh: _load,
         color: SocialTokens.cyan,
         child: _loading && _items.isEmpty

@@ -1,6 +1,10 @@
+# Root service config — used when a Railway service's Root Directory = "/"
+# (repo root). Builds the Go backend via the root-context ./Dockerfile.
+# For a service with Root Directory = "backend", backend/railway.toml +
+# backend/Dockerfile are used instead — both produce the same backend.
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "backend/Dockerfile"
+dockerfilePath = "Dockerfile"
 watchPatterns = ["backend/**"]
 
 [deploy]

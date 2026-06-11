@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../widgets/directional_icon.dart';
 import 'package:get/get.dart';
 
+import '../../controllers/app_config_controller.dart';
 import '../../controllers/auth_controller.dart';
 import '../../screens/social/social_tokens.dart';
 import '../../utils/haptic_utils.dart';
@@ -12,7 +13,6 @@ import '../../utils/responsive.dart';
 import '../../widgets/auth/auth_widgets.dart';
 import '../../widgets/dismiss_keyboard_on_tap.dart';
 import '../../widgets/social/test_account_switcher.dart';
-import 'forgot_password_screen.dart';
 
 /// =============================================================================
 /// Login Screen — one screen: email + password + Apple/Google.
@@ -23,7 +23,7 @@ import 'forgot_password_screen.dart';
 ///   • Google / Apple register a brand-new user the first time (then the
 ///     onboarding screen — gated in _AppEntry — collects name + password)
 ///     and log returning users straight in.
-///   • Forgot-password link is kept. No "Sign up" link (OAuth is sign-up).
+///   • No "Sign up" link (OAuth is sign-up).
 /// =============================================================================
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -49,6 +49,10 @@ class _LoginScreenState extends State<LoginScreen> {
     super.initState();
     _email.addListener(_recompute);
     _password.addListener(_recompute);
+    if (kDebugMode) {
+      _email.text = 'demo@unmu.app';
+      _password.text = 'Demo1234!';
+    }
   }
 
   void _recompute() {
@@ -252,40 +256,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           textInputAction: TextInputAction.done,
                           onSubmitted: (_) => _handleLogin(),
                         ),
-                        const SizedBox(height: 8),
-                        Align(
-                          alignment: AlignmentDirectional.centerEnd,
-                          child: TextButton(
-                            onPressed: () {
-                              HapticUtils.lightTap();
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => ForgotPasswordScreen(
-                                    initialEmail: _email.text.trim().isEmpty
-                                        ? null
-                                        : _email.text.trim(),
-                                  ),
-                                ),
-                              );
-                            },
-                            style: TextButton.styleFrom(
-                              foregroundColor: SocialTokens.cyan,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 4,
-                                vertical: 4,
-                              ),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            child: Text(
-                              'auth.forgotPassword'.tr,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w800,
-                                fontSize: 12.5,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 20),
                         GradientCTA(
                           label: 'auth.login.cta'.tr,
                           trailingIcon: Icons.arrow_forward_rounded,
@@ -320,20 +291,33 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ],
                         ),
-                        if (kDebugMode) ...[
-                          const SizedBox(height: 10),
-                          Row(
+                        // Test account quick-switch — visibility is
+                        // admin-controlled via the dashboard Settings toggle
+                        // (app-config `testAccountEnabled`). Hidden instantly
+                        // when an admin turns it off.
+                        Obx(() {
+                          final show = Get.find<AppConfigController>()
+                              .testAccountEnabled
+                              .value;
+                          if (!show) return const SizedBox.shrink();
+                          return Column(
                             children: [
-                              SocialAuthButton(
-                                icon: Icons.science_rounded,
-                                label: 'auth.testAccount'.tr,
-                                iconColor: SocialTokens.gold,
-                                onPressed:
-                                    auth.isLoading ? null : _openTestPicker,
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  SocialAuthButton(
+                                    icon: Icons.science_rounded,
+                                    label: 'auth.testAccount'.tr,
+                                    iconColor: SocialTokens.gold,
+                                    onPressed: auth.isLoading
+                                        ? null
+                                        : _openTestPicker,
+                                  ),
+                                ],
                               ),
                             ],
-                          ),
-                        ],
+                          );
+                        }),
                         const Spacer(),
                       ],
                     ),

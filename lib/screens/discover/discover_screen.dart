@@ -95,7 +95,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
       ),
       body: Obx(() {
         final provider = Get.find<StocksController>();
-        return RefreshIndicator(
+        return RefreshIndicator.adaptive(
             onRefresh: _refresh,
             color: SocialTokens.cyan,
             child: CustomScrollView(

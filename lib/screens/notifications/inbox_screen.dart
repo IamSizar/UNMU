@@ -285,7 +285,7 @@ class _InboxScreenState extends State<InboxScreen>
         ),
       );
     }
-    return RefreshIndicator(
+    return RefreshIndicator.adaptive(
       color: SocialTokens.cyan,
       onRefresh: _load,
       child: ListView.separated(

@@ -114,7 +114,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
           ),
         ],
       ),
-      body: RefreshIndicator(
+      body: RefreshIndicator.adaptive(
         onRefresh: _load,
         child: ListView(
           padding: const EdgeInsets.all(16),

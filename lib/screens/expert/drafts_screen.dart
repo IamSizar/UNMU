@@ -168,7 +168,7 @@ class _DraftsScreenState extends State<DraftsScreen> {
         ),
       );
     }
-    return RefreshIndicator(
+    return RefreshIndicator.adaptive(
       onRefresh: _load,
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),

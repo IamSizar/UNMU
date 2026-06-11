@@ -266,7 +266,7 @@ class _SocialHubScreenState extends State<SocialHubScreen> {
         builder: (context, constraints) {
           final hp = constraints.maxWidth < 380 ? 14.0 : 18.0;
 
-          return RefreshIndicator(
+          return RefreshIndicator.adaptive(
             onRefresh: _loadAll,
             child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(

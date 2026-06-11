@@ -7,6 +7,11 @@ class ApiConfig {
   // local backend on your Mac for offline development.
   static bool get useLocalBackend => false;
 
+  // Local Go backend port. 8090 (not the usual 8080) because another local
+  // project occupies 8080 on this machine — keep them in sync with
+  // backend/.env SERVER_PORT.
+  static const int localPort = 8090;
+
   // Live Railway backend (project UNMU).
   static const String railwayUrl = 'https://backend-production-c908.up.railway.app/api';
 
@@ -20,11 +25,11 @@ class ApiConfig {
     if (!useLocalBackend) return railwayUrl;
 
     // Web: served from the same Mac, localhost is fine.
-    if (kIsWeb) return 'http://127.0.0.1:8080/api';
+    if (kIsWeb) return 'http://127.0.0.1:$localPort/api';
 
     // Android emulator: 10.0.2.2 is the special host-loopback address.
     // Real Android device on Wi-Fi: use the Mac's LAN IP instead.
-    if (Platform.isAndroid) return 'http://$devMacLanIp:8080/api';
+    if (Platform.isAndroid) return 'http://$devMacLanIp:$localPort/api';
 
     // iOS: the SIMULATOR shares the Mac's network stack, so 127.0.0.1
     // reaches the backend reliably regardless of Wi-Fi / DHCP changes (and
@@ -35,8 +40,8 @@ class ApiConfig {
     final isIosSimulator =
         Platform.environment.containsKey('SIMULATOR_DEVICE_NAME');
     return isIosSimulator
-        ? 'http://127.0.0.1:8080/api'
-        : 'http://$devMacLanIp:8080/api';
+        ? 'http://127.0.0.1:$localPort/api'
+        : 'http://$devMacLanIp:$localPort/api';
   }
 
   // Endpoints

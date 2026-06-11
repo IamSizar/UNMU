@@ -83,7 +83,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
   ) {
     final filtered = _applyFilter(wl.watchlist);
 
-    return RefreshIndicator(
+    return RefreshIndicator.adaptive(
       color: SocialTokens.cyan,
       onRefresh: () => wl.loadWatchlist(auth.token),
       child: CustomScrollView(

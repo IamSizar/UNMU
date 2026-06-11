@@ -251,20 +251,33 @@ class _ReelsImmersiveViewState extends State<ReelsImmersiveView>
       } catch (_) {/* already disposed */}
     }
 
-    // 2. Spin up missing controllers in **parallel** so the active page
-    //    and its neighbours prime simultaneously instead of in a chain.
-    //    The old sequential await-per-controller meant neighbours weren't
-    //    ready by the time the user swiped — that's the buffer pause.
-    final pending = <Future<void>>[];
-    for (final i in keep) {
-      if (_controllers.containsKey(i)) continue;
-      pending.add(_spinUpController(i, reels[i]));
-    }
-    if (pending.isNotEmpty) {
-      await Future.wait(pending);
+    // 2. Active reel FIRST, alone. Initializing the active clip and its
+    //    neighbours together makes them fight over the same bandwidth, so
+    //    the clip the user is actually watching decodes its first frame
+    //    slower. Instead we prime the active reel by itself (full pipe →
+    //    fast first frame), start it playing, and only THEN prime the
+    //    neighbours. This is the single biggest win for "open a reel and
+    //    it plays instantly" without adding any extra requests.
+    if (!_controllers.containsKey(center)) {
+      await _spinUpController(center, reels[center]);
+      // Play the active reel the moment it's ready — don't wait on the
+      // neighbours that are about to load.
+      _syncPlayback();
     }
 
-    // 3. Sync playback so exactly one controller plays (the active one),
+    // 3. Prime the neighbours after, in parallel. They only need to be
+    //    ready by the time the user swipes, not on open — so they get
+    //    whatever bandwidth is left once the active clip is streaming.
+    final neighbours = <Future<void>>[];
+    for (final i in keep) {
+      if (i == center || _controllers.containsKey(i)) continue;
+      neighbours.add(_spinUpController(i, reels[i]));
+    }
+    if (neighbours.isNotEmpty) {
+      await Future.wait(neighbours);
+    }
+
+    // 4. Final reconcile so exactly one controller plays (the active one),
     //    every neighbour stays paused at frame 0.
     _syncPlayback();
   }

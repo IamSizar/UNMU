@@ -53,12 +53,18 @@ func (r *AppSettingsRepository) CommunityEnabled() bool      { return r.getBool(
 func (r *AppSettingsRepository) CommunityChatEnabled() bool  { return r.getBool("community_chat_enabled", true) }
 func (r *AppSettingsRepository) CommunityPostsEnabled() bool { return r.getBool("community_posts_enabled", true) }
 
+// TestAccountEnabled — controls whether the login screen shows the
+// "Test account" quick-switch button. Default true (current behaviour);
+// admins can hide it from the dashboard for production.
+func (r *AppSettingsRepository) TestAccountEnabled() bool { return r.getBool("test_account_enabled", true) }
+
 // Flags returns the camelCase shape the dashboard + app expect.
 func (r *AppSettingsRepository) Flags() map[string]bool {
 	return map[string]bool{
 		"communityEnabled":      r.CommunityEnabled(),
 		"communityChatEnabled":  r.CommunityChatEnabled(),
 		"communityPostsEnabled": r.CommunityPostsEnabled(),
+		"testAccountEnabled":    r.TestAccountEnabled(),
 	}
 }
 

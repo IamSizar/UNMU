@@ -5,6 +5,7 @@ import '../../widgets/directional_icon.dart';
 import 'package:get/get.dart';
 
 import '../../models/user.dart';
+import '../../controllers/app_config_controller.dart';
 import '../../controllers/auth_controller.dart';
 import '../../controllers/currency_controller.dart';
 import '../../controllers/language_controller.dart';
@@ -176,19 +177,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
 
             // ─────── TEST MODE ───────
-            // Visible only while running on the test-mode auth (currently always
-            // true). Lets you hop between USER / EXPERT / SCHOLAR presets to
-            // verify the subscription paywall and post-creation rights.
-            if (auth.isAuthenticated) ...[
-              const SizedBox(height: 22),
-              _MiniSectionHeader(
-                palette: palette,
-                eyebrow: 'profile.sectionTestEyebrow'.tr,
-                title: 'profile.sectionTestTitle'.tr,
-              ),
-              const SizedBox(height: 10),
-              _TestModeCard(palette: palette, auth: auth),
-            ],
+            // Lets you hop between USER / EXPERT / SCHOLAR presets to verify
+            // the subscription paywall and post-creation rights. Gated on the
+            // SAME admin flag as the login-screen "Test account" button
+            // (app-config `testAccountEnabled`) — when the admin hides the
+            // test account, this whole section disappears too. Obx so it
+            // shows/hides live when the admin flips the toggle.
+            if (auth.isAuthenticated)
+              Obx(() {
+                final show =
+                    Get.find<AppConfigController>().testAccountEnabled.value;
+                if (!show) return const SizedBox.shrink();
+                return Column(
+                  children: [
+                    const SizedBox(height: 22),
+                    _MiniSectionHeader(
+                      palette: palette,
+                      eyebrow: 'profile.sectionTestEyebrow'.tr,
+                      title: 'profile.sectionTestTitle'.tr,
+                    ),
+                    const SizedBox(height: 10),
+                    _TestModeCard(palette: palette, auth: auth),
+                  ],
+                );
+              }),
 
             const SizedBox(height: 22),
 
@@ -1128,25 +1140,32 @@ class _PreferencesCard extends StatelessWidget {
             icon: Icons.attach_money_rounded,
             accent: SocialTokens.gold,
             title: 'profile.currency'.tr,
-            trailing: _StyledDropdown<String>(
-              palette: palette,
-              value: currencyProvider.selectedCurrency.code,
-              items: CurrencyController.availableCurrencies
-                  .map(
-                    (c) => DropdownMenuItem(
-                      value: c.code,
-                      child: Text('${c.flag} ${c.code}'),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (v) async {
-                if (v != null) {
-                  await HapticUtils.selection();
-                  final c = CurrencyController.availableCurrencies
-                      .firstWhere((cur) => cur.code == v);
-                  currencyProvider.updateCurrency(c);
-                }
-              },
+            // Obx so the dropdown reflects the new currency immediately —
+            // without it, the value only refreshed after a tab switch
+            // because this card is a StatelessWidget that doesn't rebuild
+            // on a currency change (unlike theme/language, which rebuild
+            // the whole app).
+            trailing: Obx(
+              () => _StyledDropdown<String>(
+                palette: palette,
+                value: currencyProvider.selectedCurrency.code,
+                items: CurrencyController.availableCurrencies
+                    .map(
+                      (c) => DropdownMenuItem(
+                        value: c.code,
+                        child: Text('${c.flag} ${c.code}'),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (v) async {
+                  if (v != null) {
+                    await HapticUtils.selection();
+                    final c = CurrencyController.availableCurrencies
+                        .firstWhere((cur) => cur.code == v);
+                    currencyProvider.updateCurrency(c);
+                  }
+                },
+              ),
             ),
           ),
         ],

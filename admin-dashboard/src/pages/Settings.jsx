@@ -578,6 +578,12 @@ function FeaturesForm() {
       title: 'Community posts',
       desc: 'Creating and viewing posts inside communities.',
     },
+    {
+      key: 'testAccountEnabled',
+      title: 'Test account button',
+      desc: 'Show the "Test account" quick-login button on the app login screen. Turn off to hide it from users.',
+      standalone: true,
+    },
   ]
 
   return (
@@ -601,8 +607,11 @@ function FeaturesForm() {
       )}
       {items.map((it) => {
         const value = !!flags?.[it.key]
-        // Sub-toggles are moot when the master is off — dim + disable them.
-        const disabled = !it.master && flags?.communityEnabled === false
+        // Community sub-toggles are moot when the master is off — dim +
+        // disable them. Standalone flags (e.g. the test-account button) are
+        // never gated by the community master.
+        const disabled =
+          !it.master && !it.standalone && flags?.communityEnabled === false
         return (
           <div
             key={it.key}

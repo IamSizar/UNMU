@@ -161,7 +161,7 @@ class _MySubscriptionsScreenState extends State<MySubscriptionsScreen> {
         ],
       ),
       body: SafeArea(
-        child: RefreshIndicator(
+        child: RefreshIndicator.adaptive(
           onRefresh: _refreshAll,
           child: Obx(() {
             final loading = controller.isLoadingAll || _loadingCommunitySubs;

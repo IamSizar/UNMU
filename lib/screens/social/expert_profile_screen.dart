@@ -785,7 +785,7 @@ class _LivePostsTab extends StatelessWidget {
       // For real experts with no posts yet we now always show the
       // honest empty hint below.
       if (posts.isEmpty) {
-        return RefreshIndicator(
+        return RefreshIndicator.adaptive(
           color: accent,
           onRefresh: controller.reload,
           child: ListView(
@@ -808,7 +808,7 @@ class _LivePostsTab extends StatelessWidget {
         );
       }
 
-      return RefreshIndicator(
+      return RefreshIndicator.adaptive(
         color: accent,
         onRefresh: controller.reload,
         child: ListView.separated(

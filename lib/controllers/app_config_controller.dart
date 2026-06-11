@@ -21,6 +21,11 @@ class AppConfigController extends GetxController with WidgetsBindingObserver {
   final RxBool communityChatEnabled = true.obs;
   final RxBool communityPostsEnabled = true.obs;
 
+  /// Whether the login screen shows the "Test account" quick-switch button.
+  /// Admin-controlled from the dashboard Settings page. Defaults to true so a
+  /// slow/failed fetch never hides it unexpectedly.
+  final RxBool testAccountEnabled = true.obs;
+
   /// True only after the first successful fetch — lets UI avoid a flash
   /// of community content before we know the real flag value.
   final RxBool loaded = false.obs;
@@ -59,6 +64,7 @@ class AppConfigController extends GetxController with WidgetsBindingObserver {
         communityChatEnabled.value = m['communityChatEnabled'] as bool? ?? true;
         communityPostsEnabled.value =
             m['communityPostsEnabled'] as bool? ?? true;
+        testAccountEnabled.value = m['testAccountEnabled'] as bool? ?? true;
         loaded.value = true;
       }
     } catch (_) {

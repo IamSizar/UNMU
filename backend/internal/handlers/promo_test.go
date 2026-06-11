@@ -1,9 +1,58 @@
 package handlers
 
 import (
+	"halalstocks/internal/models"
 	"testing"
 	"time"
 )
+
+// discountedCents is the money math behind a promo code: given a base price
+// (in cents) and a validated code, it returns the amount the member actually
+// pays — i.e. the discounted price that gets stored on the subscription and
+// shown to the admin. This test pins that math down because it's
+// revenue-critical: a wrong number here means a member is over- or
+// under-charged for the exact discount the admin configured on the code.
+func TestDiscountedCents(t *testing.T) {
+	pct := func(v float64) *models.PromoCode {
+		return &models.PromoCode{DiscountType: "PERCENTAGE", DiscountValue: v}
+	}
+	fixed := func(v float64) *models.PromoCode {
+		return &models.PromoCode{DiscountType: "FIXED", DiscountValue: v}
+	}
+
+	cases := []struct {
+		name  string
+		price int
+		promo *models.PromoCode
+		want  int
+	}{
+		// PERCENTAGE: value is a % off the base.
+		{"25% off $10.00", 1000, pct(25), 750},
+		{"50% off $96.00", 9600, pct(50), 4800},
+		{"100% off → free", 1000, pct(100), 0},
+		{"0% off → unchanged", 1000, pct(0), 1000},
+		{"10% off rounds toward member (floor of off)", 999, pct(10), 900}, // off=int(99.9)=99 → 900
+
+		// FIXED: value is a whole-currency amount off (dollars → cents).
+		{"$3 off $10.00", 1000, fixed(3), 700},
+		{"$10 off $10.00 → free", 1000, fixed(10), 0},
+		{"$15 off $10.00 clamps at 0 (never negative)", 1000, fixed(15), 0},
+		{"$2.50 off $10.00", 1000, fixed(2.50), 750},
+
+		// Guards.
+		{"nil promo → unchanged", 1000, nil, 1000},
+		{"zero price → unchanged", 0, pct(25), 0},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := discountedCents(c.price, c.promo)
+			if got != c.want {
+				t.Errorf("discountedCents(%d, %+v) = %d, want %d", c.price, c.promo, got, c.want)
+			}
+		})
+	}
+}
 
 // parseOptionalDate is the entry point for every date field on the
 // admin promo create/update forms. It must accept three shapes:

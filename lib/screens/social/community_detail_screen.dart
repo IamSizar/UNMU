@@ -1821,7 +1821,7 @@ class _CommunityPostsTab extends StatelessWidget {
             },
           );
     if (onRefresh == null) return child;
-    return RefreshIndicator(onRefresh: onRefresh!, child: child);
+    return RefreshIndicator.adaptive(onRefresh: onRefresh!, child: child);
   }
 }
 
@@ -2451,7 +2451,7 @@ class _CommunityMembersTabState extends State<_CommunityMembersTab> {
       );
     }
     if (_members.isEmpty) {
-      return RefreshIndicator(
+      return RefreshIndicator.adaptive(
         onRefresh: _load,
         child: ListView(
           children: [
@@ -2479,7 +2479,7 @@ class _CommunityMembersTabState extends State<_CommunityMembersTab> {
     final regulars = _members
         .where((m) => m.role.toUpperCase() != 'EXPERT' && !m.isOwner)
         .toList();
-    return RefreshIndicator(
+    return RefreshIndicator.adaptive(
       onRefresh: _load,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(14, 14, 14, 24),

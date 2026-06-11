@@ -7,8 +7,8 @@ import { useI18n } from '../i18n/I18nContext'
 export default function Login() {
   const { t } = useI18n()
   const { login, user, loading } = useAuth()
-  const [email, setEmail] = useState('zaid@unmu.app')
-  const [password, setPassword] = useState('Zaid123!')
+  const [email, setEmail] = useState('admin@test.com')
+  const [password, setPassword] = useState('test')
   const [error, setError] = useState<string | null>(null)
 
   if (user) return <Navigate to="/dashboard" replace />
@@ -84,7 +84,7 @@ export default function Login() {
         </form>
 
         <p className="mt-6 text-[11px] text-slate-500 text-center">
-          {t('login.testCredentials')} <span className="text-cyan-400">zaid@unmu.app / Zaid123!</span>
+          {t('login.testCredentials')} <span className="text-cyan-400">admin@test.com / test</span>
         </p>
       </div>
     </div>

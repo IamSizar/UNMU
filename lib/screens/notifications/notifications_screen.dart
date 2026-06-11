@@ -107,7 +107,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     ],
                   ),
                 )
-              : RefreshIndicator(
+              : RefreshIndicator.adaptive(
                   onRefresh: _loadNotifications,
                   child: ListView.builder(
                     // iPad: center the inbox to a single comfortable column

@@ -65,7 +65,7 @@ class UserNotificationsScreen extends StatelessWidget {
             );
           }
           if (list.isEmpty) {
-            return RefreshIndicator(
+            return RefreshIndicator.adaptive(
               color: SocialTokens.cyan,
               onRefresh: ctrl.reload,
               child: ListView(
@@ -121,7 +121,7 @@ class UserNotificationsScreen extends StatelessWidget {
             );
           }
 
-          return RefreshIndicator(
+          return RefreshIndicator.adaptive(
             color: SocialTokens.cyan,
             onRefresh: ctrl.reload,
             child: ListView.separated(

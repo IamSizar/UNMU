@@ -108,7 +108,7 @@ class FeedScreen extends StatelessWidget {
                 }
 
                 if (posts.isEmpty) {
-                  return RefreshIndicator(
+                  return RefreshIndicator.adaptive(
                     color: SocialTokens.cyan,
                     onRefresh: ctrl.reload,
                     child: ListView(
@@ -125,7 +125,7 @@ class FeedScreen extends StatelessWidget {
                   );
                 }
 
-                return RefreshIndicator(
+                return RefreshIndicator.adaptive(
                   color: SocialTokens.cyan,
                   onRefresh: ctrl.reload,
                   // NotificationListener fires loadMore when the user
@@ -1023,17 +1023,17 @@ class _FeedArticleCardState extends State<_FeedArticleCard> {
   }
 
   // ── Cover image (4:3) ─────────────────────────────────────────────
+  // Uses AppNetworkImage (shimmer placeholder + fade-in + in-memory cache)
+  // instead of a raw Image.network so article covers load smoothly and a
+  // cover scrolled back into view is instant, not re-fetched.
   Widget _coverImage(ExpertPost p, SocialPalette palette) {
     return AspectRatio(
       aspectRatio: 4 / 3,
-      child: Image.network(
+      child: AppNetworkImage(
         p.coverUrl!,
         fit: BoxFit.cover,
-        loadingBuilder: (ctx, child, progress) {
-          if (progress == null) return child;
-          return Container(color: palette.surfaceElevated);
-        },
-        errorBuilder: (_, __, ___) => _typographicHero(p, palette),
+        placeholderColor: palette.surfaceElevated,
+        errorWidget: _typographicHero(p, palette),
       ),
     );
   }

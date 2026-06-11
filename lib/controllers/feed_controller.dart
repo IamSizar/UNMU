@@ -53,6 +53,16 @@ class FeedController extends GetxController {
   /// most recent fetch was a full page (meaning probably more available).
   static const int _pageSize = 50;
 
+  /// Per-filter result cache. Keyed by [_filterKey] ('all' | 'article' |
+  /// 'video' | 'reel'). Lets a filter switch render the previously-loaded
+  /// list INSTANTLY (no spinner, no wait) while a silent background refresh
+  /// fetches fresh data. This is the difference between the Articles/Videos
+  /// tabs feeling instant vs re-hitting the network on every tap.
+  final Map<String, List<ExpertPost>> _cacheByFilter = {};
+  final Map<String, bool> _hasMoreByFilter = {};
+
+  String get _filterKey => _filter.value?.wireValue ?? 'all';
+
   StreamSubscription<RealtimeEvent>? _realtimeSub;
   StreamSubscription<dynamic>? _authSub;
 
@@ -75,11 +85,17 @@ class FeedController extends GetxController {
     }
   }
 
-  /// Wipe + reload the feed. Called on initial mount, on filter change,
-  /// on every realtime event that could affect the list, and via
-  /// pull-to-refresh.
+  /// Reload the feed for the current filter. Called on initial mount, on
+  /// every realtime event that could affect the list, and via pull-to-
+  /// refresh.
+  ///
+  /// Only flips the [loading] spinner when there's nothing already on
+  /// screen for this filter — a refresh that has cached content to show
+  /// stays silent so the list never flashes a spinner over real content.
   Future<void> reload() async {
-    _loading.value = true;
+    final key = _filterKey;
+    final hasCached = (_cacheByFilter[key]?.isNotEmpty ?? false);
+    if (!hasCached) _loading.value = true;
     final res = await FeedService.myFeed(
       type: _filter.value,
       limit: _pageSize,
@@ -89,6 +105,15 @@ class FeedController extends GetxController {
       _loading.value = false;
       return;
     }
+    // Guard against a filter switch that happened while this fetch was in
+    // flight — don't clobber the now-active filter's list with stale data.
+    if (key != _filterKey) {
+      _cacheByFilter[key] = res;
+      _hasMoreByFilter[key] = res.length >= _pageSize;
+      return;
+    }
+    _cacheByFilter[key] = res;
+    _hasMoreByFilter[key] = res.length >= _pageSize;
     _posts.assignAll(res);
     _fetchedOk.value = true;
     _hasMore.value = res.length >= _pageSize;
@@ -125,22 +150,57 @@ class FeedController extends GetxController {
       final existingIds = _posts.map((p) => p.id).toSet();
       final fresh = res.where((p) => !existingIds.contains(p.id)).toList();
       _posts.addAll(fresh);
+      // Keep the per-filter cache in sync so returning to this filter shows
+      // the full paginated list, not just the first page.
+      _cacheByFilter[_filterKey] = List<ExpertPost>.from(_posts);
       // If we got back less than a full page, there's nothing more to
       // fetch — stop trying.
       if (res.length < _pageSize) {
         _hasMore.value = false;
+        _hasMoreByFilter[_filterKey] = false;
       }
     } finally {
       _loadingMore = false;
     }
   }
 
-  /// Switch the active type filter and re-fetch.
+  /// Switch the active type filter. If we've loaded this filter before,
+  /// show its cached list INSTANTLY (no spinner) and refresh in the
+  /// background. Only the first visit to a filter pays a loading wait.
   Future<void> setFilter(PostType? type) async {
     if (_filter.value == type) return;
     _filter.value = type;
-    // New filter = fresh page space; assume more available until the
-    // first page returns short.
+    final key = _filterKey;
+    final cached = _cacheByFilter[key];
+    if (cached != null) {
+      // Instant: paint the cached page, no spinner, then refresh quietly.
+      _posts.assignAll(cached);
+      _hasMore.value = _hasMoreByFilter[key] ?? true;
+      _loading.value = false;
+      unawaited(reload());
+      return;
+    }
+    // First time on this type filter. If the "all" feed is already loaded,
+    // seed an instant view by filtering it client-side — so the tab paints
+    // immediately with what we already have (zero extra perceived wait),
+    // then the background fetch fills in the complete type page. This is
+    // the "modern, not many requests" path: the user sees content instantly
+    // and only one network request runs.
+    if (type != null) {
+      final allCache = _cacheByFilter['all'];
+      if (allCache != null && allCache.isNotEmpty) {
+        final seed = allCache.where((p) => p.postType == type).toList();
+        if (seed.isNotEmpty) {
+          _cacheByFilter[key] = seed; // keeps reload() spinner-free
+          _posts.assignAll(seed);
+          _hasMore.value = true;
+          _loading.value = false;
+          unawaited(reload());
+          return;
+        }
+      }
+    }
+    // No cache and nothing to seed — do a normal (spinner) load.
     _hasMore.value = true;
     await reload();
   }
@@ -152,6 +212,8 @@ class FeedController extends GetxController {
     _authSub = auth.userObservable.stream.listen((user) {
       if (user == null) {
         _posts.clear();
+        _cacheByFilter.clear();
+        _hasMoreByFilter.clear();
         _fetchedOk.value = false;
       } else {
         reload();

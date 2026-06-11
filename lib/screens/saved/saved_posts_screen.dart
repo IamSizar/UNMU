@@ -64,7 +64,7 @@ class SavedPostsScreen extends StatelessWidget {
             );
           }
           if (posts.isEmpty) {
-            return RefreshIndicator(
+            return RefreshIndicator.adaptive(
               color: SocialTokens.cyan,
               onRefresh: ctrl.reload,
               child: ListView(
@@ -78,7 +78,7 @@ class SavedPostsScreen extends StatelessWidget {
             );
           }
 
-          return RefreshIndicator(
+          return RefreshIndicator.adaptive(
             color: SocialTokens.cyan,
             onRefresh: ctrl.reload,
             child: responsiveCardList(

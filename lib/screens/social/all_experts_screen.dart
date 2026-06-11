@@ -172,7 +172,7 @@ class _AllExpertsScreenState extends State<AllExpertsScreen> {
             ),
 
           Expanded(
-            child: RefreshIndicator(
+            child: RefreshIndicator.adaptive(
               onRefresh: _load,
               color: SocialTokens.violet,
               child: _loading && _experts.isEmpty

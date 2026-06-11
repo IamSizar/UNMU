@@ -333,7 +333,7 @@ class _LikesTab extends StatelessWidget {
     }
     final list = likers ?? const <Liker>[];
     if (list.isEmpty) {
-      return RefreshIndicator(
+      return RefreshIndicator.adaptive(
         color: SocialTokens.cyan,
         onRefresh: onRetry,
         child: ListView(
@@ -388,7 +388,7 @@ class _LikesTab extends StatelessWidget {
         ),
       );
     }
-    return RefreshIndicator(
+    return RefreshIndicator.adaptive(
       color: SocialTokens.cyan,
       onRefresh: onRetry,
       child: ListView.separated(

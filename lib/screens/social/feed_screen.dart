@@ -230,7 +230,7 @@ class _PostsTabState extends State<_PostsTab>
     if (_loading && _posts.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
-    return RefreshIndicator(
+    return RefreshIndicator.adaptive(
       onRefresh: _load,
       child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(

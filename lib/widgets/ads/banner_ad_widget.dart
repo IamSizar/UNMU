@@ -2,26 +2,89 @@ import 'package:flutter/material.dart';
 import '../directional_icon.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../screens/social/social_tokens.dart';
+import '../../services/api_service.dart';
+import '../common/app_network_image.dart';
 
 /// =============================================================================
 /// Banner / Sponsored card.
 ///
-/// Cyan-accented insight card. The previous gold treatment looked washed out
-/// on light backgrounds (yellow-on-near-white) and disappeared in dark mode
-/// behind the gradient — cyan reads cleanly in both themes and matches the
-/// rest of the app's brand language.
+/// Fetches the active ad for [regionCode] from `GET /api/ads` and renders it
+/// (company image, title, description, tap-through to the target URL). When no
+/// ad is live for this region, it falls back to the built-in premium-promo
+/// placeholder so the slot is never empty.
+///
+/// Cyan-accented insight card — reads cleanly in both light + dark themes.
 /// =============================================================================
-class BannerAdWidget extends StatelessWidget {
-  const BannerAdWidget({super.key});
+class BannerAdWidget extends StatefulWidget {
+  /// Which region's ads to request. Defaults to GLOBAL (the backend also
+  /// returns GLOBAL / region-less ads for any region, so a GLOBAL ad shows
+  /// everywhere).
+  final String regionCode;
+  const BannerAdWidget({super.key, this.regionCode = 'GLOBAL'});
 
-  // Single accent used throughout this card. Easy to swap if you ever
-  // want to A/B-test a different color.
+  @override
+  State<BannerAdWidget> createState() => _BannerAdWidgetState();
+}
+
+class _BannerAdWidgetState extends State<BannerAdWidget> {
+  // Single accent used throughout this card.
   static const Color _accent = SocialTokens.cyan;
+
+  /// The live ad to show, or null while loading / when none is available
+  /// (in which case the built-in placeholder renders).
+  Map<String, dynamic>? _ad;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAd();
+  }
+
+  Future<void> _loadAd() async {
+    final ads = await ApiService.getAds(widget.regionCode);
+    if (!mounted || ads.isEmpty) return;
+    setState(() => _ad = ads.first);
+  }
+
+  // Tap → open the ad's target URL in the browser. No-op for the placeholder
+  // (no URL to open).
+  Future<void> _onTap() async {
+    HapticFeedback.lightImpact();
+    final raw = (_ad?['targetUrl'] as String?)?.trim() ?? '';
+    if (raw.isEmpty) return;
+    final uri = Uri.tryParse(raw);
+    if (uri == null) return;
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+    } catch (_) {
+      // Bad / unlaunchable URL — fail silently rather than crash the card.
+    }
+  }
+
+  String get _imageUrl => (_ad?['imageUrl'] as String?)?.trim() ?? '';
+
+  // Headline / subtitle straight from the live ad (only ever built when
+  // _ad != null). No promo-placeholder fallback — the bad default is gone.
+  String _headline() => (_ad?['title'] as String?)?.trim() ?? '';
+
+  String _subtitle() {
+    final d = (_ad?['description'] as String?)?.trim() ?? '';
+    if (d.isNotEmpty) return d;
+    return (_ad?['companyName'] as String?)?.trim() ?? '';
+  }
 
   @override
   Widget build(BuildContext context) {
+    // Only render when there's a real, live admin ad. No ad (or still
+    // loading / fetch failed) → render nothing, so the slot collapses
+    // instead of showing a fake placeholder promo.
+    if (_ad == null) return const SizedBox.shrink();
+
     final palette = SocialTheme.of(context);
 
     return Container(
@@ -33,10 +96,7 @@ class BannerAdWidget extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () {
-            HapticFeedback.lightImpact();
-            // Hook up real ad URL when ready.
-          },
+          onTap: _ad == null ? null : _onTap,
           borderRadius: BorderRadius.circular(20),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(20),
@@ -102,34 +162,12 @@ class BannerAdWidget extends StatelessWidget {
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Cyan icon tile
-                          Container(
-                            width: 44,
-                            height: 44,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [
-                                  SocialTokens.cyan,
-                                  SocialTokens.cyanSoft,
-                                ],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              borderRadius: BorderRadius.circular(12),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: _accent.withValues(alpha: 0.40),
-                                  blurRadius: 14,
-                                  spreadRadius: -2,
-                                ),
-                              ],
-                            ),
-                            child: const Icon(
-                              Icons.insights_rounded,
-                              color: Color(0xFF0A1628),
-                              size: 22,
-                            ),
+                          // Ad image when present (falls back to the cyan
+                          // insights icon on a missing / broken URL), so a bad
+                          // image link never blanks the card.
+                          _LeadingVisual(
+                            imageUrl: _imageUrl,
+                            accent: _accent,
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -137,7 +175,9 @@ class BannerAdWidget extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'ad.headline'.tr,
+                                  _headline(),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     color: palette.textPrimary,
                                     fontWeight: FontWeight.w900,
@@ -148,7 +188,9 @@ class BannerAdWidget extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  'ad.subtitle'.tr,
+                                  _subtitle(),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     color: palette.textMuted,
                                     fontSize: 12,
@@ -254,6 +296,60 @@ class BannerAdWidget extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Leading 44×44 visual — the ad's image (rounded, cover) when a usable URL
+/// is supplied, else the cyan-gradient insights icon. Image errors fall back
+/// to the icon so a broken link never leaves a blank box.
+class _LeadingVisual extends StatelessWidget {
+  final String imageUrl;
+  final Color accent;
+  const _LeadingVisual({required this.imageUrl, required this.accent});
+
+  Widget _iconTile() {
+    return Container(
+      width: 44,
+      height: 44,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [SocialTokens.cyan, SocialTokens.cyanSoft],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: accent.withValues(alpha: 0.40),
+            blurRadius: 14,
+            spreadRadius: -2,
+          ),
+        ],
+      ),
+      child: const Icon(
+        Icons.insights_rounded,
+        color: Color(0xFF0A1628),
+        size: 22,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final looksLikeImage = imageUrl.startsWith('http');
+    if (!looksLikeImage) return _iconTile();
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: AppNetworkImage(
+        imageUrl,
+        width: 44,
+        height: 44,
+        fit: BoxFit.cover,
+        // Broken / non-image URL → show the branded icon instead of an error box.
+        errorWidget: _iconTile(),
       ),
     );
   }

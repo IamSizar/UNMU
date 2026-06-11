@@ -82,7 +82,7 @@ class _ExpertDashboardScreenState extends State<ExpertDashboardScreen> {
         label: Text('dashboard.newPost'.tr),
       ),
       body: SafeArea(
-        child: RefreshIndicator(
+        child: RefreshIndicator.adaptive(
           onRefresh: () async {
             await Future.wait([
               controller.refreshPosts(),

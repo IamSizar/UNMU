@@ -34,6 +34,7 @@ type updateSettingsRequest struct {
 	CommunityEnabled      *bool `json:"communityEnabled"`
 	CommunityChatEnabled  *bool `json:"communityChatEnabled"`
 	CommunityPostsEnabled *bool `json:"communityPostsEnabled"`
+	TestAccountEnabled    *bool `json:"testAccountEnabled"`
 }
 
 // Update — PATCH /api/admin/settings. Only the keys present in the body are
@@ -67,6 +68,13 @@ func (h *AdminSettingsHandler) Update(c *gin.Context) {
 			return
 		}
 		changed["communityPostsEnabled"] = *req.CommunityPostsEnabled
+	}
+	if req.TestAccountEnabled != nil {
+		if err := h.settings.Set("test_account_enabled", *req.TestAccountEnabled); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save setting"})
+			return
+		}
+		changed["testAccountEnabled"] = *req.TestAccountEnabled
 	}
 
 	// Best-effort audit trail.

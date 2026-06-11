@@ -90,13 +90,23 @@ class _MarketTickerBarState extends State<MarketTickerBar>
             _leadingBadge(palette),
             Expanded(
               child: ClipRect(
-                child: AnimatedBuilder(
-                  animation: _ctrl,
-                  builder: (context, _) => Transform.translate(
-                    offset: Offset(-_ctrl.value * _stripWidth, 0),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [strip, stripDup],
+                // OverflowBox gives the marquee Row UNBOUNDED width so it
+                // can lay out at its natural size (the two strips are far
+                // wider than the screen) without tripping a RenderFlex
+                // overflow assertion. ClipRect clips the visible part to
+                // the Expanded's bounds; the Transform scrolls it.
+                child: OverflowBox(
+                  alignment: Alignment.centerLeft,
+                  minWidth: 0,
+                  maxWidth: double.infinity,
+                  child: AnimatedBuilder(
+                    animation: _ctrl,
+                    builder: (context, _) => Transform.translate(
+                      offset: Offset(-_ctrl.value * _stripWidth, 0),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [strip, stripDup],
+                      ),
                     ),
                   ),
                 ),

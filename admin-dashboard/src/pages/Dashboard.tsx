@@ -122,49 +122,41 @@ function dayLabel(iso: string): string {
  *   - The "ARR / MRR" stats use the LivePulseDot to telegraph realtime.
  */
 
-// "Users by region" — the backend doesn't track per-user region today
-// (only stocks + communities are region-tagged). We hide the donut for
-// now; a future migration will add user.region_code and this list will
-// come from /admin/metrics like everything else.
-const recentActivity = [
-  {
-    text: 'Sheikh Abdullah published a new article',
-    time: '2m ago',
-    tone: 'cyan' as const,
-  },
-  {
-    text: 'New annual subscription — Layla Ahmed',
-    time: '14m ago',
-    tone: 'ok' as const,
-  },
-  {
-    text: 'Article flagged for review by 3 users',
-    time: '38m ago',
-    tone: 'err' as const,
-  },
-  {
-    text: 'Expert application: Omar Khalid',
-    time: '1h ago',
-    tone: 'gold' as const,
-  },
-  {
-    text: '142 stocks re-screened automatically',
-    time: '2h ago',
-    tone: 'info' as const,
-  },
-  {
-    text: 'Promo code RAMADAN25 used 18×',
-    time: '3h ago',
-    tone: 'ok' as const,
-  },
-]
+// Recent activity is now sourced live from the audit log
+// (GET /admin/audit-logs). Each event's severity maps to a dot colour.
+type AuditEvent = {
+  id: number
+  type: string
+  severity: 'info' | 'success' | 'warning' | 'error'
+  actorEmail?: string
+  summary: string
+  createdAt: string
+}
 
-const toneDotClass: Record<string, string> = {
-  cyan: 'bg-brand-cyan',
-  gold: 'bg-brand-gold',
-  ok: 'bg-ok',
-  err: 'bg-err',
+// audit severity → dot colour class.
+const severityDotClass: Record<string, string> = {
   info: 'bg-info',
+  success: 'bg-ok',
+  warning: 'bg-brand-gold',
+  error: 'bg-err',
+}
+
+// "x ago" relative time for the activity feed. Falls back to the raw
+// string if the date can't be parsed.
+function timeAgo(iso: string): string {
+  try {
+    const then = new Date(iso).getTime()
+    const secs = Math.max(0, Math.floor((Date.now() - then) / 1000))
+    if (secs < 60) return `${secs}s ago`
+    const mins = Math.floor(secs / 60)
+    if (mins < 60) return `${mins}m ago`
+    const hrs = Math.floor(mins / 60)
+    if (hrs < 24) return `${hrs}h ago`
+    const days = Math.floor(hrs / 24)
+    return `${days}d ago`
+  } catch {
+    return iso
+  }
 }
 
 // Token-driven Recharts theme — pulls colors from the CSS variables
@@ -232,6 +224,8 @@ export default function Dashboard() {
   // visual layout doesn't shift on resolution.
   const [metrics, setMetrics] = useState<MetricsResponse | null>(null)
   const [metricsError, setMetricsError] = useState<string | null>(null)
+  // Recent activity — live from the audit log.
+  const [activity, setActivity] = useState<AuditEvent[] | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -246,6 +240,14 @@ export default function Dashboard() {
             err instanceof ApiError ? err.message : t('overview.metricsError'),
           )
         }
+      })
+    api
+      .get<{ events: AuditEvent[] }>('/admin/audit-logs?limit=6')
+      .then((res) => {
+        if (!cancelled) setActivity(res.events ?? [])
+      })
+      .catch(() => {
+        if (!cancelled) setActivity([])
       })
     return () => {
       cancelled = true
@@ -564,16 +566,23 @@ export default function Dashboard() {
             </div>
             <StaggerList delayChildren={0.25}>
               <ul className="space-y-3">
-                {recentActivity.map((a, i) => (
-                  <StaggerItem key={i}>
+                {activity && activity.length === 0 && (
+                  <li className="text-sm text-fg-subtle py-1">
+                    {t('overview.noActivity')}
+                  </li>
+                )}
+                {(activity ?? []).map((a) => (
+                  <StaggerItem key={a.id}>
                     <li className="flex items-start gap-3 py-1">
                       <span
-                        className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${toneDotClass[a.tone]}`}
+                        className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${
+                          severityDotClass[a.severity] ?? 'bg-info'
+                        }`}
                       />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-fg leading-snug">{a.text}</p>
+                        <p className="text-sm text-fg leading-snug">{a.summary}</p>
                         <p className="text-[11px] text-fg-subtle mt-0.5 font-mono">
-                          {a.time}
+                          {timeAgo(a.createdAt)}
                         </p>
                       </div>
                     </li>

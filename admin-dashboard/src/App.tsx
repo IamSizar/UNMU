@@ -18,7 +18,6 @@ import Settings from './pages/Settings'
 import Login from './pages/Login'
 import AuditLog from './pages/AuditLog'
 import Uploads from './pages/Uploads'
-import Diagnostics from './pages/Diagnostics'
 import Posts from './pages/Posts'
 import PostDetail from './pages/PostDetail'
 import UserDetail from './pages/UserDetail'
@@ -114,7 +113,6 @@ export default function App() {
           <Route path="payouts" element={<Payouts />} />
           <Route path="audit-log" element={<AuditLog />} />
           <Route path="uploads" element={<Uploads />} />
-          <Route path="diagnostics" element={<Diagnostics />} />
           <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>
