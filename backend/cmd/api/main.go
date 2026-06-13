@@ -307,6 +307,16 @@ func main() {
 	// ─── Realtime: Postgres LISTEN/NOTIFY → WebSocket fan-out ───
 	hub := realtime.NewHub()
 	pgListener := realtime.NewPgListener(hub, cfg.DatabaseDSN())
+	// Social push fan-out: every notification_events row (like / comment /
+	// subscription / …) also fires an FCM push to the recipient's devices so
+	// they're notified when the app is closed. No-op when FCM is disabled.
+	if fcmSender != nil {
+		socialPush := services.NewSocialPushNotifier(
+			userNotificationsRepo, pushTokenRepo, notificationPrefsRepo, fcmSender,
+		)
+		pgListener.SetPushNotifier(socialPush.Notify)
+		log.Printf("[social-push] enabled — likes/comments/etc. push to recipients")
+	}
 	pgListener.Start(context.Background())
 	realtimeHandler := handlers.NewRealtimeHandler(hub, userRepo, socialRepo)
 	// Now that the hub exists, attach it to the social handler so

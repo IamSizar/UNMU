@@ -47,6 +47,20 @@ func (r *UserNotificationsRepository) List(userID int64, limit int) ([]*models.U
 	return out, rows.Err()
 }
 
+// Get — load a single notification by id (used by the push fan-out to
+// build the FCM title/body). Returns (nil, nil) when not found.
+func (r *UserNotificationsRepository) Get(id int64) (*models.UserNotification, error) {
+	row := r.db.QueryRow(
+		`SELECT `+notificationCols+` FROM user_notifications WHERE id = $1`,
+		id,
+	)
+	n, err := scanNotification(row)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return n, err
+}
+
 // UnreadCount — int returned to drive the bell red dot + badge.
 func (r *UserNotificationsRepository) UnreadCount(userID int64) (int, error) {
 	var c int

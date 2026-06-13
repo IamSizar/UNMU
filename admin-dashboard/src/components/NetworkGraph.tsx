@@ -24,6 +24,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import ForceGraph2D, { type ForceGraphMethods } from 'react-force-graph-2d'
+import { useTheme } from '../theme/ThemeContext'
 
 // ── Public types ─────────────────────────────────────────────────────
 export type GraphNode = {
@@ -84,6 +85,8 @@ export default function NetworkGraph({
   onNodeClick,
   focusNodeId,
 }: Props) {
+  const { theme } = useTheme()
+  const isDark = theme === 'dark'
   const fgRef = useRef<ForceGraphMethods | undefined>(undefined)
   const containerRef = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ w: 800, h: 600 })
@@ -226,7 +229,12 @@ export default function NetworkGraph({
       ctx.font = `${fontSize}px Inter, system-ui, sans-serif`
       ctx.textAlign = 'center'
       ctx.textBaseline = 'top'
-      ctx.fillStyle = `rgba(241, 245, 249, ${alpha})`
+      // Theme-aware label color: light text on the dark canvas, dark text on
+      // the light canvas. The previous hardcoded near-white was invisible in
+      // light mode.
+      ctx.fillStyle = isDark
+          ? `rgba(241, 245, 249, ${alpha})`
+          : `rgba(15, 23, 42, ${alpha})`
       ctx.fillText(label, node.x as number, (node.y as number) + r + 4)
     }
   }
@@ -241,7 +249,12 @@ export default function NetworkGraph({
       source: link.source.id,
       target: link.target.id,
     })
-    const baseColor = link.fresh ? COLORS.edgeFresh : COLORS.edge[link.type]
+    let baseColor = link.fresh ? COLORS.edgeFresh : COLORS.edge[link.type]
+    // "owns" edges are near-white (reads on the dark canvas) — swap to dark
+    // slate in light mode so they're visible on the white surface.
+    if (!link.fresh && link.type === 'owns' && !isDark) {
+      baseColor = 'rgba(15, 23, 42, 0.30)'
+    }
     const finalAlpha = highlighted ? 1 : 0.12
     ctx.strokeStyle = baseColor.replace(/[\d.]+\)$/, `${finalAlpha})`)
     ctx.lineWidth = link.fresh ? 2 : 1

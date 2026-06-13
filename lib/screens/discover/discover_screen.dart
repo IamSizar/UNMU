@@ -70,7 +70,8 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
 
   Future<void> _refresh() async {
     final p = Get.find<StocksController>();
-    await p.loadStocksByRegion(p.selectedRegion);
+    // force: true so pull-to-refresh always re-fetches (bypasses the cache).
+    await p.loadStocksByRegion(p.selectedRegion, force: true);
     if (_selectedFilter != null) p.filterByGrade(_selectedFilter);
   }
 
@@ -138,11 +139,16 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                     ),
                   ),
                 ),
-                // ── Banner ad ──
-                const SliverToBoxAdapter(
+                // ── Banner ad (region-aware: shows the ad for the
+                //    currently-selected region; GLOBAL ads show everywhere) ──
+                SliverToBoxAdapter(
                   child: Padding(
-                    padding: EdgeInsets.fromLTRB(16, 14, 16, 0),
-                    child: BannerAdWidget(),
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                    child: BannerAdWidget(
+                      regionCode: provider.selectedRegion.isNotEmpty
+                          ? provider.selectedRegion
+                          : 'GLOBAL',
+                    ),
                   ),
                 ),
                 // ── Filter chips ──

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/halal_fintech_theme.dart';
 import '../utils/stock_logo_utils.dart';
+import 'common/app_network_image.dart';
 import 'package:get/get.dart';
 
 class StockCard extends StatelessWidget {
@@ -179,6 +180,22 @@ class StockCard extends StatelessWidget {
         ? ticker.substring(0, 1).toUpperCase()
         : '?';
 
+    // Colored letter-circle — shown on a missing / failed logo.
+    final letterCircle = Container(
+      width: 46,
+      height: 46,
+      decoration: BoxDecoration(color: fallbackColor, shape: BoxShape.circle),
+      alignment: Alignment.center,
+      child: Text(
+        firstLetter,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: 18,
+        ),
+      ),
+    );
+
     return Container(
       width: 46,
       height: 46,
@@ -188,50 +205,17 @@ class StockCard extends StatelessWidget {
         border: Border.all(color: fallbackColor.withValues(alpha: 0.18)),
       ),
       child: ClipOval(
-        child: Image.network(
+        // AppNetworkImage instead of a raw Image.network: a soft shimmer +
+        // fade-in (no per-card CircularProgressIndicator spinning across the
+        // whole list), and the in-memory image cache means a logo scrolled
+        // back into view is instant and isn't re-fetched.
+        child: AppNetworkImage(
           logoUrl,
           width: 46,
           height: 46,
           fit: BoxFit.cover,
-          loadingBuilder: (context, child, loadingProgress) {
-            if (loadingProgress == null) return child;
-            return Container(
-              color: fallbackColor.withValues(alpha: 0.1),
-              child: Center(
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(fallbackColor),
-                    value: loadingProgress.expectedTotalBytes != null
-                        ? loadingProgress.cumulativeBytesLoaded /
-                              loadingProgress.expectedTotalBytes!
-                        : null,
-                  ),
-                ),
-              ),
-            );
-          },
-          errorBuilder: (context, error, stackTrace) {
-            // Fallback to colored circle with first letter
-            return Container(
-              decoration: BoxDecoration(
-                color: fallbackColor,
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Text(
-                  firstLetter,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                  ),
-                ),
-              ),
-            );
-          },
+          placeholderColor: fallbackColor.withValues(alpha: 0.10),
+          errorWidget: letterCircle,
         ),
       ),
     );

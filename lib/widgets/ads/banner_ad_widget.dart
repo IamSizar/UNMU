@@ -43,9 +43,22 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
     _loadAd();
   }
 
+  // Re-fetch when the region changes (e.g. user switches GLOBAL → US → GCC on
+  // Discover) so each region shows its own ad.
+  @override
+  void didUpdateWidget(BannerAdWidget old) {
+    super.didUpdateWidget(old);
+    if (old.regionCode != widget.regionCode) {
+      setState(() => _ad = null);
+      _loadAd();
+    }
+  }
+
   Future<void> _loadAd() async {
-    final ads = await ApiService.getAds(widget.regionCode);
-    if (!mounted || ads.isEmpty) return;
+    final region = widget.regionCode;
+    final ads = await ApiService.getAds(region);
+    // Guard against a region switch mid-fetch landing stale data.
+    if (!mounted || region != widget.regionCode || ads.isEmpty) return;
     setState(() => _ad = ads.first);
   }
 

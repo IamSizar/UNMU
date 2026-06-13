@@ -24,10 +24,21 @@ import (
 type PgListener struct {
 	hub *Hub
 	dsn string
+	// pushNotifier, when set, is called for every notification_events row so
+	// the recipient gets an FCM push (e.g. "Sizar liked your post") even when
+	// the app is closed. Optional — nil when FCM is disabled. Called in a
+	// goroutine so a slow send never blocks the listener loop.
+	pushNotifier func(notificationID, userID int64)
 }
 
 func NewPgListener(hub *Hub, dsn string) *PgListener {
 	return &PgListener{hub: hub, dsn: dsn}
+}
+
+// SetPushNotifier wires the FCM push fan-out for social notifications. Pass
+// SocialPushNotifier.Notify. Safe to leave unset (no push, in-app only).
+func (l *PgListener) SetPushNotifier(fn func(notificationID, userID int64)) {
+	l.pushNotifier = fn
 }
 
 // Start spawns the listener goroutine. Cancel ctx to stop it. Returns
@@ -219,6 +230,13 @@ func (l *PgListener) dispatchNotification(p map[string]any) {
 		return
 	}
 	l.hub.PublishJSON(ChannelUser(userID), "notification_created", p)
+
+	// Fan out an FCM push to the recipient's devices so they're notified even
+	// when the app is backgrounded / closed. Best-effort, off the hot path.
+	if l.pushNotifier != nil {
+		notificationID := toInt64(p["notificationId"])
+		go l.pushNotifier(notificationID, userID)
+	}
 }
 
 // dispatchSubscription routes subscription lifecycle events to the right
