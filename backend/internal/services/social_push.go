@@ -37,6 +37,70 @@ func NewSocialPushNotifier(
 	return &SocialPushNotifier{notifs: notifs, tokens: tokens, prefs: prefs, fcm: fcm}
 }
 
+// NewPostPublished sends a "new post" push to every active subscriber of the
+// expert when they publish content. Best-effort: failures are logged.
+//
+// Fields come straight from the `expert_post_events` Postgres payload:
+//   - expertID, authorID — author lookup + exclusion (the author doesn't get
+//     pushed about their own post)
+//   - authorName — push title (the expert's name)
+//   - postType — "article" | "video" | "reel" (drives the body text)
+//   - title — optional, appended to the body when present
+func (s *SocialPushNotifier) NewPostPublished(
+	postID int64,
+	expertID string,
+	authorID int64,
+	authorName, postType, title string,
+) {
+	if s == nil || s.fcm == nil || expertID == "" {
+		return
+	}
+	tokens, err := s.tokens.ListForExpertSubscribers(expertID, authorID)
+	if err != nil {
+		log.Printf("[social-push] subscriber lookup failed (expert=%s): %v", expertID, err)
+		return
+	}
+	if len(tokens) == 0 {
+		return
+	}
+
+	pushTitle := strings.TrimSpace(authorName)
+	if pushTitle == "" {
+		pushTitle = "UNMU"
+	}
+	body := newPostBody(postType, title)
+	data := map[string]string{
+		"kind":     "new_post",
+		"postType": postType,
+		"expertId": expertID,
+		"postId":   strconv.FormatInt(postID, 10),
+	}
+
+	if _, err := s.fcm.SendToTokens(context.Background(), tokens, pushTitle, body, data); err != nil {
+		log.Printf("[social-push] new-post send failed (expert=%s post=%d): %v",
+			expertID, postID, err)
+	}
+}
+
+// newPostBody — human-readable push body for each post type. Includes the
+// title when present (truncated so multi-byte titles never split mid-rune).
+func newPostBody(postType, title string) string {
+	t := strings.TrimSpace(title)
+	verb := "shared a new post"
+	switch strings.ToLower(strings.TrimSpace(postType)) {
+	case "article":
+		verb = "posted a new article"
+	case "video":
+		verb = "posted a new video"
+	case "reel":
+		verb = "posted a new reel"
+	}
+	if t == "" {
+		return verb
+	}
+	return verb + ": " + truncateRunes(t, 100)
+}
+
 // Notify loads notification [notificationID] and pushes it to [userID]'s
 // devices. Safe to call from a goroutine in the realtime listener.
 func (s *SocialPushNotifier) Notify(notificationID, userID int64) {

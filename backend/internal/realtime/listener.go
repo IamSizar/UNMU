@@ -29,6 +29,11 @@ type PgListener struct {
 	// the app is closed. Optional — nil when FCM is disabled. Called in a
 	// goroutine so a slow send never blocks the listener loop.
 	pushNotifier func(notificationID, userID int64)
+	// newPostPusher, when set, fans out a push to all active subscribers of
+	// the expert when a post is published (covers articles / videos / reels).
+	// Triggered from dispatchPost on `created` events with status='published'.
+	newPostPusher func(postID int64, expertID string, authorID int64,
+		authorName, postType, title string)
 }
 
 func NewPgListener(hub *Hub, dsn string) *PgListener {
@@ -39,6 +44,16 @@ func NewPgListener(hub *Hub, dsn string) *PgListener {
 // SocialPushNotifier.Notify. Safe to leave unset (no push, in-app only).
 func (l *PgListener) SetPushNotifier(fn func(notificationID, userID int64)) {
 	l.pushNotifier = fn
+}
+
+// SetNewPostPusher wires the FCM fan-out for new-post pushes (articles /
+// videos / reels) to an expert's active subscribers. Pass
+// SocialPushNotifier.NewPostPublished.
+func (l *PgListener) SetNewPostPusher(
+	fn func(postID int64, expertID string, authorID int64,
+		authorName, postType, title string),
+) {
+	l.newPostPusher = fn
 }
 
 // Start spawns the listener goroutine. Cancel ctx to stop it. Returns
@@ -373,6 +388,26 @@ func (l *PgListener) dispatchPost(p map[string]any) {
 	}
 	// Admins also want to see content lifecycle events for moderation.
 	l.hub.PublishJSON(ChannelAdmin, wireType, p)
+
+	// Subscriber push fan-out — only on actual publishes (skip drafts /
+	// scheduled / edits / hides / deletes). Drafts go through the same
+	// trigger (TG_OP=INSERT) but with status='draft', so the status check is
+	// what guards against pushing on a draft save. The scheduled-publisher
+	// promotes status='scheduled' → 'published' (mig 0053 emits `created` on
+	// that UPDATE too), so time-released posts also reach this path.
+	if l.newPostPusher == nil || evType != "created" || expertID == "" {
+		return
+	}
+	status, _ := p["status"].(string)
+	if status != "published" {
+		return
+	}
+	postID := toInt64(p["postId"])
+	authorID := toInt64(p["authorId"])
+	authorName, _ := p["authorName"].(string)
+	postType, _ := p["postType"].(string)
+	title, _ := p["title"].(string)
+	go l.newPostPusher(postID, expertID, authorID, authorName, postType, title)
 }
 
 // toInt64 handles the reality that JSON numbers come through as float64.

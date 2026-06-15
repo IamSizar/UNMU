@@ -183,6 +183,48 @@ func (r *PushTokenRepository) ListForCommunity(communityID string) ([]string, er
 	return out, rows.Err()
 }
 
+// ListForExpertSubscribers returns active tokens for every user with an
+// `active` expert_subscription to [expertID], EXCLUDING [excludeUserID]
+// (pass the post's author so they don't get pushed about their own post —
+// 0 disables the exclusion). Used to fan out "new post" pushes to an
+// expert's audience whenever they publish an article / video / reel.
+//
+// Same opt-out + soft-delete filtering as the other list helpers:
+//   - push_enabled (per-user master toggle) must be TRUE (default TRUE)
+//   - subscriptions_enabled (the relevant category) must be TRUE
+//   - the user must not be soft-deleted
+func (r *PushTokenRepository) ListForExpertSubscribers(
+	expertID string, excludeUserID int64,
+) ([]string, error) {
+	rows, err := r.db.Query(`
+		SELECT t.token
+		FROM user_push_tokens t
+		JOIN expert_subscriptions s ON s.user_id = t.user_id
+		JOIN users u ON u.id = t.user_id
+		LEFT JOIN user_notification_prefs p ON p.user_id = t.user_id
+		WHERE COALESCE(p.push_enabled, TRUE) = TRUE
+		  AND COALESCE(p.subscriptions_enabled, TRUE) = TRUE
+		  AND u.deleted_at IS NULL
+		  AND s.expert_id = $1
+		  AND s.status = 'active'
+		  AND ($2 = 0 OR t.user_id <> $2)
+		ORDER BY t.last_seen DESC
+	`, expertID, excludeUserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]string, 0, 64)
+	for rows.Next() {
+		var tok string
+		if err := rows.Scan(&tok); err != nil {
+			return nil, err
+		}
+		out = append(out, tok)
+	}
+	return out, rows.Err()
+}
+
 // DeleteToken removes a single token. Called when FCM tells us a token
 // is invalid (typical response codes: NOT_FOUND, INVALID_ARGUMENT). We
 // drop the row so the next admin broadcast doesn't waste a quota slot

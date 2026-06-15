@@ -315,7 +315,10 @@ func main() {
 			userNotificationsRepo, pushTokenRepo, notificationPrefsRepo, fcmSender,
 		)
 		pgListener.SetPushNotifier(socialPush.Notify)
-		log.Printf("[social-push] enabled — likes/comments/etc. push to recipients")
+		// New-post fan-out: when an expert publishes an article / video / reel,
+		// push every active subscriber.
+		pgListener.SetNewPostPusher(socialPush.NewPostPublished)
+		log.Printf("[social-push] enabled — likes/comments/new posts push to recipients")
 	}
 	pgListener.Start(context.Background())
 	realtimeHandler := handlers.NewRealtimeHandler(hub, userRepo, socialRepo)
