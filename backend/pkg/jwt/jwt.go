@@ -24,11 +24,18 @@ func GenerateToken(userID int64, email string) (string, error) {
 		return "", errors.New("JWT secret not initialized")
 	}
 
+	// 90-day expiry: long-lived enough that mobile users aren't kicked out
+	// after a day of inactivity (the old 24h made the app feel "broken" with
+	// constant "Session expired" prompts), short enough that a stolen token
+	// can't outlive a quarter. The app has no refresh-token flow yet, so the
+	// only refresh today is a re-login — keeping that rare is the point.
+	const tokenTTL = 90 * 24 * time.Hour
+
 	claims := Claims{
 		UserID: userID,
 		Email:  email,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(tokenTTL)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Issuer:    "halalstocks",
 		},
