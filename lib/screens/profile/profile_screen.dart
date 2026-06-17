@@ -28,7 +28,6 @@ import '../../screens/watchlist/watchlist_screen.dart';
 import '../../utils/haptic_utils.dart';
 import '../../widgets/platform_adaptive/platform_dialog.dart';
 import '../../widgets/social/test_account_switcher.dart';
-import '../subscription/subscription_screen.dart';
 import '../tools/dca_calculator_screen.dart';
 import '../tools/zakat_calculator_screen.dart';
 import 'change_email_screen.dart';
@@ -251,7 +250,6 @@ class _ProfileHero extends StatelessWidget {
     final tierLabel = isPremium
         ? 'profile.premiumMember'.tr.toUpperCase()
         : 'profile.freeMember'.tr.toUpperCase();
-    final upgradeLabel = 'profile.upgrade'.tr;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
@@ -396,81 +394,9 @@ class _ProfileHero extends StatelessWidget {
                   ),
                 ],
               ),
-              if (!isPremium) ...[
-                const SizedBox(height: 16),
-                // Upgrade CTA when free
-                Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () async {
-                      await HapticUtils.lightTap();
-                      if (!context.mounted) return;
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const SubscriptionScreen(),
-                        ),
-                      );
-                    },
-                    borderRadius: BorderRadius.circular(14),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [SocialTokens.gold, SocialTokens.goldSoft],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.rocket_launch_rounded,
-                            color: Color(0xFF0A1628),
-                            size: 18,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  upgradeLabel,
-                                  style: const TextStyle(
-                                    color: Color(0xFF0A1628),
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 13,
-                                    letterSpacing: -0.2,
-                                  ),
-                                ),
-                                Text(
-                                  'profile.upgradeToUnlock'.tr,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Color(0xFF0A1628),
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const DirectionalIcon(
-                            Icons.arrow_forward_rounded,
-                            color: Color(0xFF0A1628),
-                            size: 18,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+              // Upgrade CTA hidden for now (premium upsell paused). The
+              // SubscriptionScreen still exists; re-add this block to bring
+              // the upgrade button back.
             ],
           ),
         ],

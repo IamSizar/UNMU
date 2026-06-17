@@ -40,9 +40,11 @@ class RequestPayoutSheet extends StatefulWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => Padding(
+      // Read viewInsets from the sheet's own context (ctx) so the padding
+      // tracks the keyboard and lifts the fields above it.
+      builder: (ctx) => Padding(
         padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
+          bottom: MediaQuery.of(ctx).viewInsets.bottom,
         ),
         child: RequestPayoutSheet(
           availableCents: availableCents,

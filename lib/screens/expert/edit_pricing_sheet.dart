@@ -38,9 +38,12 @@ class EditPricingSheet extends StatefulWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => Padding(
+      // Read viewInsets from the SHEET's own context (ctx), not the outer
+      // screen context — so the padding tracks the keyboard and lifts the
+      // fields above it instead of leaving them hidden behind it.
+      builder: (ctx) => Padding(
         padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
+          bottom: MediaQuery.of(ctx).viewInsets.bottom,
         ),
         child: EditPricingSheet(
           controller: controller,
