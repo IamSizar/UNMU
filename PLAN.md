@@ -26,9 +26,8 @@ engineering complete but the exact methodology constants clearly flagged
       way, found and fixed a pre-existing production bug: GetPortfolio never
       returned the nested `stock` object watchlist_screen.dart has always expected,
       so watchlist was silently stuck in its placeholder-card fallback since launch.
-- [x] Admin-configurable Shariah screening thresholds — backend done (commit dbf4cd1):
-      migration 0054, `AppSettingsRepository` float support, `shariah.Thresholds`,
-      `GET/PUT /api/admin/screening-thresholds`. Admin-dashboard page still open.
+- [x] Admin-configurable Shariah screening thresholds — done end-to-end (backend
+      commit dbf4cd1, admin-dashboard page commit b97f8b4).
 - [ ] App-wide Pro tier (entitlement model + gating).
 
 ## Trust foundation
