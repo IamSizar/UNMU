@@ -471,6 +471,7 @@ func main() {
 	// Global feature flags (mig 0045) — backs the admin community
 	// kill-switch (master + chat + posts sub-toggles).
 	appSettingsRepo := repositories.NewAppSettingsRepository(database)
+	toolsHandler.SetZakatConfig(appSettingsRepo)
 	adminSettingsHandler := handlers.NewAdminSettingsHandler(appSettingsRepo, auditRepo)
 
 	// Load any admin-configured Shariah screening thresholds so the screener

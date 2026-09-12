@@ -121,6 +121,32 @@ var ScreeningThresholdKeys = []string{
 	"screening_haram_fail", "screening_haram_warn", "screening_haram_pass", "screening_haram_good",
 }
 
+// ── Zakat calculation inputs ──
+//
+// SHARIAH-REVIEW: the app has no live gold/silver price feed, so these are
+// admin-maintained snapshots rather than a real-time market price — they
+// WILL drift out of date and need periodic manual updates. Defaults below
+// are rough placeholders (silver ~$0.85/g, gold ~$75/g at time of writing)
+// and must be confirmed/updated by whoever owns this feature before the
+// zakat calculator is treated as authoritative.
+//
+// Nisab (the minimum wealth threshold before zakat is owed) is set here
+// using the SILVER standard (612.36g ≈ 21 troy oz), which is the more
+// commonly used and more "generous to the poor" standard vs. gold
+// (87.48g) since it produces a lower threshold — most zakat calculators
+// (Zakat Foundation, IslamicRelief) default to silver. This is a
+// methodology choice, not an objective fact, and should be confirmed with
+// a qualified advisor: some schools/institutions use the gold standard.
+func (r *AppSettingsRepository) ZakatNisabUSD() float64 {
+	return r.getFloat("zakat_nisab_usd", 520.0) // 612.36g x ~$0.85/g silver, approx
+}
+func (r *AppSettingsRepository) ZakatGoldPricePerGramUSD() float64 {
+	return r.getFloat("zakat_gold_price_per_gram_usd", 75.0)
+}
+func (r *AppSettingsRepository) ZakatSilverPricePerGramUSD() float64 {
+	return r.getFloat("zakat_silver_price_per_gram_usd", 0.85)
+}
+
 // Set upserts one flag and refreshes the cache.
 func (r *AppSettingsRepository) Set(key string, val bool) error {
 	s := "false"
