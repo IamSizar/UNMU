@@ -190,6 +190,76 @@ class ApiService {
     }
   }
 
+  // Referral program — see backend/internal/handlers/referral.go.
+  static Future<Map<String, dynamic>?> getMyReferralCode(String token) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/referrals/my-code'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+      if (response.statusCode == 200) return json.decode(response.body);
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  static Future<int?> getReferralCount(String token) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/referrals/stats'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return (data['referralCount'] as num?)?.toInt();
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Returns (success, message) — message is either the success confirmation
+  // or a user-facing error string from the backend (invalid code, already
+  // redeemed, self-referral), so the caller can show it directly.
+  static Future<(bool, String)> redeemReferralCode(String token, String code) async {
+    http.Response response;
+    try {
+      response = await http.post(
+        Uri.parse('$baseUrl/referrals/redeem'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode({'code': code}),
+      );
+    } catch (e) {
+      return (false, 'Network error — check your connection and try again');
+    }
+
+    // Decoded separately from the request itself, so a malformed body
+    // (a proxy error page, an empty 502) reports as "unexpected response"
+    // rather than being indistinguishable from a network failure.
+    Map<String, dynamic>? data;
+    try {
+      data = json.decode(response.body) as Map<String, dynamic>;
+    } catch (_) {
+      // fall through with data == null
+    }
+
+    if (response.statusCode == 200) {
+      return (true, data?['message']?.toString() ?? '');
+    }
+    return (false, data?['error']?.toString() ?? 'Unexpected response — try again');
+  }
+
   // Remove from portfolio
   static Future<bool> removeFromPortfolio(String token, int stockId) async {
     try {

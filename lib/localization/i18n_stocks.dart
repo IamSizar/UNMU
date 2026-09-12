@@ -137,6 +137,21 @@ const Map<String, String> stocksEn = {
   'portfolio.errorLoading': 'Failed to load your portfolio',
   'portfolio.errorSaving': "Couldn't save this holding — try again",
 
+  // ── Referral program ────────────────────────────────────────
+  'referral.title': 'Refer a friend',
+  'referral.giveGetTitle': 'Give @percent%, get @percent%',
+  'referral.giveGetSubtitle':
+      'Share your code — you both get a discount on Pro when they sign up.',
+  'referral.countLabel': '@count friends referred',
+  'referral.copied': 'Code copied',
+  'referral.share': 'Share',
+  'referral.redeemTitle': 'Have a code?',
+  'referral.redeemSubtitle': "Enter a friend's referral code to redeem your discount.",
+  'referral.codeHint': 'Enter code',
+  'referral.apply': 'Apply',
+  'referral.signInSubtitle': 'Sign in to get your referral code.',
+  'referral.errorLoading': 'Failed to load your referral code',
+
   // ── Tools landing ───────────────────────────────────────────
   'tools.title': 'Tools',
   'tools.zakatTitle': 'Zakat',
@@ -415,6 +430,20 @@ const Map<String, String> stocksAr = {
   'portfolio.invalidNumbers': 'يرجى إدخال أرقام صحيحة لعدد الأسهم والسعر',
   'portfolio.errorLoading': 'تعذّر تحميل محفظتك',
   'portfolio.errorSaving': 'تعذّر حفظ هذا المقتنى — حاول مرة أخرى',
+
+  // ── Referral program ────────────────────────────────────────
+  'referral.title': 'دعوة صديق',
+  'referral.giveGetTitle': 'أعطِ @percent%، واحصل على @percent%',
+  'referral.giveGetSubtitle': 'شارك رمزك — يحصل كلاكما على خصم على النسخة المميزة عند التسجيل.',
+  'referral.countLabel': '@count صديق تمت دعوتهم',
+  'referral.copied': 'تم نسخ الرمز',
+  'referral.share': 'مشاركة',
+  'referral.redeemTitle': 'لديك رمز؟',
+  'referral.redeemSubtitle': 'أدخل رمز إحالة صديق للحصول على خصمك.',
+  'referral.codeHint': 'أدخل الرمز',
+  'referral.apply': 'تطبيق',
+  'referral.signInSubtitle': 'سجل دخولك للحصول على رمز الإحالة الخاص بك.',
+  'referral.errorLoading': 'تعذّر تحميل رمز الإحالة',
 
   // ── Tools landing ───────────────────────────────────────────
   'tools.title': 'الأدوات',

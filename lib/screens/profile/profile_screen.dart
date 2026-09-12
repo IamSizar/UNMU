@@ -26,6 +26,7 @@ import '../../screens/social/social_tokens.dart';
 import '../../screens/tools/tools_screen.dart';
 import '../../screens/watchlist/watchlist_screen.dart';
 import '../../screens/portfolio/portfolio_screen.dart';
+import '../../screens/referral/referral_screen.dart';
 import '../../utils/haptic_utils.dart';
 import '../../widgets/platform_adaptive/platform_dialog.dart';
 import '../../widgets/social/test_account_switcher.dart';
@@ -868,6 +869,14 @@ class _QuickActionsGrid extends StatelessWidget {
           title: 'profile.quickPortfolioTitle'.tr,
           subtitle: 'profile.quickPortfolioSubtitle'.tr,
           onTap: () => _open(context, const PortfolioScreen()),
+        ),
+        _QuickActionTile(
+          palette: palette,
+          icon: Icons.card_giftcard_rounded,
+          accent: SocialTokens.violet,
+          title: 'profile.quickReferralTitle'.tr,
+          subtitle: 'profile.quickReferralSubtitle'.tr,
+          onTap: () => _open(context, const ReferralScreen()),
         ),
         _QuickActionTile(
           palette: palette,
