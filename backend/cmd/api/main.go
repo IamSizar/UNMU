@@ -206,6 +206,7 @@ func main() {
 	networkHandler := handlers.NewNetworkHandler(database)
 	publicHandler := handlers.NewPublicHandler(stockRepo, fundamentalRepo, shariahRepo, analystRepo, shariahEngine)
 	userHandler := handlers.NewUserHandler(portfolioRepo, notificationRepo)
+	userHandler.SetPortfolioEnrichment(stockRepo, shariahRepo)
 	toolsHandler := handlers.NewToolsHandler(portfolioRepo, stockRepo, shariahRepo, fundamentalRepo)
 	adsHandler := handlers.NewAdsHandler(adRepo)
 	promoHandler := handlers.NewPromoHandler(promoRepo)
