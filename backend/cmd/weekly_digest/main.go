@@ -252,25 +252,40 @@ func loadUserWatchedStocks(
 		return nil, err
 	}
 
+	// Batch-load (2 queries total) instead of the previous 2-per-row N+1 —
+	// this runs once per user inside the outer digest loop, so the old
+	// pattern scaled to U x 2P queries across the whole batch.
+	stockIDs := make([]int64, len(portfolios))
+	for i, p := range portfolios {
+		stockIDs[i] = p.StockID
+	}
+	// Unlike the old per-row fallback (which showed "UNKNOWN" for both "no
+	// screening exists" and "a DB error happened," conflating the two), a
+	// batch-load failure here is surfaced as a real error to the caller —
+	// the outer digest loop already logs+captures it and simply sends that
+	// user's digest without a watchlist section, rather than the digest
+	// claiming a stock's status is UNKNOWN when it's actually just unknown
+	// to this request.
+	stocksByID, err := stockRepo.GetByIDs(stockIDs)
+	if err != nil {
+		return nil, fmt.Errorf("batch-load stocks: %w", err)
+	}
+	statusByID, err := shariahRepo.GetLatestStatusBatch(stockIDs)
+	if err != nil {
+		return nil, fmt.Errorf("batch-load statuses: %w", err)
+	}
+
 	var out []watchedStock
 	for _, p := range portfolios {
-		stock, err := stockRepo.GetByID(p.StockID)
-		if err != nil {
-			log.Printf("WARN load stock %d for user %d: %v", p.StockID, userID, err)
-			continue
-		}
+		stock := stocksByID[p.StockID]
 		if stock == nil {
 			continue
 		}
-		status, err := shariahRepo.GetLatestStatus(stock.ID)
-		if err != nil {
-			log.Printf("WARN load status for stock %d: %v", stock.ID, err)
+		status := "UNKNOWN" // genuinely no screening on record for this stock
+		if s := statusByID[p.StockID]; s != nil {
+			status = s.Status
 		}
-		s := "UNKNOWN"
-		if status != nil {
-			s = status.Status
-		}
-		out = append(out, watchedStock{Ticker: stock.Ticker, Name: stock.Name, Status: s})
+		out = append(out, watchedStock{Ticker: stock.Ticker, Name: stock.Name, Status: status})
 		if len(out) >= 10 {
 			break // keep the email scannable
 		}

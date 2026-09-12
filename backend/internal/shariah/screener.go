@@ -58,7 +58,7 @@ func Screen(stock *models.Stock, fundamental *models.Fundamental) (models.Sharia
 		// admin can override (see internal/shariah/rules.go); DefaultThresholds
 		// reproduces the ladder this screener always used, so behavior is
 		// unchanged until someone actually edits the settings.
-		t := activeThresholds
+		t := ActiveThresholds()
 		if debt > t.DebtFail {
 			status.Status = "HARAM"
 			status.Grade = sql.NullString{String: "F", Valid: true}

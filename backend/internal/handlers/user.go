@@ -63,6 +63,22 @@ func (h *UserHandler) GetPortfolio(c *gin.Context) {
 		return
 	}
 
+	// Batch-load stocks + statuses (2 queries total) instead of the
+	// previous 2-queries-per-row N+1 — a 50-holding portfolio otherwise
+	// meant ~100 sequential round-trips on every screen open.
+	var stocksByID map[int64]*models.Stock
+	var statusByID map[int64]*models.ShariahStatus
+	if h.stockRepo != nil {
+		stockIDs := make([]int64, len(portfolios))
+		for i, p := range portfolios {
+			stockIDs[i] = p.StockID
+		}
+		stocksByID, _ = h.stockRepo.GetByIDs(stockIDs)
+		if h.shariahRepo != nil {
+			statusByID, _ = h.shariahRepo.GetLatestStatusBatch(stockIDs)
+		}
+	}
+
 	entries := make([]gin.H, 0, len(portfolios))
 	for _, p := range portfolios {
 		entry := gin.H{"stock_id": p.StockID}
@@ -73,21 +89,17 @@ func (h *UserHandler) GetPortfolio(c *gin.Context) {
 			entry["avg_buy_price"] = p.AvgBuyPrice.Float64
 		}
 
-		if h.stockRepo != nil {
-			if stock, err := h.stockRepo.GetByID(p.StockID); err == nil && stock != nil {
-				stockJSON := gin.H{
-					"id":       stock.ID,
-					"ticker":   stock.Ticker,
-					"exchange": stock.Exchange,
-					"name":     stock.Name,
-				}
-				if h.shariahRepo != nil {
-					if status, err := h.shariahRepo.GetLatestStatus(p.StockID); err == nil && status != nil {
-						stockJSON["shariah_status"] = buildShariahResponse(status)
-					}
-				}
-				entry["stock"] = stockJSON
+		if stock := stocksByID[p.StockID]; stock != nil {
+			stockJSON := gin.H{
+				"id":       stock.ID,
+				"ticker":   stock.Ticker,
+				"exchange": stock.Exchange,
+				"name":     stock.Name,
 			}
+			if status := statusByID[p.StockID]; status != nil {
+				stockJSON["shariah_status"] = buildShariahResponse(status)
+			}
+			entry["stock"] = stockJSON
 		}
 
 		entries = append(entries, entry)

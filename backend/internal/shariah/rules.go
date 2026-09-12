@@ -1,6 +1,9 @@
 package shariah
 
-import "fmt"
+import (
+	"fmt"
+	"sync"
+)
 
 // HaramSectors contains list of prohibited sectors (Section 1 - Activity Screening)
 // These activities make a stock 100% NOT_HALAL
@@ -113,16 +116,32 @@ var DefaultThresholds = Thresholds{
 	HaramFail: 10, HaramWarn: 5, HaramPass: 3, HaramGood: 1,
 }
 
-var activeThresholds = DefaultThresholds
+var (
+	// thresholdsMu guards activeThresholds — Screen() reads it on every
+	// concurrent request/ingestion call, while the admin PUT endpoint
+	// writes it via SetThresholds at any time. Without a lock this is a
+	// genuine data race (confirmed under -race) and risks a torn read of
+	// the struct's 8 fields mixing old and new values mid-update.
+	thresholdsMu     sync.RWMutex
+	activeThresholds = DefaultThresholds
+)
 
 // SetThresholds overrides the ladder used by Screen(). Called once at startup
 // with whatever the admin has configured (falling back to DefaultThresholds),
 // and again immediately after an admin edits the settings, so the change is
 // live without a restart.
-func SetThresholds(t Thresholds) { activeThresholds = t }
+func SetThresholds(t Thresholds) {
+	thresholdsMu.Lock()
+	defer thresholdsMu.Unlock()
+	activeThresholds = t
+}
 
 // ActiveThresholds returns the ladder currently in effect.
-func ActiveThresholds() Thresholds { return activeThresholds }
+func ActiveThresholds() Thresholds {
+	thresholdsMu.RLock()
+	defer thresholdsMu.RUnlock()
+	return activeThresholds
+}
 
 // CheckHaramActivity checks if sector, industry, or description contains haram keywords
 // Section 1 - Activity Screening: If activity is haram → status = NOT_HALAL

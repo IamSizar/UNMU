@@ -367,7 +367,7 @@ class _ErrorState extends StatelessWidget {
               style: TextStyle(color: palette.textPrimary, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 16),
-            OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
+            OutlinedButton(onPressed: onRetry, child: Text('common.refresh'.tr)),
           ],
         ),
       ),

@@ -366,6 +366,11 @@ class _ZakatCalculatorScreenState extends State<ZakatCalculatorScreen>
           ),
         ),
         const SizedBox(height: 18),
+        // The below-nisab banner and the empty state are both informational
+        // headers — neither should hide the per-holding breakdown the
+        // backend already computed and sent; a user should always be able
+        // to see which holdings were counted, regardless of whether zakat
+        // is currently due on them.
         if (!nisabMet && totalWealth > 0)
           _NisabNotMetBanner(
             palette: palette,
@@ -382,37 +387,40 @@ class _ZakatCalculatorScreenState extends State<ZakatCalculatorScreen>
             ctaLabel: 'common.refresh'.tr,
             onCta: _loadPortfolio,
           )
-        else ...[
+        else
           _ZakatResultHero(
             palette: palette,
             totalAssets: totalWealth,
             zakatDue: total,
             formatPrice: cur.formatPrice,
           ),
+        if (breakdown.isNotEmpty) ...[
           const SizedBox(height: 18),
-          if (breakdown.isNotEmpty) ...[
-            _MiniSectionHeader(
-              palette: palette,
-              eyebrow: 'zakat.breakdownEyebrow'.tr,
-              title: 'zakat.perHolding'.tr,
-            ),
-            const SizedBox(height: 12),
-            ...breakdown.map(
-              (item) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _BreakdownRow(
-                  palette: palette,
-                  title: item['name']?.toString() ?? '',
-                  subtitle: 'zakat.sharesCount'.trParams({
-                    'count': '${item['shares']}',
-                  }),
-                  value: cur.formatPrice(
-                    ((item['zakat_amount'] ?? 0.0) as num).toDouble(),
-                  ),
+          _MiniSectionHeader(
+            palette: palette,
+            eyebrow: 'zakat.breakdownEyebrow'.tr,
+            title: 'zakat.perHolding'.tr,
+          ),
+          const SizedBox(height: 12),
+          ...breakdown.map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _BreakdownRow(
+                palette: palette,
+                title: item['name']?.toString() ?? '',
+                // The backend folds cash/gold/silver/other into one
+                // synthetic "OTHER" row with no `shares` key (see
+                // finalizeZakatBreakdown) — show it without a share count
+                // instead of the literal string "null".
+                subtitle: item['shares'] != null
+                    ? 'zakat.sharesCount'.trParams({'count': '${item['shares']}'})
+                    : null,
+                value: cur.formatPrice(
+                  ((item['zakat_amount'] ?? 0.0) as num).toDouble(),
                 ),
               ),
             ),
-          ],
+          ),
         ],
         const SizedBox(height: 16),
         _NisabNote(palette: palette),
@@ -1091,12 +1099,12 @@ class _CenteredEmpty extends StatelessWidget {
 class _BreakdownRow extends StatelessWidget {
   final SocialPalette palette;
   final String title;
-  final String subtitle;
+  final String? subtitle;
   final String value;
   const _BreakdownRow({
     required this.palette,
     required this.title,
-    required this.subtitle,
+    this.subtitle,
     required this.value,
   });
 
@@ -1141,11 +1149,13 @@ class _BreakdownRow extends StatelessWidget {
                     fontSize: 13.5,
                   ),
                 ),
-                const SizedBox(height: 1),
-                Text(
-                  subtitle,
-                  style: TextStyle(color: palette.textMuted, fontSize: 11),
-                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 1),
+                  Text(
+                    subtitle!,
+                    style: TextStyle(color: palette.textMuted, fontSize: 11),
+                  ),
+                ],
               ],
             ),
           ),

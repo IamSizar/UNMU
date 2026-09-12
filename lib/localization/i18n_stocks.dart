@@ -136,6 +136,7 @@ const Map<String, String> stocksEn = {
   'portfolio.invalidNumbers': 'Please enter valid numbers for shares and price',
   'portfolio.errorLoading': 'Failed to load your portfolio',
   'portfolio.errorSaving': "Couldn't save this holding — try again",
+  'portfolio.searchHint': 'Search ticker or company…',
 
   // ── Referral program ────────────────────────────────────────
   'referral.title': 'Refer a friend',
@@ -446,6 +447,7 @@ const Map<String, String> stocksAr = {
   'portfolio.invalidNumbers': 'يرجى إدخال أرقام صحيحة لعدد الأسهم والسعر',
   'portfolio.errorLoading': 'تعذّر تحميل محفظتك',
   'portfolio.errorSaving': 'تعذّر حفظ هذا المقتنى — حاول مرة أخرى',
+  'portfolio.searchHint': 'ابحث برمز السهم أو اسم الشركة…',
 
   // ── Referral program ────────────────────────────────────────
   'referral.title': 'دعوة صديق',

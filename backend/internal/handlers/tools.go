@@ -5,6 +5,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"halalstocks/internal/models"
 	"halalstocks/internal/repositories"
 
 	"github.com/gin-gonic/gin"
@@ -42,6 +43,70 @@ func (h *ToolsHandler) SetZakatConfig(settingsRepo *repositories.AppSettingsRepo
 	h.settingsRepo = settingsRepo
 }
 
+// eligibleHolding pairs a portfolio row with its resolved stock + Shariah
+// status, once both are known to exist.
+type eligibleHolding struct {
+	Portfolio *models.UserPortfolio
+	Stock     *models.Stock
+	Status    *models.ShariahStatus
+}
+
+// loadEligibleHoldings batch-loads stocks + Shariah statuses for a user's
+// entire portfolio in 2 queries (not 2-per-row), then filters to rows with
+// shares > 0 whose status passes accept. Shared by CalculateZakat and
+// CalculatePurification, which previously duplicated this exact loop with
+// a per-row stockRepo.GetByID + shariahRepo.GetLatestStatus call each —
+// an N+1 pattern that meant ~2N DB round-trips per request for an N-stock
+// portfolio.
+func (h *ToolsHandler) loadEligibleHoldings(
+	userID int64,
+	accept func(status *models.ShariahStatus) bool,
+) ([]eligibleHolding, error) {
+	portfolios, err := h.portfolioRepo.GetUserPortfolio(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	stockIDs := make([]int64, 0, len(portfolios))
+	for _, p := range portfolios {
+		if p.Shares.Valid && p.Shares.Float64 > 0 {
+			stockIDs = append(stockIDs, p.StockID)
+		}
+	}
+
+	var stocksByID map[int64]*models.Stock
+	var statusByID map[int64]*models.ShariahStatus
+	if len(stockIDs) > 0 {
+		stocksByID, err = h.stockRepo.GetByIDs(stockIDs)
+		if err != nil {
+			log.Printf("[tools] batch-load stocks for user %d: %v", userID, err)
+			stocksByID = map[int64]*models.Stock{}
+		}
+		statusByID, err = h.shariahRepo.GetLatestStatusBatch(stockIDs)
+		if err != nil {
+			log.Printf("[tools] batch-load statuses for user %d: %v", userID, err)
+			statusByID = map[int64]*models.ShariahStatus{}
+		}
+	}
+
+	holdings := make([]eligibleHolding, 0, len(stockIDs))
+	for _, p := range portfolios {
+		if !p.Shares.Valid || p.Shares.Float64 <= 0 {
+			continue
+		}
+		stock := stocksByID[p.StockID]
+		if stock == nil {
+			continue
+		}
+		status := statusByID[p.StockID]
+		if !accept(status) {
+			continue
+		}
+		holdings = append(holdings, eligibleHolding{Portfolio: p, Stock: stock, Status: status})
+	}
+	return holdings, nil
+}
+
 // CalculateZakat handles GET /api/tools/zakat
 //
 // Query params (all optional, default 0) let the caller include assets
@@ -69,7 +134,9 @@ func (h *ToolsHandler) SetZakatConfig(settingsRepo *repositories.AppSettingsRepo
 func (h *ToolsHandler) CalculateZakat(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 
-	portfolios, err := h.portfolioRepo.GetUserPortfolio(userID)
+	holdings, err := h.loadEligibleHoldings(userID, func(s *models.ShariahStatus) bool {
+		return s != nil && s.Status == "HALAL" // Only Zakat-eligible on Halal holdings — see doc comment above
+	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get portfolio"})
 		return
@@ -79,73 +146,11 @@ func (h *ToolsHandler) CalculateZakat(c *gin.Context) {
 	goldGrams := nonNegativeQueryFloat(c, "gold_grams")
 	silverGrams := nonNegativeQueryFloat(c, "silver_grams")
 	otherAssets := nonNegativeQueryFloat(c, "other_assets")
-
-	// Fallback constants match AppSettingsRepository's own defaults —
-	// used only if SetZakatConfig was never called (main.go always calls
-	// it; this is a landmine guard against a future refactor dropping
-	// that wiring, not an expected runtime path).
-	goldPricePerGram, silverPricePerGram, nisabThreshold := 75.0, 0.85, 520.0
-	if h.settingsRepo != nil {
-		goldPricePerGram = h.settingsRepo.ZakatGoldPricePerGramUSD()
-		silverPricePerGram = h.settingsRepo.ZakatSilverPricePerGramUSD()
-		nisabThreshold = h.settingsRepo.ZakatNisabUSD()
-	}
+	goldPricePerGram, silverPricePerGram, nisabThreshold := h.zakatPricing()
 	goldValue := goldGrams * goldPricePerGram
 	silverValue := silverGrams * silverPricePerGram
 
-	var stockBreakdown []gin.H
-	totalStockValue := 0.0
-
-	for _, portfolio := range portfolios {
-		if !portfolio.Shares.Valid || portfolio.Shares.Float64 == 0 {
-			continue
-		}
-
-		// Get stock and Sharia status
-		stock, err := h.stockRepo.GetByID(portfolio.StockID)
-		if err != nil {
-			log.Printf("[zakat] load stock %d for user %d: %v", portfolio.StockID, userID, err)
-			continue
-		}
-		if stock == nil {
-			continue
-		}
-
-		shariahStatus, err := h.shariahRepo.GetLatestStatus(stock.ID)
-		if err != nil {
-			log.Printf("[zakat] load status for stock %d: %v", stock.ID, err)
-			continue
-		}
-		if shariahStatus == nil || shariahStatus.Status != "HALAL" {
-			continue // Only Zakat-eligible on Halal holdings — see doc comment above
-		}
-
-		// Get current price (simplified - would need market data)
-		// For now, use avg buy price
-		currentPrice := 0.0
-		if portfolio.AvgBuyPrice.Valid {
-			currentPrice = portfolio.AvgBuyPrice.Float64
-		}
-
-		stockValue := portfolio.Shares.Float64 * currentPrice
-		totalStockValue += stockValue
-
-		// stock_id/ticker/name/shares/value/zakat_amount is the pre-existing
-		// wire shape lib/screens/tools/zakat_calculator_screen.dart already
-		// parses — kept exactly as-is at the top-level `breakdown` array
-		// (a plain list, not the richer object this endpoint now also
-		// returns) so the current app doesn't silently show an empty
-		// portfolio tab. New per-asset fields (cash/gold/silver/nisab) are
-		// added alongside it rather than replacing it.
-		stockBreakdown = append(stockBreakdown, gin.H{
-			"stock_id": stock.ID,
-			"ticker":   stock.Ticker,
-			"name":     stock.Name,
-			"shares":   portfolio.Shares.Float64,
-			"value":    roundCents(stockValue),
-		})
-	}
-
+	stockBreakdown, totalStockValue := buildZakatStockBreakdown(holdings)
 	totalWealth := totalStockValue + cash + goldValue + silverValue + otherAssets
 	nisabMet := totalWealth >= nisabThreshold
 	totalZakat := 0.0
@@ -153,26 +158,20 @@ func (h *ToolsHandler) CalculateZakat(c *gin.Context) {
 		totalZakat = totalWealth * 0.025
 	}
 
-	// Per-stock zakat_amount, filled in after nisabMet is known (a stock's
-	// individual zakat isn't meaningful in isolation — it's total wealth
-	// that's compared against nisab — but the old response shape carried
-	// this field per row, so it's populated as "this stock's 2.5% share,
-	// given zakat is due at all" rather than dropped.
-	for i, row := range stockBreakdown {
-		value := row["value"].(float64)
-		amount := 0.0
-		if nisabMet {
-			amount = value * 0.025
-		}
-		stockBreakdown[i]["zakat_amount"] = roundCents(amount)
-	}
+	// zakat_amount per row, filled in now that nisabMet is known. To keep
+	// sum(breakdown[].zakat_amount) == total_zakat exactly (previously it
+	// didn't: total_zakat counted cash/gold/silver/other too, while every
+	// breakdown row only ever covered its own stock's share), a synthetic
+	// row folds in the non-stock assets' zakat under one line item.
+	nonStockValue := cash + goldValue + silverValue + otherAssets
+	stockBreakdown = finalizeZakatBreakdown(stockBreakdown, nonStockValue, nisabMet)
 
 	c.JSON(http.StatusOK, gin.H{
 		"total_zakat":     roundCents(totalZakat),
 		"total_wealth":    roundCents(totalWealth),
 		"nisab_threshold": roundCents(nisabThreshold),
 		"nisab_met":       nisabMet,
-		"breakdown":       stockBreakdown, // flat array — see comment above
+		"breakdown":       stockBreakdown, // flat array — see buildZakatStockBreakdown
 		"assets": gin.H{
 			"stocks_total": roundCents(totalStockValue),
 			"cash":         roundCents(cash),
@@ -181,6 +180,71 @@ func (h *ToolsHandler) CalculateZakat(c *gin.Context) {
 			"other_assets": roundCents(otherAssets),
 		},
 	})
+}
+
+// zakatPricing returns (goldPricePerGram, silverPricePerGram, nisabThreshold),
+// falling back to AppSettingsRepository's own defaults if SetZakatConfig was
+// never called (main.go always calls it; this is a landmine guard against a
+// future refactor dropping that wiring, not an expected runtime path).
+func (h *ToolsHandler) zakatPricing() (goldPricePerGram, silverPricePerGram, nisabThreshold float64) {
+	goldPricePerGram, silverPricePerGram, nisabThreshold = 75.0, 0.85, 520.0
+	if h.settingsRepo != nil {
+		goldPricePerGram = h.settingsRepo.ZakatGoldPricePerGramUSD()
+		silverPricePerGram = h.settingsRepo.ZakatSilverPricePerGramUSD()
+		nisabThreshold = h.settingsRepo.ZakatNisabUSD()
+	}
+	return
+}
+
+// buildZakatStockBreakdown builds the pre-existing wire shape
+// lib/screens/tools/zakat_calculator_screen.dart already parses — a flat
+// array of {stock_id, ticker, name, shares, value}, zakat_amount filled in
+// later by finalizeZakatBreakdown once nisabMet is known.
+func buildZakatStockBreakdown(holdings []eligibleHolding) (rows []gin.H, totalStockValue float64) {
+	for _, h := range holdings {
+		currentPrice := 0.0
+		if h.Portfolio.AvgBuyPrice.Valid {
+			currentPrice = h.Portfolio.AvgBuyPrice.Float64
+		}
+		stockValue := h.Portfolio.Shares.Float64 * currentPrice
+		totalStockValue += stockValue
+
+		rows = append(rows, gin.H{
+			"stock_id": h.Stock.ID,
+			"ticker":   h.Stock.Ticker,
+			"name":     h.Stock.Name,
+			"shares":   h.Portfolio.Shares.Float64,
+			"value":    roundCents(stockValue),
+		})
+	}
+	return rows, totalStockValue
+}
+
+// finalizeZakatBreakdown fills in each row's zakat_amount (2.5% of that
+// row's value once zakat is due at all) and appends a synthetic row for
+// non-stock assets, so summing every row's zakat_amount reproduces
+// total_zakat exactly.
+func finalizeZakatBreakdown(rows []gin.H, nonStockValue float64, nisabMet bool) []gin.H {
+	pct := func(v float64) float64 {
+		if !nisabMet {
+			return 0
+		}
+		return roundCents(v * 0.025)
+	}
+	for i, row := range rows {
+		value, _ := row["value"].(float64)
+		rows[i]["zakat_amount"] = pct(value)
+	}
+	if nonStockValue > 0 {
+		rows = append(rows, gin.H{
+			"stock_id":     nil,
+			"ticker":       "OTHER",
+			"name":         "Cash, gold, silver & other assets",
+			"value":        roundCents(nonStockValue),
+			"zakat_amount": pct(nonStockValue),
+		})
+	}
+	return rows
 }
 
 // nonNegativeQueryFloat parses a query param as a float, clamping garbage
@@ -214,7 +278,11 @@ func roundCents(v float64) float64 {
 func (h *ToolsHandler) CalculatePurification(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 
-	portfolios, err := h.portfolioRepo.GetUserPortfolio(userID)
+	// Only compliant/mixed stocks carry a purification obligation — a HARAM
+	// holding shouldn't be held at all, and its dividend isn't "purifiable."
+	holdings, err := h.loadEligibleHoldings(userID, func(s *models.ShariahStatus) bool {
+		return s != nil && (s.Status == "HALAL" || s.Status == "MIXED")
+	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get portfolio"})
 		return
@@ -224,27 +292,17 @@ func (h *ToolsHandler) CalculatePurification(c *gin.Context) {
 	totalPurification := 0.0
 	var breakdown []gin.H
 
-	for _, portfolio := range portfolios {
-		if !portfolio.Shares.Valid || portfolio.Shares.Float64 <= 0 {
-			continue
-		}
+	for _, holding := range holdings {
+		portfolio, stock, shariahStatus := holding.Portfolio, holding.Stock, holding.Status
 
-		stock, _ := h.stockRepo.GetByID(portfolio.StockID)
-		if stock == nil {
+		// Fundamentals (dividend-per-share) have no batch-lookup method yet,
+		// unlike stocks/statuses above — a smaller, pre-existing N+1 left
+		// as-is since it wasn't part of what this pass fixed.
+		fundamental, err := h.fundamentalRepo.GetLatestFundamental(stock.ID)
+		if err != nil {
+			log.Printf("[purification] load fundamental for stock %d: %v", stock.ID, err)
 			continue
 		}
-
-		shariahStatus, _ := h.shariahRepo.GetLatestStatus(stock.ID)
-		if shariahStatus == nil {
-			continue
-		}
-		// Only compliant/mixed stocks carry a purification obligation — a HARAM
-		// holding shouldn't be held at all, and its dividend isn't "purifiable."
-		if shariahStatus.Status != "HALAL" && shariahStatus.Status != "MIXED" {
-			continue
-		}
-
-		fundamental, _ := h.fundamentalRepo.GetLatestFundamental(stock.ID)
 		if fundamental == nil || !fundamental.DividendsPerShare.Valid || fundamental.DividendsPerShare.Float64 <= 0 {
 			continue
 		}
@@ -263,22 +321,25 @@ func (h *ToolsHandler) CalculatePurification(c *gin.Context) {
 		totalDividends += dividendReceived
 		totalPurification += purificationAmount
 
-		breakdown = append(breakdown, gin.H{
-			"stock_id":             stock.ID,
-			"ticker":               stock.Ticker,
-			"name":                 stock.Name,
-			"shares":               portfolio.Shares.Float64,
-			"dividend_per_share":   fundamental.DividendsPerShare.Float64,
-			"dividend_received":    dividendReceived,
-			"haram_income_ratio":   haramRatio,
-			"purification_amount":  purificationAmount,
-			"as_of_date":           fundamental.AsOfDate.Time,
-		})
+		row := gin.H{
+			"stock_id":            stock.ID,
+			"ticker":              stock.Ticker,
+			"name":                stock.Name,
+			"shares":              portfolio.Shares.Float64,
+			"dividend_per_share":  fundamental.DividendsPerShare.Float64,
+			"dividend_received":   roundCents(dividendReceived),
+			"haram_income_ratio":  haramRatio,
+			"purification_amount": roundCents(purificationAmount),
+		}
+		if fundamental.AsOfDate.Valid {
+			row["as_of_date"] = fundamental.AsOfDate.Time
+		}
+		breakdown = append(breakdown, row)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"total_dividends_received": totalDividends,
-		"total_purification_due":   totalPurification,
+		"total_dividends_received": roundCents(totalDividends),
+		"total_purification_due":   roundCents(totalPurification),
 		"breakdown":                breakdown,
 		"methodology": gin.H{
 			"formula": "dividend_received × haram_income_ratio",

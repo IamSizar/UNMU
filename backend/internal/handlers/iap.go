@@ -259,7 +259,19 @@ func isProProductID(productID string) bool {
 // the client re-verifying periodically, not on the backend knowing
 // proactively.
 func (h *IAPHandler) activateProSubscription(userID int64, verified *services.AppleVerifiedTransaction) error {
-	if verified.ExpiresDate != nil && verified.ExpiresDate.Before(timeNow()) {
+	// Every SKU that reaches here (isProProductID's allowlist) is a
+	// subscription product, so ExpiresDate should always be populated —
+	// apple_iap_verifier.go's pickLatestTransaction only leaves it nil
+	// when expires_date_ms was empty, unparseable, or <= 0. Treat that as
+	// "can't verify this purchase is current" and refuse, same as an
+	// actually-expired date — the original code only checked the latter,
+	// so a malformed/missing expiry from Apple silently skipped the
+	// expiry gate entirely and granted Premium with no expiry at all.
+	if verified.ExpiresDate == nil {
+		return fmt.Errorf("apple-iap: receipt for product %s has no parseable expiry date — refusing to activate Pro without one",
+			verified.ProductID)
+	}
+	if verified.ExpiresDate.Before(timeNow()) {
 		return fmt.Errorf("apple-iap: receipt for product %s has already expired (expiresDate=%s) — not activating Pro",
 			verified.ProductID, verified.ExpiresDate.Format(time.RFC3339))
 	}
