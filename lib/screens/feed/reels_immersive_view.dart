@@ -2386,7 +2386,7 @@ class _ReactionPickerPill extends StatelessWidget {
             alignment: Alignment.center,
             transformAlignment: Alignment.center,
             transform: isHovered
-                ? (Matrix4.identity()..scale(1.45))
+                ? (Matrix4.identity()..scaleByDouble(1.45, 1.45, 1.45, 1))
                 : Matrix4.identity(),
             decoration: BoxDecoration(
               shape: BoxShape.circle,

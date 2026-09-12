@@ -1041,7 +1041,7 @@ class _PreferencesCard extends StatelessWidget {
             title: 'profile.darkMode'.tr,
             trailing: Switch.adaptive(
               value: themeProvider.isDarkMode,
-              activeColor: SocialTokens.cyan,
+              activeThumbColor: SocialTokens.cyan,
               onChanged: (_) async {
                 await HapticUtils.selection();
                 themeProvider.toggleTheme();

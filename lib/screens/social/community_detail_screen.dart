@@ -3110,8 +3110,14 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
         : await CommunityService.transferOwnership(
             widget.community.id, m.userId);
     if (!mounted) return;
+    // `ctx` is a BuildContext parameter (passed in from this State's own
+    // `context` at call time — see _onPick's signature above), not the
+    // State's `context` getter directly, so the analyzer can't statically
+    // tie it to the `mounted` check just above even though it guards the
+    // same lifetime in practice.
     if (!res.ok) {
       HapticFeedback.heavyImpact();
+      // ignore: use_build_context_synchronously
       ScaffoldMessenger.of(ctx).showSnackBar(
         SnackBar(
           duration: const Duration(seconds: 2),
@@ -3120,8 +3126,10 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
       );
       return;
     }
+    // ignore: use_build_context_synchronously
     Navigator.of(ctx).pop();
     HapticFeedback.lightImpact();
+    // ignore: use_build_context_synchronously
     ScaffoldMessenger.of(ctx).showSnackBar(
       SnackBar(
         duration: const Duration(seconds: 2),

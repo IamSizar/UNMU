@@ -709,7 +709,7 @@ class _CommunityEditSheetState extends State<CommunityEditSheet> {
           ),
           Switch.adaptive(
             value: _isPublic,
-            activeColor: SocialTokens.cyan,
+            activeThumbColor: SocialTokens.cyan,
             onChanged: (v) {
               HapticFeedback.selectionClick();
               setState(() => _isPublic = v);
@@ -875,7 +875,7 @@ class _CommunityEditSheetState extends State<CommunityEditSheet> {
               ),
               Switch.adaptive(
                 value: _isPaidMode,
-                activeColor: SocialTokens.gold,
+                activeThumbColor: SocialTokens.gold,
                 onChanged: (v) {
                   HapticFeedback.selectionClick();
                   setState(() => _isPaidMode = v);
