@@ -10,6 +10,7 @@ import (
 	"halalstocks/internal/realtime"
 	"halalstocks/internal/repositories"
 	"halalstocks/internal/services"
+	"halalstocks/internal/shariah"
 	"halalstocks/pkg/jwt"
 	"log"
 	"os"
@@ -205,9 +206,12 @@ func main() {
 	networkHandler := handlers.NewNetworkHandler(database)
 	publicHandler := handlers.NewPublicHandler(stockRepo, fundamentalRepo, shariahRepo, analystRepo, shariahEngine)
 	userHandler := handlers.NewUserHandler(portfolioRepo, notificationRepo)
+	userHandler.SetPortfolioEnrichment(stockRepo, shariahRepo)
 	toolsHandler := handlers.NewToolsHandler(portfolioRepo, stockRepo, shariahRepo, fundamentalRepo)
 	adsHandler := handlers.NewAdsHandler(adRepo)
 	promoHandler := handlers.NewPromoHandler(promoRepo)
+	referralRepo := repositories.NewReferralRepository(database)
+	referralHandler := handlers.NewReferralHandler(referralRepo, promoRepo)
 	promoHandler.SetAudits(auditRepo)
 	marketHandler := handlers.NewMarketHandler(marketProvider)
 	// SocialHandler needs the post-interactions + post-saves repos (used
@@ -440,6 +444,11 @@ func main() {
 	// Setup router
 	router := gin.Default()
 
+	// Error monitoring (Sentry) — no-op if SENTRY_DSN isn't set, matching
+	// the graceful-degrade pattern used for FCM/email elsewhere. Placed
+	// before other middleware so it wraps everything downstream.
+	router.Use(services.InitErrorTracking())
+
 	// Compression middleware (gzip responses)
 	router.Use(middleware.CompressionMiddleware())
 
@@ -467,7 +476,17 @@ func main() {
 	// Global feature flags (mig 0045) — backs the admin community
 	// kill-switch (master + chat + posts sub-toggles).
 	appSettingsRepo := repositories.NewAppSettingsRepository(database)
+	toolsHandler.SetZakatConfig(appSettingsRepo)
 	adminSettingsHandler := handlers.NewAdminSettingsHandler(appSettingsRepo, auditRepo)
+
+	// Load any admin-configured Shariah screening thresholds so the screener
+	// (internal/shariah) uses them instead of its compiled-in defaults.
+	shariah.SetThresholds(shariah.Thresholds{
+		DebtFail: appSettingsRepo.ScreeningDebtFail(), DebtWarn: appSettingsRepo.ScreeningDebtWarn(),
+		DebtPass: appSettingsRepo.ScreeningDebtPass(), DebtGood: appSettingsRepo.ScreeningDebtGood(),
+		HaramFail: appSettingsRepo.ScreeningHaramFail(), HaramWarn: appSettingsRepo.ScreeningHaramWarn(),
+		HaramPass: appSettingsRepo.ScreeningHaramPass(), HaramGood: appSettingsRepo.ScreeningHaramGood(),
+	})
 
 	// Public routes
 	api := router.Group("/api")
@@ -532,6 +551,7 @@ func main() {
 		{
 			stockData.GET("/search", publicHandler.SearchStocks)
 			stockData.GET("/stocks/:ticker", publicHandler.GetStockDetails)
+			stockData.GET("/stocks/:ticker/certificate", publicHandler.GetComplianceCertificate)
 			stockData.GET("/regions/:code/stocks", publicHandler.GetStocksByRegion)
 		}
 
@@ -609,6 +629,10 @@ func main() {
 
 		// Tools
 		protected.GET("/tools/zakat", toolsHandler.CalculateZakat)
+		protected.GET("/tools/purification", toolsHandler.CalculatePurification)
+		protected.GET("/referrals/my-code", referralHandler.GetMyCode)
+		protected.GET("/referrals/stats", referralHandler.GetStats)
+		protected.POST("/referrals/redeem", referralHandler.Redeem)
 
 		// Promo codes
 		protected.POST("/promo/validate", promoHandler.ValidatePromo)
@@ -1037,6 +1061,8 @@ func main() {
 		// Feature flags — community kill-switch (master + chat + posts).
 		admin.GET("/settings", adminSettingsHandler.Get)
 		admin.PATCH("/settings", adminSettingsHandler.Update)
+		admin.GET("/screening-thresholds", adminSettingsHandler.GetScreeningThresholds)
+		admin.PUT("/screening-thresholds", adminSettingsHandler.UpdateScreeningThresholds)
 
 		admin.GET("/expert-applications", expertAppHandler.List)
 		// Pending-count for the sidebar badge (A12). Cheap COUNT(*) — must

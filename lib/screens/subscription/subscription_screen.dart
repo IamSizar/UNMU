@@ -41,6 +41,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     final result = await _iapService.buy(product);
     if (!mounted) return;
     setState(() => _isLoading = false);
+
     if (!result.ok) {
       PlatformDialog.show(
         context: context,
@@ -48,7 +49,35 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         content: result.error ?? 'common.error'.tr,
         confirmText: 'common.ok'.tr,
       );
+      return;
     }
+
+    // A 200 response doesn't guarantee Premium was actually granted —
+    // the backend verifies the receipt and persists the transaction
+    // separately from activating the entitlement (see backend/internal/
+    // handlers/iap.go's activateProSubscription), and the latter can
+    // fail without failing the whole request. proActivated distinguishes
+    // that case from a genuine success.
+    final proActivated = result.payload?['proActivated'];
+    if (proActivated == false) {
+      if (!mounted) return;
+      PlatformDialog.show(
+        context: context,
+        title: 'subscription.activationFailedTitle'.tr,
+        content: 'subscription.activationFailedBody'.tr,
+        confirmText: 'common.ok'.tr,
+      );
+      return;
+    }
+
+    // Payment verified and entitlement granted — refresh so isPremium
+    // (read from Get.find<AuthController>().user.subscriptionTier)
+    // reflects it immediately instead of waiting for the next natural
+    // /api/me refresh. This screen reads authProvider.isPremium as a
+    // plain getter in build() rather than through an Obx, so a manual
+    // setState is needed to actually repaint after the refresh.
+    await Get.find<AuthController>().refreshFromBackend();
+    if (mounted) setState(() {});
   }
 
   @override

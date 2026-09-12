@@ -28,6 +28,7 @@ import 'controllers/upload_controller.dart';
 import 'controllers/subscription_controller.dart';
 import 'controllers/theme_controller.dart';
 import 'controllers/watchlist_controller.dart';
+import 'controllers/portfolio_controller.dart';
 import 'main_tab_scaffold.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/onboarding_screen.dart';
@@ -97,6 +98,7 @@ Future<void> main() async {
   Get.put(LanguageController(), permanent: true);
   Get.put(StocksController(), permanent: true);
   Get.put(WatchlistController(), permanent: true);
+  Get.put(PortfolioController(), permanent: true);
   Get.put(CurrencyController(), permanent: true);
   // Realtime depends on AuthController being already registered — it watches
   // the auth state to know when to (re)connect the WebSocket.

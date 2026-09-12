@@ -36,9 +36,15 @@ class _ZakatCalculatorScreenState extends State<ZakatCalculatorScreen>
   double _manualZakat = 0;
   double _manualTotal = 0;
 
-  // Portfolio
+  // Portfolio — extra assets the backend has no other record of, sent
+  // alongside the stock-based zakat calculation (see ApiService.calculateZakat).
+  final _pfCash = TextEditingController();
+  final _pfGoldGrams = TextEditingController();
+  final _pfSilverGrams = TextEditingController();
+  final _pfOther = TextEditingController();
   Map<String, dynamic>? _portfolio;
   bool _loadingPortfolio = false;
+  bool _portfolioLoadFailed = false;
 
   @override
   void initState() {
@@ -54,6 +60,10 @@ class _ZakatCalculatorScreenState extends State<ZakatCalculatorScreen>
     _gold.dispose();
     _shares.dispose();
     _other.dispose();
+    _pfCash.dispose();
+    _pfGoldGrams.dispose();
+    _pfSilverGrams.dispose();
+    _pfOther.dispose();
     super.dispose();
   }
 
@@ -74,17 +84,32 @@ class _ZakatCalculatorScreenState extends State<ZakatCalculatorScreen>
   Future<void> _loadPortfolio() async {
     final auth = Get.find<AuthController>();
     if (!auth.isAuthenticated) return;
-    setState(() => _loadingPortfolio = true);
+    setState(() {
+      _loadingPortfolio = true;
+      _portfolioLoadFailed = false;
+    });
     try {
-      final data = await ApiService.calculateZakat(auth.token!);
+      final data = await ApiService.calculateZakat(
+        auth.token!,
+        cash: double.tryParse(_pfCash.text) ?? 0,
+        goldGrams: double.tryParse(_pfGoldGrams.text) ?? 0,
+        silverGrams: double.tryParse(_pfSilverGrams.text) ?? 0,
+        otherAssets: double.tryParse(_pfOther.text) ?? 0,
+      );
       if (mounted) {
         setState(() {
           _portfolio = data;
           _loadingPortfolio = false;
+          _portfolioLoadFailed = data == null;
         });
       }
     } catch (_) {
-      if (mounted) setState(() => _loadingPortfolio = false);
+      if (mounted) {
+        setState(() {
+          _loadingPortfolio = false;
+          _portfolioLoadFailed = true;
+        });
+      }
     }
   }
 
@@ -234,40 +259,143 @@ class _ZakatCalculatorScreenState extends State<ZakatCalculatorScreen>
       );
     }
 
-    if (_loadingPortfolio) {
+    // Only a full-screen spinner on the very FIRST load — once the user has
+    // inputs on screen (gold/silver/cash) and taps Recalculate, replacing
+    // the whole tab would discard what they just typed and their scroll
+    // position. Subsequent loads show a spinner in the button instead
+    // (see the OutlinedButton below).
+    if (_loadingPortfolio && _portfolio == null) {
       return const Center(
         child: CircularProgressIndicator(color: SocialTokens.cyan),
       );
     }
 
-    final data = _portfolio ?? {'total_zakat': 0.0, 'breakdown': []};
+    final data = _portfolio ??
+        {'total_zakat': 0.0, 'total_wealth': 0.0, 'nisab_met': false, 'breakdown': []};
     final total = (data['total_zakat'] as num?)?.toDouble() ?? 0.0;
+    final totalWealth = (data['total_wealth'] as num?)?.toDouble() ?? 0.0;
+    final nisabThreshold = (data['nisab_threshold'] as num?)?.toDouble() ?? 0.0;
+    final nisabMet = data['nisab_met'] == true;
     final breakdown = (data['breakdown'] as List?) ?? [];
-
-    if (total == 0 && breakdown.isEmpty) {
-      return _CenteredEmpty(
-        palette: palette,
-        icon: Icons.show_chart_rounded,
-        accent: SocialTokens.cyan,
-        title: 'zakat.noZakatDue'.tr,
-        subtitle: 'zakat.noZakatDueSubtitle'.tr,
-        ctaLabel: 'common.refresh'.tr,
-        onCta: _loadPortfolio,
-      );
-    }
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
       physics: const BouncingScrollPhysics(),
       children: [
-        _ZakatResultHero(
+        _MiniSectionHeader(
           palette: palette,
-          totalAssets: total / 0.025, // back-calculate ~total assets
-          zakatDue: total,
-          formatPrice: cur.formatPrice,
+          eyebrow: 'zakat.assetsEyebrow'.tr,
+          title: 'zakat.otherAssetsTitle'.tr,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'zakat.otherAssetsSubtitle'.tr,
+          style: TextStyle(color: palette.textSecondary, fontSize: 12.5),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _MoneyInput(
+                palette: palette,
+                controller: _pfCash,
+                label: 'zakat.cashBank'.tr,
+                icon: Icons.account_balance_wallet_outlined,
+                accent: SocialTokens.cyan,
+                prefix: cur.selectedCurrency.symbol,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _MoneyInput(
+                palette: palette,
+                controller: _pfOther,
+                label: 'zakat.otherAssets'.tr,
+                icon: Icons.category_outlined,
+                accent: const Color(0xFF8B5CF6),
+                prefix: cur.selectedCurrency.symbol,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _MoneyInput(
+                palette: palette,
+                controller: _pfGoldGrams,
+                label: 'zakat.goldGrams'.tr,
+                icon: Icons.diamond_outlined,
+                accent: SocialTokens.gold,
+                prefix: 'g',
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _MoneyInput(
+                palette: palette,
+                controller: _pfSilverGrams,
+                label: 'zakat.silverGrams'.tr,
+                icon: Icons.diamond_outlined,
+                accent: SocialTokens.cyanSoft,
+                prefix: 'g',
+              ),
+            ),
+          ],
+        ),
+        if (_portfolioLoadFailed) ...[
+          const SizedBox(height: 10),
+          Text(
+            'zakat.loadFailed'.tr,
+            style: const TextStyle(color: SocialTokens.down, fontSize: 13),
+          ),
+        ],
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton(
+            onPressed: _loadingPortfolio ? null : _loadPortfolio,
+            child: _loadingPortfolio
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text('zakat.recalculate'.tr),
+          ),
         ),
         const SizedBox(height: 18),
+        // The below-nisab banner and the empty state are both informational
+        // headers — neither should hide the per-holding breakdown the
+        // backend already computed and sent; a user should always be able
+        // to see which holdings were counted, regardless of whether zakat
+        // is currently due on them.
+        if (!nisabMet && totalWealth > 0)
+          _NisabNotMetBanner(
+            palette: palette,
+            totalWealth: cur.formatPrice(totalWealth),
+            nisabThreshold: cur.formatPrice(nisabThreshold),
+          )
+        else if (total == 0 && breakdown.isEmpty)
+          _CenteredEmpty(
+            palette: palette,
+            icon: Icons.show_chart_rounded,
+            accent: SocialTokens.cyan,
+            title: 'zakat.noZakatDue'.tr,
+            subtitle: 'zakat.noZakatDueSubtitle'.tr,
+            ctaLabel: 'common.refresh'.tr,
+            onCta: _loadPortfolio,
+          )
+        else
+          _ZakatResultHero(
+            palette: palette,
+            totalAssets: totalWealth,
+            zakatDue: total,
+            formatPrice: cur.formatPrice,
+          ),
         if (breakdown.isNotEmpty) ...[
+          const SizedBox(height: 18),
           _MiniSectionHeader(
             palette: palette,
             eyebrow: 'zakat.breakdownEyebrow'.tr,
@@ -280,9 +408,13 @@ class _ZakatCalculatorScreenState extends State<ZakatCalculatorScreen>
               child: _BreakdownRow(
                 palette: palette,
                 title: item['name']?.toString() ?? '',
-                subtitle: 'zakat.sharesCount'.trParams({
-                  'count': '${item['shares']}',
-                }),
+                // The backend folds cash/gold/silver/other into one
+                // synthetic "OTHER" row with no `shares` key (see
+                // finalizeZakatBreakdown) — show it without a share count
+                // instead of the literal string "null".
+                subtitle: item['shares'] != null
+                    ? 'zakat.sharesCount'.trParams({'count': '${item['shares']}'})
+                    : null,
                 value: cur.formatPrice(
                   ((item['zakat_amount'] ?? 0.0) as num).toDouble(),
                 ),
@@ -290,7 +422,59 @@ class _ZakatCalculatorScreenState extends State<ZakatCalculatorScreen>
             ),
           ),
         ],
+        const SizedBox(height: 16),
+        _NisabNote(palette: palette),
       ],
+    );
+  }
+}
+
+class _NisabNotMetBanner extends StatelessWidget {
+  const _NisabNotMetBanner({
+    required this.palette,
+    required this.totalWealth,
+    required this.nisabThreshold,
+  });
+
+  final SocialPalette palette;
+  final String totalWealth;
+  final String nisabThreshold;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: SocialTokens.gold.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: SocialTokens.gold.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline_rounded, color: SocialTokens.gold, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'zakat.belowNisabTitle'.tr,
+                  style: TextStyle(color: palette.textPrimary, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'zakat.belowNisabSubtitle'.trParams({
+                    'total': totalWealth,
+                    'nisab': nisabThreshold,
+                  }),
+                  style: TextStyle(color: palette.textSecondary, fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -915,12 +1099,12 @@ class _CenteredEmpty extends StatelessWidget {
 class _BreakdownRow extends StatelessWidget {
   final SocialPalette palette;
   final String title;
-  final String subtitle;
+  final String? subtitle;
   final String value;
   const _BreakdownRow({
     required this.palette,
     required this.title,
-    required this.subtitle,
+    this.subtitle,
     required this.value,
   });
 
@@ -965,11 +1149,13 @@ class _BreakdownRow extends StatelessWidget {
                     fontSize: 13.5,
                   ),
                 ),
-                const SizedBox(height: 1),
-                Text(
-                  subtitle,
-                  style: TextStyle(color: palette.textMuted, fontSize: 11),
-                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 1),
+                  Text(
+                    subtitle!,
+                    style: TextStyle(color: palette.textMuted, fontSize: 11),
+                  ),
+                ],
               ],
             ),
           ),

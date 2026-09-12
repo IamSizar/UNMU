@@ -11,6 +11,7 @@ import '../../utils/haptic_utils.dart';
 import '../../utils/platform_utils.dart';
 import '../../utils/explanation_translator.dart';
 import '../../controllers/language_controller.dart';
+import 'certificate_screen.dart';
 
 class StockDetailScreen extends StatefulWidget {
   final String ticker;
@@ -357,6 +358,19 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
           icon: Icon(_isFollowing ? Icons.star : Icons.star_border),
           onPressed: _toggleFollow,
           color: _isFollowing ? HalalFintechTheme.accentGreen : null,
+        ),
+        IconButton(
+          icon: const Icon(Icons.verified_outlined),
+          tooltip: 'certificate.title'.tr,
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => CertificateScreen(
+                ticker: widget.ticker,
+                exchange: widget.exchange,
+              ),
+            ),
+          ),
         ),
       ],
     );

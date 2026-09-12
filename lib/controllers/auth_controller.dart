@@ -297,7 +297,12 @@ class AuthController extends GetxController {
         accessToken: googleAuth.accessToken,
       );
 
-      return _completeFirebaseSignIn(credential);
+      // Awaited (not just returned) so a failure inside
+      // _completeFirebaseSignIn is actually caught below — without await,
+      // this method returns the still-pending Future to its caller and
+      // the catch block here never runs, leaving _isLoading stuck true
+      // and no error surfaced on a failed sign-in.
+      return await _completeFirebaseSignIn(credential);
     } catch (e) {
       debugPrint('signInWithGoogle failed: $e');
       _error.value = 'Google sign-in failed: $e';
@@ -353,7 +358,10 @@ class AuthController extends GetxController {
         if (displayName.isEmpty) displayName = null;
       }
 
-      return _completeFirebaseSignIn(credential, displayName: displayName);
+      // Awaited for the same reason as signInWithGoogle above — otherwise
+      // a failure inside _completeFirebaseSignIn bypasses every catch
+      // clause below it.
+      return await _completeFirebaseSignIn(credential, displayName: displayName);
     } on SignInWithAppleAuthorizationException catch (e) {
       // 1000 = canceled (user closed the sheet). Anything else is a real
       // failure worth surfacing.

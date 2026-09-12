@@ -9,6 +9,16 @@
 # packages, and plugins designed to encourage good coding practices.
 include: package:flutter_lints/flutter.yaml
 
+analyzer:
+  exclude:
+    # Confirmed-defunct duplicate of the app (pre-dates a rename/restructure —
+    # see the repo's growth-memo audit) that still depends on `provider`,
+    # a package this project no longer uses (state is GetX-based under
+    # lib/). Without this exclude, `flutter analyze` reports 100+ errors
+    # from this directory alone, drowning out real issues in the shipped
+    # app and making a CI gate on analyze results meaningless.
+    - "StockAnalyzer-real-stack/**"
+
 linter:
   # The lint rules applied to this project can be customized in the
   # section below to disable rules from the `package:flutter_lints/flutter.yaml`

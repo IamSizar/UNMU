@@ -12,7 +12,9 @@
 package main
 
 import (
+	"context"
 	"database/sql"
+	"fmt"
 	"log"
 	"time"
 
@@ -21,33 +23,87 @@ import (
 	"halalstocks/internal/marketdata"
 	"halalstocks/internal/models"
 	"halalstocks/internal/repositories"
+	"halalstocks/internal/services"
 	"halalstocks/internal/shariah"
 )
 
+// fatalf captures the error to Sentry (if configured), flushes so it
+// actually gets sent before the process exits, then behaves like
+// log.Fatalf. A plain log.Fatalf calls os.Exit immediately, which would
+// otherwise drop whatever Sentry hasn't sent yet — this is the daily
+// production screening job, so a failure here is worth knowing about.
+// fatalf's own flush is load-bearing, not redundant with main()'s
+// deferred FlushErrorTracking: log.Fatal calls os.Exit, which skips
+// deferred functions entirely, so the defer only covers the normal-
+// return path and this is the only flush that runs on a fatal exit.
+func fatalf(tags map[string]string, format string, args ...any) {
+	err := fmt.Errorf(format, args...)
+	services.CaptureError(err, tags)
+	services.FlushErrorTracking(2 * time.Second)
+	log.Fatal(err)
+}
+
 func main() {
+	// Intentionally NOT routed through fatalf/Sentry — Sentry has no DSN
+	// to report to until config.Load() has already succeeded. This is the
+	// one failure mode that can never be captured.
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("config: %v", err)
 	}
+
+	sentryEnabled := services.InitStandaloneErrorTracking()
+	jobTags := map[string]string{"job": "ingest_eodhd"}
+
 	if cfg.EODHDAPIKey == "" {
-		log.Fatal("EODHD_API_KEY is not set in backend/.env")
+		fatalf(jobTags, "EODHD_API_KEY is not set in backend/.env")
 	}
 
 	database, err := db.Connect(cfg)
 	if err != nil {
-		log.Fatalf("db connect: %v", err)
+		fatalf(jobTags, "db connect: %v", err)
 	}
 	defer database.Close()
+	if sentryEnabled {
+		defer services.FlushErrorTracking(2 * time.Second)
+	}
 
 	stockRepo := repositories.NewStockRepository(database)
 	fundRepo := repositories.NewFundamentalRepository(database)
 	shariahRepo := repositories.NewShariahStatusRepository(database)
+	notificationRepo := repositories.NewNotificationRepository(database)
+	portfolioRepo := repositories.NewPortfolioRepository(database)
+
+	// Compliance-drift push — this cron job is what actually changes a
+	// stock's status in production, so it's where the drift alert has to
+	// fire from. FCM is optional here exactly like everywhere else in the
+	// app: if credentials aren't configured, DriftDetector still writes the
+	// admin-visible notification row, it just skips the push fan-out.
+	var notifier *services.Notifier
+	if fcm, ferr := services.NewFCMSender(context.Background()); ferr == nil {
+		userRepo := repositories.NewUserRepository(database)
+		prefsRepo := repositories.NewNotificationPrefsRepository(database)
+		pushTokenRepo := repositories.NewPushTokenRepository(database)
+		notifier = services.NewNotifier(userRepo, prefsRepo, pushTokenRepo, fcm)
+	} else {
+		log.Printf("compliance-drift push disabled (FCM not configured): %v", ferr)
+	}
+	drift := services.NewDriftDetector(notificationRepo, portfolioRepo, notifier)
+
+	// Apply any admin-configured screening thresholds, same as the API server.
+	appSettingsRepo := repositories.NewAppSettingsRepository(database)
+	shariah.SetThresholds(shariah.Thresholds{
+		DebtFail: appSettingsRepo.ScreeningDebtFail(), DebtWarn: appSettingsRepo.ScreeningDebtWarn(),
+		DebtPass: appSettingsRepo.ScreeningDebtPass(), DebtGood: appSettingsRepo.ScreeningDebtGood(),
+		HaramFail: appSettingsRepo.ScreeningHaramFail(), HaramWarn: appSettingsRepo.ScreeningHaramWarn(),
+		HaramPass: appSettingsRepo.ScreeningHaramPass(), HaramGood: appSettingsRepo.ScreeningHaramGood(),
+	})
 
 	prov := marketdata.NewEODHDProvider(cfg.EODHDAPIKey)
 
 	stocks, err := stockRepo.GetAll(1000, 0)
 	if err != nil {
-		log.Fatalf("load stocks: %v", err)
+		fatalf(jobTags, "load stocks: %v", err)
 	}
 	log.Printf("Loaded %d stocks from DB", len(stocks))
 
@@ -101,14 +157,20 @@ func main() {
 		}
 		if err := fundRepo.CreateOrUpdate(fund); err != nil {
 			log.Printf("FAIL  %-6s save fundamentals: %v", st.Ticker, err)
+			services.CaptureError(err, map[string]string{"job": "ingest_eodhd", "ticker": st.Ticker, "stage": "save_fundamentals"})
 			failed++
 			continue
 		}
+
+		// Capture the pre-update status so we can tell if this run actually
+		// changed anything — DriftDetector needs "before" and "after".
+		previousStatus, _ := shariahRepo.GetLatestStatus(st.ID)
 
 		// Re-screen on the real numbers.
 		status, err := shariah.Screen(st, fund)
 		if err != nil {
 			log.Printf("FAIL  %-6s screen: %v", st.Ticker, err)
+			services.CaptureError(err, map[string]string{"job": "ingest_eodhd", "ticker": st.Ticker, "stage": "screen"})
 			failed++
 			continue
 		}
@@ -119,9 +181,11 @@ func main() {
 			status.AsOfDate.Day(), 0, 0, 0, 0, time.UTC)
 		if err := shariahRepo.CreateOrUpdate(&status); err != nil {
 			log.Printf("FAIL  %-6s save status: %v", st.Ticker, err)
+			services.CaptureError(err, map[string]string{"job": "ingest_eodhd", "ticker": st.Ticker, "stage": "save_status"})
 			failed++
 			continue
 		}
+		drift.Check(st, previousStatus, &status)
 
 		grade := ""
 		if status.Grade.Valid {

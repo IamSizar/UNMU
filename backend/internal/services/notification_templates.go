@@ -30,6 +30,7 @@ const (
 	CatSubscriptions NotifCategory = "subscriptions"
 	CatCommunities   NotifCategory = "communities"
 	CatMarketing     NotifCategory = "marketing"
+	CatCompliance    NotifCategory = "compliance"
 )
 
 // NotifTemplate is the bilingual push copy for one notification type.
@@ -145,6 +146,26 @@ var notifTemplates = map[string]NotifTemplate{
 		BodyEn:   "The poll results are in.",
 		TitleAr:  "أُغلق الاستطلاع في {community}",
 		BodyAr:   "ظهرت نتائج الاستطلاع.",
+	},
+
+	// Compliance drift (fanned out to holders/watchers of the stock) -----
+	// Sent when a stock in someone's watchlist or portfolio flips Shariah
+	// status — the single most-requested alert in halal investing (a
+	// holding going HALAL→HARAM previously only produced a user-less
+	// notification row nobody ever saw; see IngestionService).
+	"compliance_status_change": {
+		Category: CatCompliance,
+		TitleEn:  "{ticker} compliance changed",
+		BodyEn:   "{ticker} moved from {oldStatus} to {newStatus}.",
+		TitleAr:  "تغيّر توافق {ticker}",
+		BodyAr:   "انتقل {ticker} من {oldStatus} إلى {newStatus}.",
+	},
+	"purification_rate_change": {
+		Category: CatCompliance,
+		TitleEn:  "{ticker} purification rate changed",
+		BodyEn:   "{ticker}'s non-compliant income ratio changed from {oldRate}% to {newRate}%.",
+		TitleAr:  "تغيّرت نسبة تطهير {ticker}",
+		BodyAr:   "تغيّرت نسبة الدخل غير المتوافق لـ {ticker} من {oldRate}% إلى {newRate}%.",
 	},
 
 	// Support -------------------------------------------------------------

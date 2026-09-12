@@ -23,6 +23,17 @@ func main() {
 	}
 	defer database.Close()
 
+	// Apply any admin-configured screening thresholds, same as the API
+	// server — otherwise this tool's screening output would silently
+	// disagree with what the live app actually shows users.
+	appSettingsRepo := repositories.NewAppSettingsRepository(database)
+	shariah.SetThresholds(shariah.Thresholds{
+		DebtFail: appSettingsRepo.ScreeningDebtFail(), DebtWarn: appSettingsRepo.ScreeningDebtWarn(),
+		DebtPass: appSettingsRepo.ScreeningDebtPass(), DebtGood: appSettingsRepo.ScreeningDebtGood(),
+		HaramFail: appSettingsRepo.ScreeningHaramFail(), HaramWarn: appSettingsRepo.ScreeningHaramWarn(),
+		HaramPass: appSettingsRepo.ScreeningHaramPass(), HaramGood: appSettingsRepo.ScreeningHaramGood(),
+	})
+
 	// Initialize repositories
 	stockRepo := repositories.NewStockRepository(database)
 	fundamentalRepo := repositories.NewFundamentalRepository(database)

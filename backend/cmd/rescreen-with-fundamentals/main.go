@@ -25,6 +25,18 @@ func main() {
 	}
 	defer database.Close()
 
+	// Apply any admin-configured screening thresholds, same as the API
+	// server and ingest_eodhd — without this, this tool would silently
+	// re-grade stocks using the compiled-in defaults even after an admin
+	// has changed the live methodology via the admin dashboard.
+	appSettingsRepo := repositories.NewAppSettingsRepository(database)
+	shariah.SetThresholds(shariah.Thresholds{
+		DebtFail: appSettingsRepo.ScreeningDebtFail(), DebtWarn: appSettingsRepo.ScreeningDebtWarn(),
+		DebtPass: appSettingsRepo.ScreeningDebtPass(), DebtGood: appSettingsRepo.ScreeningDebtGood(),
+		HaramFail: appSettingsRepo.ScreeningHaramFail(), HaramWarn: appSettingsRepo.ScreeningHaramWarn(),
+		HaramPass: appSettingsRepo.ScreeningHaramPass(), HaramGood: appSettingsRepo.ScreeningHaramGood(),
+	})
+
 	// Initialize repositories
 	fundamentalRepo := repositories.NewFundamentalRepository(database)
 

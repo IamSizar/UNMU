@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"halalstocks/internal/models"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 type StockRepository struct {
@@ -356,4 +358,42 @@ func (r *StockRepository) GetByID(id int64) (*models.Stock, error) {
 		return nil, nil
 	}
 	return stock, err
+}
+
+// GetByIDs fetches multiple stocks in one query, keyed by ID. Missing IDs
+// (already deleted, or a stale portfolio row) are simply absent from the
+// returned map rather than erroring — callers should treat a missing key
+// the same way a nil GetByID result was already handled.
+//
+// Added to fix an N+1 pattern in GetPortfolio/CalculatePurification, which
+// previously called GetByID once per portfolio row.
+func (r *StockRepository) GetByIDs(ids []int64) (map[int64]*models.Stock, error) {
+	result := make(map[int64]*models.Stock, len(ids))
+	if len(ids) == 0 {
+		return result, nil
+	}
+
+	rows, err := r.db.Query(`
+		SELECT id, ticker, exchange, name, country, region_code, sector, industry, description, market_cap, is_active, created_at, updated_at
+		FROM stocks
+		WHERE id = ANY($1)
+	`, pq.Array(ids))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		stock := &models.Stock{}
+		if err := rows.Scan(
+			&stock.ID, &stock.Ticker, &stock.Exchange, &stock.Name,
+			&stock.Country, &stock.RegionCode, &stock.Sector, &stock.Industry,
+			&stock.Description, &stock.MarketCap, &stock.IsActive,
+			&stock.CreatedAt, &stock.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		result[stock.ID] = stock
+	}
+	return result, rows.Err()
 }

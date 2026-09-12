@@ -515,10 +515,17 @@ class UploadService {
       Future<void> uploadOne(int i) async {
         await sem.acquire();
         try {
-          final part = state!.parts[i];
+          // Captured once, non-null, so every access below is sound —
+          // `state` itself is a mutable outer-scope var, and Dart can't
+          // promote it to non-null across this async closure's boundary
+          // (it could theoretically be reassigned before the closure
+          // runs), so referencing `state` directly here was only
+          // null-safe by luck at some call sites and not others.
+          final s = state!;
+          final part = s.parts[i];
           if (part.etag != null) return; // finished in an earlier pass
-          final start = i * state.partSize;
-          final end = (start + state.partSize).clamp(0, totalSize);
+          final start = i * s.partSize;
+          final end = (start + s.partSize).clamp(0, totalSize);
 
           // Per-part open/seek/read/close. RandomAccessFile is not
           // thread-safe; keeping the handle scoped per-worker avoids
@@ -537,10 +544,10 @@ class UploadService {
           part.etag = etag;
           // Recompute progress from authoritative state each time so the
           // bar never jumps backward across passes.
-          onProgress?.call(state.doneCount / state.parts.length);
+          onProgress?.call(s.doneCount / s.parts.length);
           // Persist after every success so a crash here only loses
           // (at most) the part currently mid-flight.
-          await _saveUploadState(state);
+          await _saveUploadState(s);
         } finally {
           sem.release();
         }

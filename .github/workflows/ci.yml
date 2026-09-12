@@ -1,0 +1,114 @@
+name: ci
+
+# Runs on every push and PR against main — the "build → test" gate the
+# audit flagged as missing (the only prior workflow, version-bump.yml, is
+# a manual release tool, not a CI gate). Backend and admin-dashboard are
+# independent jobs so a failure in one doesn't hide a failure in the
+# other, and both run in parallel.
+#
+# Flutter is intentionally NOT run as `flutter test` yet: there are zero
+# Flutter test files in the repo, so a test step here would be a green
+# checkmark asserting nothing. Running `flutter analyze` in the meantime,
+# which at least catches Dart-level static errors.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Read-only: this workflow only builds/tests, it never pushes or comments,
+# so GITHUB_TOKEN is scoped down instead of inheriting the repo/org default
+# (which can be read/write depending on settings).
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (Go)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          # These two paths are resolved relative to the REPO ROOT, not
+          # the `defaults.run.working-directory: backend` set above —
+          # that default only applies to `run:` step shells, not to this
+          # action's own inputs. Do not "simplify" to go.mod/go.sum.
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go build
+        run: go build ./...
+
+      - name: go test
+        run: go test ./...
+
+  admin-dashboard:
+    name: Admin Dashboard (TypeScript)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: admin-dashboard
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: admin-dashboard/package-lock.json
+
+      - name: npm ci
+        run: npm ci
+
+      # NOT a hard gate yet: `npm run build` currently fails on ~15
+      # pre-existing TypeScript errors (untyped .jsx page imports missing
+      # declaration files, ImportMeta.env not typed, a few loose i18n key
+      # types) that predate this workflow and are unrelated to any single
+      # change — see the growth-memo audit's "no CI pipeline" finding for
+      # how this went unnoticed. Runs and reports every push so the debt
+      # is visible, but doesn't fail the pipeline until it's paid down.
+      # Flip continue-on-error to false once `npm run build` is clean.
+      - name: Build (tsc + vite)
+        id: build
+        run: npm run build
+        continue-on-error: true
+
+      - name: Flag known pre-existing build debt
+        if: steps.build.outcome == 'failure'
+        run: |
+          echo "::warning::admin-dashboard build failed — see the pre-existing-debt note on the 'Build (tsc + vite)' step above. This does not fail the pipeline yet, but should be paid down."
+
+  flutter-analyze:
+    name: Flutter (static analysis only — no tests exist yet)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: flutter pub get
+        run: flutter pub get
+
+      # --no-fatal-infos: this Flutter version defaults fatal-infos to ON,
+      # which fails the build on info-level lints alone. The repo carries
+      # 11 pre-existing info-level issues (deprecated API usage, a couple
+      # of already-`mounted`-guarded async-context checks) across files
+      # this PR never touched — real code-quality debt worth paying down,
+      # but not something a CI gate should block every unrelated PR on.
+      # Errors and warnings still fail the build.
+      - name: flutter analyze
+        run: flutter analyze --no-fatal-infos
