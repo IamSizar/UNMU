@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"halalstocks/internal/models"
 	"halalstocks/internal/repositories"
@@ -137,16 +139,48 @@ func (h *IAPHandler) VerifyApple(c *gin.Context) {
 	if expertID := strings.TrimSpace(body.ExpertID); expertID != "" {
 		_ = h.activateExpertSubscription(userID, expertID, verified, tx.ID)
 	}
+	// proActivated distinguishes "not a Pro SKU" from "was a Pro SKU but
+	// activation failed" from "activated successfully", so the Flutter
+	// client can tell the difference instead of assuming success just
+	// because the HTTP call returned 200 — a verified-but-unactivated
+	// purchase should prompt a retry, not silently show as Premium only
+	// after the user happens to reload.
+	var proActivated *bool
+	if isProProductID(verified.ProductID) {
+		// The general app-wide Pro tier — see activateProSubscription's
+		// doc comment. This was the one gap that made the whole feature a
+		// no-op end to end: the Flutter purchase screen and the real IAP
+		// wiring both already existed, but nothing on this side ever
+		// called UserRepository.UpdateSubscription, so a completed
+		// purchase never actually granted Premium.
+		ok := true
+		if err := h.activateProSubscription(userID, verified); err != nil {
+			ok = false
+			// Best-effort, matching activateExpertSubscription's pattern:
+			// the payment is already verified and the transaction is
+			// already persisted above, so we don't fail the whole request
+			// over an entitlement-write error — but it IS worth knowing
+			// about, since it means a paying user doesn't get Premium.
+			services.CaptureError(err, map[string]string{
+				"handler": "iap.VerifyApple", "stage": "activate_pro",
+			})
+		}
+		proActivated = &ok
+	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"id":                   tx.ID,
-		"transactionId":        tx.TransactionID,
-		"productId":            tx.ProductID,
-		"environment":          tx.Environment,
-		"purchaseDate":         tx.PurchaseDate,
-		"expiresDate":          tx.ExpiresDate,
-		"new":                  inserted,
-	})
+	response := gin.H{
+		"id":            tx.ID,
+		"transactionId": tx.TransactionID,
+		"productId":     tx.ProductID,
+		"environment":   tx.Environment,
+		"purchaseDate":  tx.PurchaseDate,
+		"expiresDate":   tx.ExpiresDate,
+		"new":           inserted,
+	}
+	if proActivated != nil {
+		response["proActivated"] = *proActivated
+	}
+	c.JSON(http.StatusOK, response)
 }
 
 // activateExpertSubscription is best-effort. The cash/FIB flow already
@@ -181,6 +215,61 @@ func (h *IAPHandler) activateExpertSubscription(
 		verified.ExpiresDate,
 	)
 }
+
+// proProductIDs are the SKUs for the general app-wide Premium tier,
+// defined client-side in lib/services/iap_service.dart
+// (IAPService.monthlySubscriptionId/annualSubscriptionId). Kept as an
+// explicit allowlist rather than a substring/suffix heuristic (like
+// activateExpertSubscription's ".monthly"/".yearly" check) because this
+// path writes directly to users.subscription_tier — a typo'd pattern
+// match here would silently grant or deny Premium to every purchaser.
+var proProductIDs = map[string]bool{
+	"com.unmu.premium.monthly": true,
+	"com.unmu.premium.yearly":  true,
+}
+
+func isProProductID(productID string) bool {
+	return proProductIDs[strings.ToLower(strings.TrimSpace(productID))]
+}
+
+// activateProSubscription grants the app-wide Premium tier after Apple
+// has verified the purchase — the counterpart to activateExpertSubscription
+// for the general (non-expert-scoped) Pro tier.
+//
+// A verified receipt only proves the receipt is authentic, NOT that the
+// subscription period it describes is still current — Apple's
+// verifyReceipt endpoint has no separate "is this active right now"
+// flag, and pickLatestTransaction (internal/services/apple_iap_verifier.go)
+// doesn't check expiry either. Without an explicit check here, a user
+// could replay their own old, now-expired-or-cancelled receipt at any
+// time to re-grant themselves Premium indefinitely. So: reject (as a
+// no-op, not an error — the payment WAS real, just not current) any
+// transaction whose ExpiresDate has already passed.
+//
+// SHARIAH-REVIEW: N/A (not a fiqh question) but flagged for product
+// awareness — this only handles the ACTIVATION path, gated by the expiry
+// check above. There is still no corresponding downgrade-on-expiry job:
+// if a subscription lapses (cancelled, payment failed) without a fresh
+// verify call, subscription_status stays "ACTIVE" until whatever
+// end_date was last recorded passes — there's no proactive sweep that
+// flips it to EXPIRED the moment it lapses. Apple's App Store Server
+// Notifications (a webhook, not implemented here) is the standard way to
+// learn about cancellations without waiting for the client to call this
+// endpoint again; until that exists, entitlement freshness depends on
+// the client re-verifying periodically, not on the backend knowing
+// proactively.
+func (h *IAPHandler) activateProSubscription(userID int64, verified *services.AppleVerifiedTransaction) error {
+	if verified.ExpiresDate != nil && verified.ExpiresDate.Before(timeNow()) {
+		return fmt.Errorf("apple-iap: receipt for product %s has already expired (expiresDate=%s) — not activating Pro",
+			verified.ProductID, verified.ExpiresDate.Format(time.RFC3339))
+	}
+	return h.userRepo.UpdateSubscription(userID, "PREMIUM", "ACTIVE", verified.ExpiresDate)
+}
+
+// timeNow — a var, not a direct time.Now() call, so a future test can
+// stub "now" without needing a full clock-injection refactor of this
+// handler.
+var timeNow = time.Now
 
 // intToStr — tiny helper to avoid pulling strconv into the import set
 // twice (the package already uses it via gin).

@@ -37,6 +37,9 @@ const Map<String, String> subscriptionsEn = {
 
   // ── Premium subscription screen (subscription_screen.dart) ──
   'subscription.title': 'Subscription Plans',
+  'subscription.activationFailedTitle': "Payment received, activation pending",
+  'subscription.activationFailedBody':
+      "Your payment went through, but we couldn't activate Premium yet. This usually resolves itself — try Restore Purchases in a moment, or contact support if it persists.",
   'subscription.planFree': 'Free',
   'subscription.planPremiumMonthly': 'Premium Monthly',
   'subscription.planPremiumAnnual': 'Premium Annual',
@@ -186,6 +189,9 @@ const Map<String, String> subscriptionsAr = {
 
   // ── Premium subscription screen (subscription_screen.dart) ──
   'subscription.title': 'خطط الاشتراك',
+  'subscription.activationFailedTitle': 'تم استلام الدفع، التفعيل قيد الانتظار',
+  'subscription.activationFailedBody':
+      'تمت عملية الدفع بنجاح، لكن لم نتمكن من تفعيل النسخة المميزة بعد. عادة ما يُحل هذا تلقائياً — جرّب "استعادة المشتريات" بعد لحظات، أو تواصل مع الدعم إذا استمرت المشكلة.',
   'subscription.planFree': 'مجاني',
   'subscription.planPremiumMonthly': 'بريميوم شهري',
   'subscription.planPremiumAnnual': 'بريميوم سنوي',
