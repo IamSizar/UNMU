@@ -190,6 +190,30 @@ class ApiService {
     }
   }
 
+  // Compliance certificate — see backend/internal/handlers/public.go's
+  // GetComplianceCertificate. Public endpoint, no auth token needed.
+  static Future<CertificateResult> getComplianceCertificate(
+    String ticker,
+    String exchange,
+  ) async {
+    try {
+      final uri = Uri.parse('$baseUrl/stocks/$ticker/certificate')
+          .replace(queryParameters: {'exchange': exchange});
+      final response = await http.get(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+      );
+      if (response.statusCode == 200) {
+        return CertificateResult(data: json.decode(response.body));
+      }
+      // 404 = no screening on record for this stock (or stock not found)
+      // — a distinct, non-retryable case from a network/server failure.
+      return CertificateResult(data: null, notFound: response.statusCode == 404);
+    } catch (e) {
+      return const CertificateResult(data: null, notFound: false);
+    }
+  }
+
   // Referral program — see backend/internal/handlers/referral.go.
   static Future<Map<String, dynamic>?> getMyReferralCode(String token) async {
     try {
@@ -412,4 +436,14 @@ class ApiService {
       return null;
     }
   }
+}
+
+/// Result of ApiService.getComplianceCertificate — distinguishes "no
+/// screening on record" (notFound: true, a 404, not retryable with the
+/// same request) from a transient network/server failure (data == null,
+/// notFound == false, retry might succeed).
+class CertificateResult {
+  const CertificateResult({required this.data, this.notFound = false});
+  final Map<String, dynamic>? data;
+  final bool notFound;
 }

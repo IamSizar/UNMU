@@ -152,6 +152,22 @@ const Map<String, String> stocksEn = {
   'referral.signInSubtitle': 'Sign in to get your referral code.',
   'referral.errorLoading': 'Failed to load your referral code',
 
+  // ── Compliance certificate ──────────────────────────────────
+  'certificate.title': 'Compliance Certificate',
+  'certificate.eyebrow': 'Shariah Compliance Record',
+  'certificate.grade': 'Grade @grade',
+  'certificate.debtRatio': 'Debt ratio',
+  'certificate.haramIncomeRatio': 'Non-compliant income',
+  'certificate.asOfDate': 'Screened as of',
+  'certificate.issuedAt': 'Certificate issued',
+  'certificate.methodologyTitle': 'Screening methodology',
+  'certificate.debtHardFail': 'Debt ratio hard-fail floor',
+  'certificate.haramHardFail': 'Non-compliant income hard-fail floor',
+  'certificate.errorLoading': 'Failed to load certificate',
+  'certificate.notFound': 'No compliance screening on record for this stock yet',
+  'certificate.shareText':
+      '@ticker is screened @status on UNMU\'s Shariah compliance methodology.',
+
   // ── Tools landing ───────────────────────────────────────────
   'tools.title': 'Tools',
   'tools.zakatTitle': 'Zakat',
@@ -444,6 +460,21 @@ const Map<String, String> stocksAr = {
   'referral.apply': 'تطبيق',
   'referral.signInSubtitle': 'سجل دخولك للحصول على رمز الإحالة الخاص بك.',
   'referral.errorLoading': 'تعذّر تحميل رمز الإحالة',
+
+  // ── Compliance certificate ──────────────────────────────────
+  'certificate.title': 'شهادة التوافق الشرعي',
+  'certificate.eyebrow': 'سجل التوافق الشرعي',
+  'certificate.grade': 'الدرجة @grade',
+  'certificate.debtRatio': 'نسبة الدين',
+  'certificate.haramIncomeRatio': 'الدخل غير المتوافق',
+  'certificate.asOfDate': 'تاريخ الفرز',
+  'certificate.issuedAt': 'تاريخ إصدار الشهادة',
+  'certificate.methodologyTitle': 'منهجية الفرز',
+  'certificate.debtHardFail': 'حد الرسوب لنسبة الدين',
+  'certificate.haramHardFail': 'حد الرسوب للدخل غير المتوافق',
+  'certificate.errorLoading': 'تعذّر تحميل الشهادة',
+  'certificate.notFound': 'لا يوجد فرز شرعي مسجل لهذا السهم بعد',
+  'certificate.shareText': 'تم فرز @ticker بحالة @status وفق منهجية التوافق الشرعي في UNMU.',
 
   // ── Tools landing ───────────────────────────────────────────
   'tools.title': 'الأدوات',
