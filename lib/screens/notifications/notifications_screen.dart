@@ -148,7 +148,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             final exchange = notification['exchange']?.toString();
 
                             if (ticker != null && exchange != null && ticker.isNotEmpty && exchange.isNotEmpty) {
+                              // `context` here is itemBuilder's own closure
+                              // parameter, not this State's `context`
+                              // getter, so the analyzer can't tie it to the
+                              // `mounted` check above even though it's the
+                              // same list item's (still-live) context.
                               Navigator.push(
+                                // ignore: use_build_context_synchronously
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => StockDetailScreen(

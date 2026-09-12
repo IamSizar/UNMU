@@ -223,7 +223,7 @@ class _PollCreatorSheetState extends State<PollCreatorSheet> {
                             ),
                             Switch.adaptive(
                               value: _isAnonymous,
-                              activeColor: SocialTokens.cyan,
+                              activeThumbColor: SocialTokens.cyan,
                               onChanged: (v) {
                                 HapticFeedback.selectionClick();
                                 setState(() => _isAnonymous = v);

@@ -178,7 +178,13 @@ class RealtimeController extends GetxController {
       borderRadius: 12,
     );
     Future.delayed(const Duration(milliseconds: 2500), () {
+      // Get.context re-fetches the app's current navigator context fresh
+      // at callback-execution time (not a widget-local `context` captured
+      // before this delay) — there's no `mounted` to check against since
+      // this is a GetxController, not a State, so the null-check below is
+      // the actual safety guard the lint is asking for.
       final ctx = Get.context;
+      // ignore: use_build_context_synchronously
       if (ctx != null) Phoenix.rebirth(ctx);
     });
   }

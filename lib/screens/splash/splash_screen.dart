@@ -205,7 +205,7 @@ class _SplashScreenState extends State<SplashScreen>
                   transform: Matrix4.identity()
                     ..setEntry(3, 2, 0.001)
                     ..rotateY(_wordTilt.value)
-                    ..scale(_wordScale.value),
+                    ..scaleByDouble(_wordScale.value, _wordScale.value, _wordScale.value, 1),
                   child: Opacity(
                     opacity: _wordOpacity.value,
                     child: _Wordmark(shineProgress: _shineProgress.value),
