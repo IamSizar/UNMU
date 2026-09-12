@@ -90,6 +90,32 @@ func (r *UserRepository) GetByID(id int64) (*models.User, error) {
 	return user, err
 }
 
+// ListEmailable returns id/email/name/locale for every non-deleted user
+// with a non-empty email, in one query. Used by cmd/weekly_digest instead
+// of AllUserIDs()+GetByID-per-user, which would be an N+1 over the whole
+// user base for something that runs as a single batch job anyway.
+func (r *UserRepository) ListEmailable() ([]*models.User, error) {
+	rows, err := r.db.Query(`
+		SELECT id, email, name, COALESCE(locale, 'en')
+		FROM users
+		WHERE deleted_at IS NULL AND email IS NOT NULL AND email != ''
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []*models.User
+	for rows.Next() {
+		u := &models.User{}
+		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.Locale); err != nil {
+			return nil, err
+		}
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}
+
 // AllUserIDs returns the ids of all non-deleted users. Used by the
 // temporary notification smoke-test endpoint.
 func (r *UserRepository) AllUserIDs() ([]int64, error) {
