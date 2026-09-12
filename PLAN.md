@@ -40,11 +40,10 @@ engineering complete but the exact methodology constants clearly flagged
 - [x] Compliance certificate export — backend done (commit f7c6989):
       `GET /api/stocks/:ticker/certificate`. Flutter UI (shareable screen/image)
       not built yet.
-- [x] Error monitoring — backend done (commit 78ddcc6): Sentry wired into
-      cmd/api/main.go with a PII-scrubbing BeforeSend hook, soft-fails when
-      SENTRY_DSN unset. NOT wired into Flutter, admin dashboard, or the cron
-      jobs (ingest_eodhd, weekly_digest) yet — CaptureError() exported for
-      the crons but unused.
+- [x] Error monitoring — done for backend (commits 78ddcc6, 9b71423): Sentry
+      wired into cmd/api/main.go AND the cron jobs (ingest_eodhd, weekly_digest)
+      with a PII-scrubbing BeforeSend hook, soft-fails when SENTRY_DSN unset.
+      NOT wired into Flutter or the admin dashboard.
 - [x] Basic CI pipeline — done (commit 692b197): .github/workflows/ci.yml (backend
       go build/vet/test, admin-dashboard npm build as non-blocking known-debt,
       flutter analyze). Also fixed analysis_options.yaml to exclude the defunct
