@@ -209,6 +209,8 @@ func main() {
 	toolsHandler := handlers.NewToolsHandler(portfolioRepo, stockRepo, shariahRepo, fundamentalRepo)
 	adsHandler := handlers.NewAdsHandler(adRepo)
 	promoHandler := handlers.NewPromoHandler(promoRepo)
+	referralRepo := repositories.NewReferralRepository(database)
+	referralHandler := handlers.NewReferralHandler(referralRepo, promoRepo)
 	promoHandler.SetAudits(auditRepo)
 	marketHandler := handlers.NewMarketHandler(marketProvider)
 	// SocialHandler needs the post-interactions + post-saves repos (used
@@ -620,6 +622,9 @@ func main() {
 		// Tools
 		protected.GET("/tools/zakat", toolsHandler.CalculateZakat)
 		protected.GET("/tools/purification", toolsHandler.CalculatePurification)
+		protected.GET("/referrals/my-code", referralHandler.GetMyCode)
+		protected.GET("/referrals/stats", referralHandler.GetStats)
+		protected.POST("/referrals/redeem", referralHandler.Redeem)
 
 		// Promo codes
 		protected.POST("/promo/validate", promoHandler.ValidatePromo)
