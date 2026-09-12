@@ -84,6 +84,46 @@ const (
 	MaxCashReceivablesRatio = 0.70 // 70% - if enabled, classify as MIXED
 )
 
+// Thresholds is the full set of percentage cut-points the grading ladder in
+// screener.go uses. These were previously hardcoded numbers scattered through
+// checkFinancialRatios' if/else chain; they're centralized here so an admin
+// can override the methodology (e.g. a stricter house standard, or a
+// different fiqh council's ratios) without a code change and redeploy.
+//
+// SHARIAH-REVIEW: DefaultThresholds below reproduces the exact numbers this
+// screener already shipped with (AAOIFI-adjacent, not identical to any single
+// published standard). Any admin override should be confirmed with a
+// qualified Shariah advisor before it changes what users see as "HALAL".
+type Thresholds struct {
+	DebtFail float64 // debt ratio %  above this -> HARAM (F)
+	DebtWarn float64 // debt ratio %  above this -> DOUBTFUL (D)
+	DebtPass float64 // debt ratio %  above this -> HALAL, Grade C
+	DebtGood float64 // debt ratio %  above this -> HALAL, Grade B (else Grade A)
+
+	HaramFail float64 // haram income % above this -> HARAM (F)
+	HaramWarn float64 // haram income % above this -> DOUBTFUL (D)
+	HaramPass float64 // haram income % above this -> HALAL, Grade C
+	HaramGood float64 // haram income % above this -> HALAL, Grade B (else Grade A)
+}
+
+// DefaultThresholds matches the numbers screener.go used before this became
+// configurable — kept as the fallback if no admin override is loaded.
+var DefaultThresholds = Thresholds{
+	DebtFail: 33, DebtWarn: 30, DebtPass: 20, DebtGood: 10,
+	HaramFail: 10, HaramWarn: 5, HaramPass: 3, HaramGood: 1,
+}
+
+var activeThresholds = DefaultThresholds
+
+// SetThresholds overrides the ladder used by Screen(). Called once at startup
+// with whatever the admin has configured (falling back to DefaultThresholds),
+// and again immediately after an admin edits the settings, so the change is
+// live without a restart.
+func SetThresholds(t Thresholds) { activeThresholds = t }
+
+// ActiveThresholds returns the ladder currently in effect.
+func ActiveThresholds() Thresholds { return activeThresholds }
+
 // CheckHaramActivity checks if sector, industry, or description contains haram keywords
 // Section 1 - Activity Screening: If activity is haram → status = NOT_HALAL
 // Rule: If activity ∈ {Banking, Interest-based Finance, Gambling, Alcohol, Tobacco, Pork, Adult Content, Prohibited Weapons} → status = NOT_HALAL

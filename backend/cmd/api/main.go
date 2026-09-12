@@ -10,6 +10,7 @@ import (
 	"halalstocks/internal/realtime"
 	"halalstocks/internal/repositories"
 	"halalstocks/internal/services"
+	"halalstocks/internal/shariah"
 	"halalstocks/pkg/jwt"
 	"log"
 	"os"
@@ -468,6 +469,15 @@ func main() {
 	// kill-switch (master + chat + posts sub-toggles).
 	appSettingsRepo := repositories.NewAppSettingsRepository(database)
 	adminSettingsHandler := handlers.NewAdminSettingsHandler(appSettingsRepo, auditRepo)
+
+	// Load any admin-configured Shariah screening thresholds so the screener
+	// (internal/shariah) uses them instead of its compiled-in defaults.
+	shariah.SetThresholds(shariah.Thresholds{
+		DebtFail: appSettingsRepo.ScreeningDebtFail(), DebtWarn: appSettingsRepo.ScreeningDebtWarn(),
+		DebtPass: appSettingsRepo.ScreeningDebtPass(), DebtGood: appSettingsRepo.ScreeningDebtGood(),
+		HaramFail: appSettingsRepo.ScreeningHaramFail(), HaramWarn: appSettingsRepo.ScreeningHaramWarn(),
+		HaramPass: appSettingsRepo.ScreeningHaramPass(), HaramGood: appSettingsRepo.ScreeningHaramGood(),
+	})
 
 	// Public routes
 	api := router.Group("/api")
@@ -1038,6 +1048,8 @@ func main() {
 		// Feature flags — community kill-switch (master + chat + posts).
 		admin.GET("/settings", adminSettingsHandler.Get)
 		admin.PATCH("/settings", adminSettingsHandler.Update)
+		admin.GET("/screening-thresholds", adminSettingsHandler.GetScreeningThresholds)
+		admin.PUT("/screening-thresholds", adminSettingsHandler.UpdateScreeningThresholds)
 
 		admin.GET("/expert-applications", expertAppHandler.List)
 		// Pending-count for the sidebar badge (A12). Cheap COUNT(*) — must

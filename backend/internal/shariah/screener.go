@@ -54,52 +54,51 @@ func Screen(stock *models.Stock, fundamental *models.Fundamental) (models.Sharia
 		// Build detailed explanation components
 		var debtComment, haramComment string
 
-		// Logic for Grading
-		// Check F (Fail) conditions first
-		// Standard AAOIFI: Debt > 33% (usually 30-33 depending on scholar), Haram Income > 5%
-		if debt > 33 {
+		// Logic for Grading — cut-points come from activeThresholds, which an
+		// admin can override (see internal/shariah/rules.go); DefaultThresholds
+		// reproduces the ladder this screener always used, so behavior is
+		// unchanged until someone actually edits the settings.
+		t := activeThresholds
+		if debt > t.DebtFail {
 			status.Status = "HARAM"
 			status.Grade = sql.NullString{String: "F", Valid: true}
-			debtComment = fmt.Sprintf("Debt ratio: %.2f%% (Critically High > 33%%)", debt)
-		} else if haram > 10 {
+			debtComment = fmt.Sprintf("Debt ratio: %.2f%% (Critically High > %.0f%%)", debt, t.DebtFail)
+		} else if haram > t.HaramFail {
 			// Extremely high impure income
 			status.Status = "HARAM"
 			status.Grade = sql.NullString{String: "F", Valid: true}
-			haramComment = fmt.Sprintf("Non-compliant income: %.2f%% (Critically High > 10%%)", haram)
-		} else if debt > 30 || haram > 5 {
+			haramComment = fmt.Sprintf("Non-compliant income: %.2f%% (Critically High > %.0f%%)", haram, t.HaramFail)
+		} else if debt > t.DebtWarn || haram > t.HaramWarn {
 			// Grade D: Borderline / Warning
-			// Technically passed hard cap of 33% debt if between 30-33, but risky.
-			// Or income between 5-10% (some strictly reject >5%, others might check source).
 			status.Status = "DOUBTFUL" // Or MIXED
 			status.Grade = sql.NullString{String: "D", Valid: true}
 
-			if debt > 30 {
-				debtComment = fmt.Sprintf("Debt ratio: %.2f%% (High Risk 30-33%%)", debt)
+			if debt > t.DebtWarn {
+				debtComment = fmt.Sprintf("Debt ratio: %.2f%% (High Risk %.0f-%.0f%%)", debt, t.DebtWarn, t.DebtFail)
 			}
-			if haram > 5 {
-				haramComment = fmt.Sprintf("Non-compliant income: %.2f%% (High Risk > 5%%)", haram)
+			if haram > t.HaramWarn {
+				haramComment = fmt.Sprintf("Non-compliant income: %.2f%% (High Risk > %.0f%%)", haram, t.HaramWarn)
 			}
-		} else if debt > 20 || haram > 3 {
+		} else if debt > t.DebtPass || haram > t.HaramPass {
 			// Grade C: Standard Pass
-			// Standard "Halal" by most screener definitions, but not "Pure".
-			status.Status = "HALAL" // Compliant per AAOIFI
+			status.Status = "HALAL" // Compliant per active methodology
 			status.Grade = sql.NullString{String: "C", Valid: true}
 
-			if debt > 20 {
-				debtComment = fmt.Sprintf("Debt ratio: %.2f%% (Acceptable < 30%%)", debt)
+			if debt > t.DebtPass {
+				debtComment = fmt.Sprintf("Debt ratio: %.2f%% (Acceptable < %.0f%%)", debt, t.DebtWarn)
 			}
-			if haram > 3 {
+			if haram > t.HaramPass {
 				haramComment = fmt.Sprintf("Non-compliant income: %.2f%% (Requires Purification)", haram)
 			}
-		} else if debt > 10 || haram > 1 {
+		} else if debt > t.DebtGood || haram > t.HaramGood {
 			// Grade B: Good / Very Safe
 			status.Status = "HALAL"
 			status.Grade = sql.NullString{String: "B", Valid: true}
 
-			if debt > 10 {
-				debtComment = fmt.Sprintf("Debt ratio: %.2f%% (Good < 20%%)", debt)
+			if debt > t.DebtGood {
+				debtComment = fmt.Sprintf("Debt ratio: %.2f%% (Good < %.0f%%)", debt, t.DebtPass)
 			}
-			if haram > 1 {
+			if haram > t.HaramGood {
 				haramComment = fmt.Sprintf("Non-compliant income: %.2f%% (Minor Purification)", haram)
 			}
 		} else {
