@@ -39,7 +39,11 @@ engineering complete but the exact methodology constants clearly flagged
       old stock-only request; still works, just doesn't expose the new fields).
 - [ ] Compliance certificate export (per-stock, dated, methodology-versioned).
 - [ ] Error monitoring (Sentry) wired into backend + Flutter + admin dashboard.
-- [ ] Basic CI pipeline (build + test on PR) for backend and admin-dashboard.
+- [x] Basic CI pipeline — done (commit 692b197): .github/workflows/ci.yml (backend
+      go build/vet/test, admin-dashboard npm build as non-blocking known-debt,
+      flutter analyze). Also fixed analysis_options.yaml to exclude the defunct
+      StockAnalyzer-real-stack/ tree, which was drowning flutter analyze in
+      100+ unrelated errors from a legacy duplicate.
 
 ## Deferred / needs client input (not attempted automatically)
 - Google Play Billing parity — needs the client's Play Console service-account
