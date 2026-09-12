@@ -6,8 +6,12 @@ engineering complete but the exact methodology constants clearly flagged
 `// SHARIAH-REVIEW:` for a scholar/compliance sign-off before shipping to production.
 
 ## Quick wins
-- [ ] Event-driven push: wire fcm_sender into watchlist price-cross, new post from
-      followed expert, reply/comment notifications.
+- [x] Event-driven push — compliance-drift alerts done (commit 9bc49fe): a
+      HALAL<->HARAM flip or significant purification-rate change now pushes
+      to every watcher/holder, wired into the real production ingest_eodhd
+      cron. (Note: new-post-to-subscribers push already existed pre-audit —
+      see git history f1ab8a2/7bd2d48 — the actual gap was market-driven
+      alerts, not social ones, which is what got built.)
 - [ ] Weekly halal-market digest email (new compliant stocks, watchlist movers, top posts).
 - [ ] Referral program on top of existing promo-code infra.
 
@@ -37,3 +41,26 @@ engineering complete but the exact methodology constants clearly flagged
 
 ## Working notes
 (appended per session as work lands — file, migration id, what's left)
+
+### Session 1 — 2026-09-12
+Branch `feat/upsell-implementation`, 4 commits, backend only so far, `go build`
++ `go vet` + `go test ./...` all green after each commit (existing
+screener_test.go confirms the threshold refactor is behavior-preserving).
+
+- d562918 — plan file
+- 14aeac9 — dividend purification calculator (`GET /api/tools/purification`)
+- dbf4cd1 — admin-configurable Shariah thresholds (migration 0054 +
+  `shariah.Thresholds` + `GET/PUT /api/admin/screening-thresholds`)
+- 9bc49fe — compliance-drift push alerts (`services.DriftDetector`,
+  wired into the real ingest_eodhd cron, not just the unused
+  IngestionService path)
+
+Not started yet: Flutter portfolio screen, Flutter purification/zakat UI,
+admin-dashboard pages for the two new endpoints above, weekly digest
+email, referral program, real zakat + gold/silver, compliance
+certificates, error monitoring, CI pipeline. Deferred items (Google Play
+billing, licensed index) still need client-provided credentials/licenses
+per the original scoping questions — not attempted.
+
+Nothing has been pushed to GitHub yet — everything is local commits on
+`feat/upsell-implementation` pending your go-ahead to push + open the PR.
