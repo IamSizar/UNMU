@@ -12,7 +12,8 @@ engineering complete but the exact methodology constants clearly flagged
       cron. (Note: new-post-to-subscribers push already existed pre-audit —
       see git history f1ab8a2/7bd2d48 — the actual gap was market-driven
       alerts, not social ones, which is what got built.)
-- [ ] Weekly halal-market digest email (new compliant stocks, watchlist movers, top posts).
+- [x] Weekly halal-market digest email — done (commit 8e5bbfa): `cmd/weekly_digest`,
+      reviewed by ecc:go-reviewer (fixed a query-logic bug + N+1 before commit).
 - [ ] Referral program on top of existing promo-code infra.
 
 ## Core bets
