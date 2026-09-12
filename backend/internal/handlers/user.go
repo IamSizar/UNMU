@@ -39,19 +39,21 @@ func (h *UserHandler) SetPortfolioEnrichment(stockRepo *repositories.StockReposi
 	h.shariahRepo = shariahRepo
 }
 
-// portfolioEntryResponse is what the Flutter portfolio screen actually
-// needs to render a row — the bare UserPortfolio model only carries IDs.
-type portfolioEntryResponse struct {
-	StockID       int64   `json:"stockId"`
-	Ticker        string  `json:"ticker"`
-	Name          string  `json:"name"`
-	Shares        float64 `json:"shares"`
-	AvgBuyPrice   float64 `json:"avgBuyPrice"`
-	ShariahStatus string  `json:"shariahStatus"`
-	ShariahGrade  string  `json:"shariahGrade,omitempty"`
-}
-
 // GetPortfolio handles GET /api/user/portfolio
+//
+// The response nests a `stock` object (id/ticker/exchange/name/
+// shariah_status) alongside the top-level stock_id/shares/avg_buy_price —
+// this is NOT a new shape invented for the Portfolio screen, it's the
+// shape lib/screens/watchlist/watchlist_screen.dart has always expected
+// (it reads item['stock']['ticker'], item['stock']['exchange'],
+// item['stock']['shariah_status']['grade'], and falls back to a bare
+// "Stock ID: N" placeholder card when `stock` is null — see that file's
+// _WatchlistCard). Before this change, GetPortfolio returned bare
+// models.UserPortfolio structs with no `stock` key at all, so watchlist
+// was ALWAYS rendering the placeholder fallback in production, silently:
+// grade filters, the halal/mixed summary counts, and tapping a row to
+// open stock detail were all no-ops. This fixes that pre-existing bug as
+// a side effect of building the shape the Portfolio screen also needs.
 func (h *UserHandler) GetPortfolio(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 
@@ -61,31 +63,33 @@ func (h *UserHandler) GetPortfolio(c *gin.Context) {
 		return
 	}
 
-	if h.stockRepo == nil || h.shariahRepo == nil {
-		c.JSON(http.StatusOK, gin.H{"portfolio": portfolios})
-		return
-	}
-
-	entries := make([]portfolioEntryResponse, 0, len(portfolios))
+	entries := make([]gin.H, 0, len(portfolios))
 	for _, p := range portfolios {
-		entry := portfolioEntryResponse{StockID: p.StockID, ShariahStatus: "UNKNOWN"}
+		entry := gin.H{"stock_id": p.StockID}
 		if p.Shares.Valid {
-			entry.Shares = p.Shares.Float64
+			entry["shares"] = p.Shares.Float64
 		}
 		if p.AvgBuyPrice.Valid {
-			entry.AvgBuyPrice = p.AvgBuyPrice.Float64
+			entry["avg_buy_price"] = p.AvgBuyPrice.Float64
 		}
 
-		if stock, err := h.stockRepo.GetByID(p.StockID); err == nil && stock != nil {
-			entry.Ticker = stock.Ticker
-			entry.Name = stock.Name
-		}
-		if status, err := h.shariahRepo.GetLatestStatus(p.StockID); err == nil && status != nil {
-			entry.ShariahStatus = status.Status
-			if status.Grade.Valid {
-				entry.ShariahGrade = status.Grade.String
+		if h.stockRepo != nil {
+			if stock, err := h.stockRepo.GetByID(p.StockID); err == nil && stock != nil {
+				stockJSON := gin.H{
+					"id":       stock.ID,
+					"ticker":   stock.Ticker,
+					"exchange": stock.Exchange,
+					"name":     stock.Name,
+				}
+				if h.shariahRepo != nil {
+					if status, err := h.shariahRepo.GetLatestStatus(p.StockID); err == nil && status != nil {
+						stockJSON["shariah_status"] = buildShariahResponse(status)
+					}
+				}
+				entry["stock"] = stockJSON
 			}
 		}
+
 		entries = append(entries, entry)
 	}
 

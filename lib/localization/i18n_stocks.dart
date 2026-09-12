@@ -118,6 +118,25 @@ const Map<String, String> stocksEn = {
           'alerts when their Shariah status changes.',
   'watchlist.signIn': 'Sign in',
 
+  // ── Portfolio ───────────────────────────────────────────────
+  'portfolio.title': 'My Portfolio',
+  'portfolio.totalValue': 'Total value',
+  'portfolio.holdings': 'Holdings',
+  'portfolio.addHolding': 'Add holding',
+  'portfolio.shares': 'Shares',
+  'portfolio.avgBuyPrice': 'Average buy price',
+  'portfolio.save': 'Save',
+  'portfolio.cancel': 'Cancel',
+  'portfolio.removeTitle': 'Remove holding',
+  'portfolio.removeConfirm': 'Remove this holding from your portfolio?',
+  'portfolio.noHoldings': "You haven't added any holdings yet",
+  'portfolio.startAdding':
+      'Add your real positions to track their value and Shariah compliance in one place.',
+  'portfolio.signInSubtitle': 'Sign in to track your portfolio holdings.',
+  'portfolio.invalidNumbers': 'Please enter valid numbers for shares and price',
+  'portfolio.errorLoading': 'Failed to load your portfolio',
+  'portfolio.errorSaving': "Couldn't save this holding — try again",
+
   // ── Tools landing ───────────────────────────────────────────
   'tools.title': 'Tools',
   'tools.zakatTitle': 'Zakat',
@@ -367,6 +386,25 @@ const Map<String, String> stocksAr = {
   'watchlist.signInSubtitle':
       'سجل دخولك لتتبع أسهمك المفضلة وتلقّي تنبيهات عند تغيّر وضعها الشرعي.',
   'watchlist.signIn': 'تسجيل الدخول',
+
+  // ── Portfolio ───────────────────────────────────────────────
+  'portfolio.title': 'محفظتي',
+  'portfolio.totalValue': 'القيمة الإجمالية',
+  'portfolio.holdings': 'المقتنيات',
+  'portfolio.addHolding': 'إضافة مقتنى',
+  'portfolio.shares': 'عدد الأسهم',
+  'portfolio.avgBuyPrice': 'متوسط سعر الشراء',
+  'portfolio.save': 'حفظ',
+  'portfolio.cancel': 'إلغاء',
+  'portfolio.removeTitle': 'إزالة المقتنى',
+  'portfolio.removeConfirm': 'هل تريد إزالة هذا المقتنى من محفظتك؟',
+  'portfolio.noHoldings': 'لم تُضِف أي مقتنيات بعد',
+  'portfolio.startAdding':
+      'أضف مراكزك الفعلية لتتبع قيمتها وتوافقها الشرعي في مكان واحد.',
+  'portfolio.signInSubtitle': 'سجل دخولك لتتبع مقتنيات محفظتك.',
+  'portfolio.invalidNumbers': 'يرجى إدخال أرقام صحيحة لعدد الأسهم والسعر',
+  'portfolio.errorLoading': 'تعذّر تحميل محفظتك',
+  'portfolio.errorSaving': 'تعذّر حفظ هذا المقتنى — حاول مرة أخرى',
 
   // ── Tools landing ───────────────────────────────────────────
   'tools.title': 'الأدوات',

@@ -63,6 +63,8 @@ const Map<String, String> profileAccountEn = {
   // Quick actions tiles.
   'profile.quickWatchlistTitle': 'Watchlist',
   'profile.quickWatchlistSubtitle': 'Stocks you track',
+  'profile.quickPortfolioTitle': 'Portfolio',
+  'profile.quickPortfolioSubtitle': 'Your real holdings',
   'profile.quickToolsTitle': 'Tools',
   'profile.quickToolsSubtitle': 'Calculators & helpers',
   'profile.quickDcaTitle': 'DCA Calculator',
@@ -196,6 +198,8 @@ const Map<String, String> profileAccountAr = {
   // Quick actions tiles.
   'profile.quickWatchlistTitle': 'قائمة المتابعة',
   'profile.quickWatchlistSubtitle': 'الأسهم التي تتابعها',
+  'profile.quickPortfolioTitle': 'المحفظة',
+  'profile.quickPortfolioSubtitle': 'مقتنياتك الفعلية',
   'profile.quickToolsTitle': 'الأدوات',
   'profile.quickToolsSubtitle': 'الحاسبات والأدوات',
   'profile.quickDcaTitle': 'حاسبة DCA',

@@ -160,6 +160,36 @@ class ApiService {
     }
   }
 
+  // Add a real holding (shares + average buy price) — the watchlist's
+  // addToPortfolio() posts stock_id only, which the backend stores as an
+  // unvalued row (shares/avg_buy_price left NULL). This is the same
+  // endpoint with the fields the Portfolio screen actually needs filled in.
+  static Future<bool> addHoldingToPortfolio(
+    String token,
+    int stockId,
+    double shares,
+    double avgBuyPrice,
+  ) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/user/portfolio'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode({
+          'stock_id': stockId,
+          'shares': shares,
+          'avg_buy_price': avgBuyPrice,
+        }),
+      );
+
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
   // Remove from portfolio
   static Future<bool> removeFromPortfolio(String token, int stockId) async {
     try {

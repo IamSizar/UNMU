@@ -25,6 +25,7 @@ import '../../screens/social/social_tokens.dart';
 // point.
 import '../../screens/tools/tools_screen.dart';
 import '../../screens/watchlist/watchlist_screen.dart';
+import '../../screens/portfolio/portfolio_screen.dart';
 import '../../utils/haptic_utils.dart';
 import '../../widgets/platform_adaptive/platform_dialog.dart';
 import '../../widgets/social/test_account_switcher.dart';
@@ -859,6 +860,14 @@ class _QuickActionsGrid extends StatelessWidget {
           title: 'profile.quickWatchlistTitle'.tr,
           subtitle: 'profile.quickWatchlistSubtitle'.tr,
           onTap: () => _open(context, const WatchlistScreen()),
+        ),
+        _QuickActionTile(
+          palette: palette,
+          icon: Icons.pie_chart_rounded,
+          accent: SocialTokens.violet,
+          title: 'profile.quickPortfolioTitle'.tr,
+          subtitle: 'profile.quickPortfolioSubtitle'.tr,
+          onTap: () => _open(context, const PortfolioScreen()),
         ),
         _QuickActionTile(
           palette: palette,
