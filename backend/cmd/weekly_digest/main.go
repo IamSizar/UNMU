@@ -53,17 +53,43 @@ type topPost struct {
 	Likes      int
 }
 
+// fatalf captures the error to Sentry (if configured), flushes so it
+// actually gets sent before the process exits, then behaves exactly like
+// log.Fatalf. Every log.Fatalf call site in this file that represents a
+// real operational failure (not a config-once-at-startup nicety) should
+// go through this instead — plain log.Fatalf calls os.Exit immediately,
+// which would otherwise drop whatever Sentry hasn't sent yet.
+// fatalf's own flush is load-bearing, not redundant with main()'s
+// deferred FlushErrorTracking: log.Fatal calls os.Exit, which skips
+// deferred functions entirely, so the defer only covers the normal-
+// return path and this is the only flush that runs on a fatal exit.
+func fatalf(tags map[string]string, format string, args ...any) {
+	err := fmt.Errorf(format, args...)
+	services.CaptureError(err, tags)
+	services.FlushErrorTracking(2 * time.Second)
+	log.Fatal(err)
+}
+
 func main() {
+	// Intentionally NOT routed through fatalf/Sentry — Sentry has no DSN
+	// to report to until config.Load() has already succeeded. This is the
+	// one failure mode that can never be captured.
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("config: %v", err)
 	}
 
+	sentryEnabled := services.InitStandaloneErrorTracking()
+	jobTags := map[string]string{"job": "weekly_digest"}
+
 	database, err := db.Connect(cfg)
 	if err != nil {
-		log.Fatalf("db connect: %v", err)
+		fatalf(jobTags, "db connect: %v", err)
 	}
 	defer database.Close()
+	if sentryEnabled {
+		defer services.FlushErrorTracking(2 * time.Second)
+	}
 
 	userRepo := repositories.NewUserRepository(database)
 	prefsRepo := repositories.NewNotificationPrefsRepository(database)
@@ -73,25 +99,26 @@ func main() {
 	emailSender := services.NewEmailSender()
 
 	if emailSender == nil {
-		log.Fatal("weekly_digest: no email transport configured (set RESEND_API_KEY or SMTP_HOST) — refusing to run a no-op batch")
+		fatalf(jobTags, "weekly_digest: no email transport configured (set RESEND_API_KEY or SMTP_HOST) — refusing to run a no-op batch")
 	}
 
 	sinceDate := time.Now().AddDate(0, 0, -lookbackDays)
 
 	newlyCompliant, err := loadNewlyCompliant(database, sinceDate)
 	if err != nil {
-		log.Fatalf("load newly-compliant stocks: %v", err)
+		fatalf(jobTags, "load newly-compliant stocks: %v", err)
 	}
 	log.Printf("Found %d newly-compliant stocks in the last %d days", len(newlyCompliant), lookbackDays)
 
 	topPosts, err := loadTopPosts(database, sinceDate)
 	if err != nil {
 		log.Printf("WARN load top posts: %v (continuing without them)", err)
+		services.CaptureError(err, jobTags)
 	}
 
 	users, err := userRepo.ListEmailable()
 	if err != nil {
-		log.Fatalf("load users: %v", err)
+		fatalf(jobTags, "load users: %v", err)
 	}
 	log.Printf("Loaded %d emailable users", len(users))
 
@@ -129,6 +156,7 @@ func main() {
 
 		if err := emailSender.Send(user.Email, subject, html, text); err != nil {
 			log.Printf("FAIL  user %d (%s): %v", user.ID, user.Email, err)
+			services.CaptureError(err, jobTags)
 			failed++
 			continue
 		}

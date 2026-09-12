@@ -11,23 +11,64 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// InitErrorTracking wires Sentry for the backend. Soft-fail: when
-// SENTRY_DSN isn't set, this logs one line and returns a no-op gin
-// middleware — matching the same graceful-degrade pattern used for FCM
-// (NewFCMSender) and email (NewEmailSender) elsewhere in this codebase,
-// so a missing API key never blocks the server from starting.
-//
-// Env vars:
+// Env vars shared by every Sentry entry point in this package:
 //
 //	SENTRY_DSN          (required to actually report — no-op without it)
 //	SENTRY_ENVIRONMENT  (optional, default "development")
 //	APP_VERSION         (optional — tags events with a release identifier
 //	                      if set; falls back to "unknown" otherwise)
+
+// InitErrorTracking wires Sentry for the API server. Soft-fail: when
+// SENTRY_DSN isn't set, this logs one line and returns a no-op gin
+// middleware — matching the same graceful-degrade pattern used for FCM
+// (NewFCMSender) and email (NewEmailSender) elsewhere in this codebase,
+// so a missing API key never blocks the server from starting.
 func InitErrorTracking() gin.HandlerFunc {
+	if !initSentry() {
+		return func(c *gin.Context) { c.Next() } // no-op passthrough
+	}
+
+	// NOTE: there is no sentry.Flush() on shutdown — main.go currently
+	// runs via router.Run() with no graceful-shutdown handler (no
+	// signal.Notify/http.Server.Shutdown), so there's no hook to flush
+	// from. WaitForDelivery:false below means the last few events before
+	// a SIGTERM could be dropped. Add a flush call if/when main.go grows
+	// a graceful shutdown path.
+
+	// Repanic: true re-raises after capturing so gin.Recovery() (already
+	// registered via gin.Default() in main.go) still returns the usual
+	// 500 — this middleware's only job is to report, not to replace
+	// existing panic-recovery behavior.
+	return sentrygin.New(sentrygin.Options{Repanic: true, WaitForDelivery: false, Timeout: 3 * time.Second})
+}
+
+// InitStandaloneErrorTracking wires Sentry for a non-HTTP process (the
+// cron jobs — ingest_eodhd, weekly_digest, etc.). Same soft-fail behavior
+// and env vars as InitErrorTracking, just without the gin middleware:
+// call this once near the top of main(), then use CaptureError for
+// individual failures and FlushErrorTracking before the process exits
+// (including right before any log.Fatalf, which calls os.Exit and would
+// otherwise drop whatever hasn't been sent yet).
+//
+// Returns whether Sentry actually initialized, so callers can decide
+// whether calling FlushErrorTracking is worth the wait.
+func InitStandaloneErrorTracking() bool {
+	return initSentry()
+}
+
+// FlushErrorTracking blocks up to timeout for any queued events to be
+// sent. A cron process that just calls CaptureError and then exits (or
+// os.Exit via log.Fatalf) needs this — there's no long-running gin server
+// keeping the process alive for Sentry's background sender to catch up.
+func FlushErrorTracking(timeout time.Duration) {
+	sentry.Flush(timeout)
+}
+
+func initSentry() bool {
 	dsn := strings.TrimSpace(os.Getenv("SENTRY_DSN"))
 	if dsn == "" {
 		log.Println("[errortracking] SENTRY_DSN not set — error monitoring disabled")
-		return func(c *gin.Context) { c.Next() } // no-op passthrough
+		return false
 	}
 
 	env := strings.TrimSpace(os.Getenv("SENTRY_ENVIRONMENT"))
@@ -59,23 +100,11 @@ func InitErrorTracking() gin.HandlerFunc {
 	})
 	if err != nil {
 		log.Printf("[errortracking] Sentry init failed, error monitoring disabled: %v", err)
-		return func(c *gin.Context) { c.Next() }
+		return false
 	}
 
 	log.Printf("[errortracking] Sentry initialized (environment=%s, release=%s)", env, release)
-
-	// NOTE: there is no sentry.Flush() on shutdown — main.go currently
-	// runs via router.Run() with no graceful-shutdown handler (no
-	// signal.Notify/http.Server.Shutdown), so there's no hook to flush
-	// from. WaitForDelivery:false below means the last few events before
-	// a SIGTERM could be dropped. Add a flush call if/when main.go grows
-	// a graceful shutdown path.
-
-	// Repanic: true re-raises after capturing so gin.Recovery() (already
-	// registered via gin.Default() in main.go) still returns the usual
-	// 500 — this middleware's only job is to report, not to replace
-	// existing panic-recovery behavior.
-	return sentrygin.New(sentrygin.Options{Repanic: true, WaitForDelivery: false, Timeout: 3 * time.Second})
+	return true
 }
 
 // sensitiveHeaders are stripped from every event before it leaves the

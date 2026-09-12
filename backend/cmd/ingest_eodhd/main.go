@@ -14,6 +14,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log"
 	"time"
 
@@ -26,20 +27,46 @@ import (
 	"halalstocks/internal/shariah"
 )
 
+// fatalf captures the error to Sentry (if configured), flushes so it
+// actually gets sent before the process exits, then behaves like
+// log.Fatalf. A plain log.Fatalf calls os.Exit immediately, which would
+// otherwise drop whatever Sentry hasn't sent yet — this is the daily
+// production screening job, so a failure here is worth knowing about.
+// fatalf's own flush is load-bearing, not redundant with main()'s
+// deferred FlushErrorTracking: log.Fatal calls os.Exit, which skips
+// deferred functions entirely, so the defer only covers the normal-
+// return path and this is the only flush that runs on a fatal exit.
+func fatalf(tags map[string]string, format string, args ...any) {
+	err := fmt.Errorf(format, args...)
+	services.CaptureError(err, tags)
+	services.FlushErrorTracking(2 * time.Second)
+	log.Fatal(err)
+}
+
 func main() {
+	// Intentionally NOT routed through fatalf/Sentry — Sentry has no DSN
+	// to report to until config.Load() has already succeeded. This is the
+	// one failure mode that can never be captured.
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("config: %v", err)
 	}
+
+	sentryEnabled := services.InitStandaloneErrorTracking()
+	jobTags := map[string]string{"job": "ingest_eodhd"}
+
 	if cfg.EODHDAPIKey == "" {
-		log.Fatal("EODHD_API_KEY is not set in backend/.env")
+		fatalf(jobTags, "EODHD_API_KEY is not set in backend/.env")
 	}
 
 	database, err := db.Connect(cfg)
 	if err != nil {
-		log.Fatalf("db connect: %v", err)
+		fatalf(jobTags, "db connect: %v", err)
 	}
 	defer database.Close()
+	if sentryEnabled {
+		defer services.FlushErrorTracking(2 * time.Second)
+	}
 
 	stockRepo := repositories.NewStockRepository(database)
 	fundRepo := repositories.NewFundamentalRepository(database)
@@ -76,7 +103,7 @@ func main() {
 
 	stocks, err := stockRepo.GetAll(1000, 0)
 	if err != nil {
-		log.Fatalf("load stocks: %v", err)
+		fatalf(jobTags, "load stocks: %v", err)
 	}
 	log.Printf("Loaded %d stocks from DB", len(stocks))
 
@@ -130,6 +157,7 @@ func main() {
 		}
 		if err := fundRepo.CreateOrUpdate(fund); err != nil {
 			log.Printf("FAIL  %-6s save fundamentals: %v", st.Ticker, err)
+			services.CaptureError(err, map[string]string{"job": "ingest_eodhd", "ticker": st.Ticker, "stage": "save_fundamentals"})
 			failed++
 			continue
 		}
@@ -142,6 +170,7 @@ func main() {
 		status, err := shariah.Screen(st, fund)
 		if err != nil {
 			log.Printf("FAIL  %-6s screen: %v", st.Ticker, err)
+			services.CaptureError(err, map[string]string{"job": "ingest_eodhd", "ticker": st.Ticker, "stage": "screen"})
 			failed++
 			continue
 		}
@@ -152,6 +181,7 @@ func main() {
 			status.AsOfDate.Day(), 0, 0, 0, 0, time.UTC)
 		if err := shariahRepo.CreateOrUpdate(&status); err != nil {
 			log.Printf("FAIL  %-6s save status: %v", st.Ticker, err)
+			services.CaptureError(err, map[string]string{"job": "ingest_eodhd", "ticker": st.Ticker, "stage": "save_status"})
 			failed++
 			continue
 		}
