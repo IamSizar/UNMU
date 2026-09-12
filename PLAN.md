@@ -31,7 +31,12 @@ engineering complete but the exact methodology constants clearly flagged
 - [ ] App-wide Pro tier (entitlement model + gating).
 
 ## Trust foundation
-- [ ] Real zakat engine (nisab/hawl calc across portfolio + gold/silver ledger).
+- [x] Real zakat engine — backend done (commit c581883): nisab threshold check,
+      gold/silver/cash/other-assets inputs, admin-configurable prices. NO hawl
+      (lunar-year holding) check — flagged SHARIAH-REVIEW, would need per-asset
+      acquisition-date tracking the app doesn't have. Flutter UI for the new
+      gold/silver/cash inputs not built yet (calculator screen still posts the
+      old stock-only request; still works, just doesn't expose the new fields).
 - [ ] Compliance certificate export (per-stock, dated, methodology-versioned).
 - [ ] Error monitoring (Sentry) wired into backend + Flutter + admin dashboard.
 - [ ] Basic CI pipeline (build + test on PR) for backend and admin-dashboard.
