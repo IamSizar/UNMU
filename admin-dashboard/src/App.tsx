@@ -10,6 +10,7 @@ import Videos from './pages/Videos'
 import Stocks from './pages/Stocks'
 import Subscriptions from './pages/Subscriptions'
 import Promos from './pages/Promos'
+import ScreeningThresholds from './pages/ScreeningThresholds'
 import Ads from './pages/Ads'
 import Notifications from './pages/Notifications'
 import Payouts from './pages/Payouts'
@@ -107,6 +108,7 @@ export default function App() {
           <Route path="stocks" element={<Stocks />} />
           <Route path="subscriptions" element={<Subscriptions />} />
           <Route path="promos" element={<Promos />} />
+          <Route path="screening-thresholds" element={<ScreeningThresholds />} />
           <Route path="ads" element={<Ads />} />
           <Route path="notifications" element={<Notifications />} />
           <Route path="reports" element={<Reports />} />

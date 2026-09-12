@@ -25,6 +25,7 @@ import {
   TrendingUp,
   CreditCard,
   TicketPercent,
+  ShieldAlert,
   Megaphone,
   Bell,
   Settings as SettingsIcon,
@@ -154,6 +155,7 @@ function monetizationItems(
           : undefined,
     },
     { to: '/promos', label: 'nav.promos', icon: TicketPercent },
+    { to: '/screening-thresholds', label: 'nav.screening', icon: ShieldAlert },
     { to: '/ads', label: 'nav.ads', icon: Megaphone },
   ]
 }
