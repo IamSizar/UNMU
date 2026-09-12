@@ -609,6 +609,7 @@ func main() {
 
 		// Tools
 		protected.GET("/tools/zakat", toolsHandler.CalculateZakat)
+		protected.GET("/tools/purification", toolsHandler.CalculatePurification)
 
 		// Promo codes
 		protected.POST("/promo/validate", promoHandler.ValidatePromo)

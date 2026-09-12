@@ -85,6 +85,94 @@ func (h *ToolsHandler) CalculateZakat(c *gin.Context) {
 	})
 }
 
+// CalculatePurification handles GET /api/tools/purification
+//
+// SHARIAH-REVIEW: purification methodology needs sign-off from a Shariah advisor
+// before this number is presented to users as an obligation, not a suggestion.
+// Current approach (the common retail-screener convention, e.g. Zoya/Musaffa):
+//   purification amount = shares_held × dividends_per_share × haram_income_ratio
+// i.e. the same non-halal income ratio the screener already uses to grade the
+// stock is applied to the dividend actually received, since that ratio is the
+// company's own estimate of how much of its income is impure. Some scholars use
+// net income mix instead of the same ratio, or require purification on capital
+// gains too — those variants are NOT implemented and should be confirmed.
+func (h *ToolsHandler) CalculatePurification(c *gin.Context) {
+	userID := c.GetInt64("user_id")
+
+	portfolios, err := h.portfolioRepo.GetUserPortfolio(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get portfolio"})
+		return
+	}
+
+	totalDividends := 0.0
+	totalPurification := 0.0
+	var breakdown []gin.H
+
+	for _, portfolio := range portfolios {
+		if !portfolio.Shares.Valid || portfolio.Shares.Float64 <= 0 {
+			continue
+		}
+
+		stock, _ := h.stockRepo.GetByID(portfolio.StockID)
+		if stock == nil {
+			continue
+		}
+
+		shariahStatus, _ := h.shariahRepo.GetLatestStatus(stock.ID)
+		if shariahStatus == nil {
+			continue
+		}
+		// Only compliant/mixed stocks carry a purification obligation — a HARAM
+		// holding shouldn't be held at all, and its dividend isn't "purifiable."
+		if shariahStatus.Status != "HALAL" && shariahStatus.Status != "MIXED" {
+			continue
+		}
+
+		fundamental, _ := h.fundamentalRepo.GetLatestFundamental(stock.ID)
+		if fundamental == nil || !fundamental.DividendsPerShare.Valid || fundamental.DividendsPerShare.Float64 <= 0 {
+			continue
+		}
+
+		haramRatio := 0.0
+		if shariahStatus.HaramIncomeRatio.Valid {
+			haramRatio = shariahStatus.HaramIncomeRatio.Float64 / 100.0
+		}
+		if haramRatio <= 0 {
+			continue // nothing to purify
+		}
+
+		dividendReceived := portfolio.Shares.Float64 * fundamental.DividendsPerShare.Float64
+		purificationAmount := dividendReceived * haramRatio
+
+		totalDividends += dividendReceived
+		totalPurification += purificationAmount
+
+		breakdown = append(breakdown, gin.H{
+			"stock_id":             stock.ID,
+			"ticker":               stock.Ticker,
+			"name":                 stock.Name,
+			"shares":               portfolio.Shares.Float64,
+			"dividend_per_share":   fundamental.DividendsPerShare.Float64,
+			"dividend_received":    dividendReceived,
+			"haram_income_ratio":   haramRatio,
+			"purification_amount":  purificationAmount,
+			"as_of_date":           fundamental.AsOfDate.Time,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"total_dividends_received": totalDividends,
+		"total_purification_due":   totalPurification,
+		"breakdown":                breakdown,
+		"methodology": gin.H{
+			"formula": "dividend_received × haram_income_ratio",
+			"note":    "Purification obligations should be donated to charity without expectation of religious reward. Confirm methodology with a qualified Shariah advisor.",
+			"status":  "pending_scholar_review",
+		},
+	})
+}
+
 // CalculateDCA handles GET /api/tools/dca
 func (h *ToolsHandler) CalculateDCA(c *gin.Context) {
 	monthlyAmount, _ := strconv.ParseFloat(c.Query("monthly"), 64)
