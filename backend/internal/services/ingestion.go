@@ -19,6 +19,7 @@ type IngestionService struct {
 	fundamentalRepo  *repositories.FundamentalRepository
 	shariahRepo      *repositories.ShariahStatusRepository
 	notificationRepo *repositories.NotificationRepository
+	drift            *DriftDetector // nullable — falls back to a no-push detector
 }
 
 func NewIngestionService(
@@ -36,7 +37,17 @@ func NewIngestionService(
 		fundamentalRepo:   fundamentalRepo,
 		shariahRepo:       shariahRepo,
 		notificationRepo: notificationRepo,
+		drift:            NewDriftDetector(notificationRepo, nil, nil),
 	}
+}
+
+// SetDriftNotifiers wires the pieces needed to actually reach a user when
+// their stock's compliance status or purification rate changes, instead of
+// only writing a user-less notification row. Optional — main.go calls this
+// post-construction; if never called, drift detection still runs but the
+// push fan-out is silently skipped (nil-checked inside DriftDetector).
+func (s *IngestionService) SetDriftNotifiers(portfolioRepo *repositories.PortfolioRepository, notifier *Notifier) {
+	s.drift = NewDriftDetector(s.notificationRepo, portfolioRepo, notifier)
 }
 
 func (s *IngestionService) RunIngestion() error {
@@ -216,73 +227,16 @@ case "fmp":
 
 	// Get latest status to check for changes (not previous, but latest)
 	latestStatus, _ := s.shariahRepo.GetLatestStatus(stock.ID)
-	
+
 	// Save new status (will update if same stock_id and as_of_date exist)
 	if err := s.shariahRepo.CreateOrUpdate(&shariahStatus); err != nil {
 		return fmt.Errorf("failed to save Sharia status: %w", err)
 	}
 
-	// Check for status changes and create notifications
-	// Only notify if this is actually a change (not just an update of the same day's status)
-	if latestStatus != nil {
-		// Check if the latest status is from a different date (not just an update)
-		latestDate := time.Date(
-			latestStatus.AsOfDate.Year(),
-			latestStatus.AsOfDate.Month(),
-			latestStatus.AsOfDate.Day(),
-			0, 0, 0, 0,
-			latestStatus.AsOfDate.Location(),
-		)
-		newDate := time.Date(
-			shariahStatus.AsOfDate.Year(),
-			shariahStatus.AsOfDate.Month(),
-			shariahStatus.AsOfDate.Day(),
-			0, 0, 0, 0,
-			shariahStatus.AsOfDate.Location(),
-		)
-		
-		// Only notify if it's a different date AND the status changed
-		if !latestDate.Equal(newDate) && latestStatus.Status != shariahStatus.Status {
-			// Status changed on a new date - notify users
-			s.createStatusChangeNotification(stock, latestStatus.Status, shariahStatus.Status)
-		}
-		
-		// Check purification rate change (only if different date)
-		if !latestDate.Equal(newDate) && latestStatus.PurificationRate.Valid && shariahStatus.PurificationRate.Valid {
-			change := shariahStatus.PurificationRate.Float64 - latestStatus.PurificationRate.Float64
-			if change > 0.5 || change < -0.5 { // Significant change
-				s.createPurificationChangeNotification(stock, latestStatus.PurificationRate.Float64, shariahStatus.PurificationRate.Float64)
-			}
-		}
-	}
+	// Drift detection + user-facing alerts — see DriftDetector for the
+	// actually-notifies-someone version of what used to be a user-less
+	// notification row nobody saw.
+	s.drift.Check(stock, latestStatus, &shariahStatus)
 
 	return nil
-}
-
-func (s *IngestionService) createStatusChangeNotification(stock *models.Stock, oldStatus, newStatus string) {
-	// Get all users who have this stock in their portfolio
-	// For now, create a general notification (would need portfolio repo)
-	notification := &models.Notification{
-		StockID:   sql.NullInt64{Int64: stock.ID, Valid: true},
-		Type:      "STATUS_CHANGE",
-		Title:     fmt.Sprintf("Sharia Status Changed: %s", stock.Ticker),
-		Message:   fmt.Sprintf("The Sharia status of %s has changed from %s to %s", stock.Name, oldStatus, newStatus),
-		IsRead:    false,
-	}
-	
-	// This would need to be sent to all users with this stock
-	// For now, we'll skip user_id (NULL) to indicate it's a general notification
-	s.notificationRepo.Create(notification)
-}
-
-func (s *IngestionService) createPurificationChangeNotification(stock *models.Stock, oldRate, newRate float64) {
-	notification := &models.Notification{
-		StockID:   sql.NullInt64{Int64: stock.ID, Valid: true},
-		Type:      "PURIFICATION_CHANGE",
-		Title:     fmt.Sprintf("Purification Rate Changed: %s", stock.Ticker),
-		Message:   fmt.Sprintf("The purification rate for %s has changed from %.2f%% to %.2f%%", stock.Name, oldRate, newRate),
-		IsRead:    false,
-	}
-	
-	s.notificationRepo.Create(notification)
 }

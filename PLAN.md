@@ -12,10 +12,12 @@ engineering complete but the exact methodology constants clearly flagged
 - [ ] Referral program on top of existing promo-code infra.
 
 ## Core bets
-- [ ] Dividend purification calculator (flagship) — backend calc + endpoint + Flutter screen.
+- [x] Dividend purification calculator (flagship) — backend calc + endpoint done
+      (`GET /api/tools/purification`, commit 14aeac9). Flutter screen still open.
 - [ ] Portfolio tracking UI in Flutter, wired to existing `repositories/portfolio.go`.
-- [ ] Admin-configurable Shariah screening thresholds (migration + repo + admin handler
-      + admin-dashboard page), screener reads from DB with constants as fallback.
+- [x] Admin-configurable Shariah screening thresholds — backend done (commit dbf4cd1):
+      migration 0054, `AppSettingsRepository` float support, `shariah.Thresholds`,
+      `GET/PUT /api/admin/screening-thresholds`. Admin-dashboard page still open.
 - [ ] App-wide Pro tier (entitlement model + gating).
 
 ## Trust foundation

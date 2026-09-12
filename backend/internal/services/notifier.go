@@ -125,6 +125,12 @@ func categoryEnabled(p *repositories.NotificationPrefs, cat NotifCategory) bool 
 		return p.CommunitiesEnabled
 	case CatMarketing:
 		return p.MarketingEnabled
+	case CatCompliance:
+		// No dedicated toggle yet (would need a notification_prefs column +
+		// migration) — gated only by the master push switch for now, same
+		// as CatGeneral. A compliance-status change is high-signal enough
+		// that defaulting it to "on" is the right call until a toggle exists.
+		return true
 	default:
 		return true
 	}

@@ -74,3 +74,27 @@ func (r *PortfolioRepository) RemoveFromPortfolio(userID, stockID int64) error {
 	return err
 }
 
+// GetUserIDsForStock returns every user who has this stock in their
+// watchlist or portfolio (user_portfolios doubles as both — a row with
+// shares = 0/NULL is watchlist-only). Used to fan out compliance-drift
+// notifications: previously a status/purification change only wrote one
+// user-less notification row (see IngestionService.createStatusChangeNotification);
+// this is what makes that notification actually reach someone.
+func (r *PortfolioRepository) GetUserIDsForStock(stockID int64) ([]int64, error) {
+	rows, err := r.db.Query(`SELECT DISTINCT user_id FROM user_portfolios WHERE stock_id = $1`, stockID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			continue
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
