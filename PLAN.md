@@ -60,20 +60,21 @@ engineering complete but the exact methodology constants clearly flagged
   discovery, sadaqah/waqf giving, portfolio challenges — flagged in the memo as
   net-new bets; picked up after the above if time allows.
 
-## Status: all backend items complete (2026-09-12)
+## Status: feature-complete (2026-09-12)
 
 Every quick-win, core-bet, and trust-foundation item now has a working
-backend implementation, reviewed by ecc:go-reviewer/ecc:flutter-reviewer
-and covered by go build/vet/test (green throughout) plus flutter analyze
-(clean). PR: https://github.com/IamSizar/UNMU/pull/2
+backend implementation AND a Flutter UI (where applicable), reviewed by
+ecc:go-reviewer/ecc:flutter-reviewer and covered by go build/vet/test
+(green throughout) plus flutter analyze (clean, zero new issues vs. the
+pre-session baseline). PR: https://github.com/IamSizar/UNMU/pull/2, 16
+feature commits.
 
-What's left is genuinely Flutter UI polish for features whose backend is
-already done, not new engineering:
-- Zakat calculator screen doesn't expose the new gold/silver/cash inputs yet
-- No Flutter screen for the referral code (share/redeem)
-- No Flutter screen for the compliance certificate
+Genuinely remaining, not attempted:
 - Sentry not wired into Flutter or the admin dashboard, only the API server
 - Sentry not wired into the cron jobs (CaptureError exported but unused)
+- Admin-dashboard has ~15 pre-existing TypeScript errors unrelated to this
+  PR (untyped .jsx imports, ImportMeta.env not typed) — CI reports but
+  doesn't block on this yet
 
 Deferred per the original scoping conversation, needs the client's own
 credentials/licenses — not attempted:
