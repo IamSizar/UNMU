@@ -14,7 +14,10 @@ engineering complete but the exact methodology constants clearly flagged
       alerts, not social ones, which is what got built.)
 - [x] Weekly halal-market digest email — done (commit 8e5bbfa): `cmd/weekly_digest`,
       reviewed by ecc:go-reviewer (fixed a query-logic bug + N+1 before commit).
-- [ ] Referral program on top of existing promo-code infra.
+- [x] Referral program — done (commit 71fe8d2): migration 0055, ReferralRepository,
+      ReferralHandler, 3 endpoints. ecc:go-reviewer caught and fixed a guaranteed-
+      failure bug (deterministic reward codes) and a redemption race condition
+      before commit. Flutter referral-code share screen not built yet.
 
 ## Core bets
 - [x] Dividend purification calculator (flagship) — backend calc + endpoint done
