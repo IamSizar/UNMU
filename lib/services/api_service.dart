@@ -230,11 +230,29 @@ class ApiService {
     }
   }
 
-  // Calculate Zakat
-  static Future<Map<String, dynamic>?> calculateZakat(String token) async {
+  // Calculate Zakat — cash/goldGrams/silverGrams/otherAssets are optional
+  // extra assets the backend has no other record of; the backend combines
+  // them with the caller's Halal portfolio value and only charges zakat
+  // once the total meets the nisab threshold (see backend/internal/
+  // handlers/tools.go's CalculateZakat doc comment for the methodology).
+  static Future<Map<String, dynamic>?> calculateZakat(
+    String token, {
+    double cash = 0,
+    double goldGrams = 0,
+    double silverGrams = 0,
+    double otherAssets = 0,
+  }) async {
     try {
+      final uri = Uri.parse('$baseUrl/tools/zakat').replace(
+        queryParameters: {
+          'cash': cash.toString(),
+          'gold_grams': goldGrams.toString(),
+          'silver_grams': silverGrams.toString(),
+          'other_assets': otherAssets.toString(),
+        },
+      );
       final response = await http.get(
-        Uri.parse('$baseUrl/tools/zakat'),
+        uri,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
