@@ -22,7 +22,10 @@ engineering complete but the exact methodology constants clearly flagged
 ## Core bets
 - [x] Dividend purification calculator (flagship) — backend calc + endpoint done
       (`GET /api/tools/purification`, commit 14aeac9). Flutter screen still open.
-- [ ] Portfolio tracking UI in Flutter, wired to existing `repositories/portfolio.go`.
+- [x] Portfolio tracking UI in Flutter — done (commits a3f46e8, 5751174). Along the
+      way, found and fixed a pre-existing production bug: GetPortfolio never
+      returned the nested `stock` object watchlist_screen.dart has always expected,
+      so watchlist was silently stuck in its placeholder-card fallback since launch.
 - [x] Admin-configurable Shariah screening thresholds — backend done (commit dbf4cd1):
       migration 0054, `AppSettingsRepository` float support, `shariah.Thresholds`,
       `GET/PUT /api/admin/screening-thresholds`. Admin-dashboard page still open.
@@ -45,6 +48,20 @@ engineering complete but the exact methodology constants clearly flagged
 
 ## Working notes
 (appended per session as work lands — file, migration id, what's left)
+
+### Session 2 — 2026-09-12 (continued via /loop)
+Branch `feat/upsell-implementation`, commits a3f46e8 → 5751174. Weekly
+digest email, referral program, and Flutter portfolio UI landed — each
+reviewed by ecc:go-reviewer or ecc:flutter-reviewer before commit, and
+each review caught at least one real, would-have-shipped bug (query
+logic, a guaranteed-failure race, and a pre-existing production bug in
+watchlist that predates this session entirely). Backend: `go build`,
+`go vet`, `go test ./...` all green after every commit. Flutter:
+`flutter analyze` clean.
+
+Not started yet: admin-dashboard pages for screening-thresholds/referrals,
+real zakat+gold ledger, compliance certificates, error monitoring, CI
+pipeline. Still nothing pushed to GitHub.
 
 ### Session 1 — 2026-09-12
 Branch `feat/upsell-implementation`, 4 commits, backend only so far, `go build`
