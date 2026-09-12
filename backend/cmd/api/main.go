@@ -444,6 +444,11 @@ func main() {
 	// Setup router
 	router := gin.Default()
 
+	// Error monitoring (Sentry) — no-op if SENTRY_DSN isn't set, matching
+	// the graceful-degrade pattern used for FCM/email elsewhere. Placed
+	// before other middleware so it wraps everything downstream.
+	router.Use(services.InitErrorTracking())
+
 	// Compression middleware (gzip responses)
 	router.Use(middleware.CompressionMiddleware())
 
