@@ -28,7 +28,17 @@ engineering complete but the exact methodology constants clearly flagged
       so watchlist was silently stuck in its placeholder-card fallback since launch.
 - [x] Admin-configurable Shariah screening thresholds — done end-to-end (backend
       commit dbf4cd1, admin-dashboard page commit b97f8b4).
-- [ ] App-wide Pro tier (entitlement model + gating).
+- [x] App-wide Pro tier — done (commit 3e50607). Turned out to be mostly
+      already built (subscription_tier column, auth.isPremium gating in 4
+      Flutter screens, a full purchase screen with real Apple IAP) except
+      for one missing piece: UserRepository.UpdateSubscription had zero
+      callers, so a completed purchase never actually granted Premium.
+      Fixed the activation path + an expiry-check gap ecc:go-reviewer
+      caught (old/cancelled receipts couldn't be replayed to re-grant
+      Premium) + wired the Flutter purchase flow to react to activation
+      failure and refresh isPremium on success. No downgrade-on-expiry
+      job (needs Apple App Store Server Notifications, a webhook, not
+      implemented) — documented as a known gap in code.
 
 ## Trust foundation
 - [x] Real zakat engine — backend done (commit c581883): nisab threshold check,
