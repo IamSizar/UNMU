@@ -546,6 +546,7 @@ func main() {
 		{
 			stockData.GET("/search", publicHandler.SearchStocks)
 			stockData.GET("/stocks/:ticker", publicHandler.GetStockDetails)
+			stockData.GET("/stocks/:ticker/certificate", publicHandler.GetComplianceCertificate)
 			stockData.GET("/regions/:code/stocks", publicHandler.GetStocksByRegion)
 		}
 
