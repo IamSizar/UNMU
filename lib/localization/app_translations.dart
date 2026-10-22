@@ -23,6 +23,7 @@ import 'i18n_legal.dart';
 import 'i18n_misc.dart';
 import 'i18n_widgets.dart';
 import 'i18n_widgets2.dart';
+import 'i18n_pulse.dart';
 
 /// =============================================================================
 /// Centralized app translations (GetX i18n) — the single source of truth.
@@ -72,6 +73,7 @@ class AppTranslations extends Translations {
           ...miscEn,
           ...widgetsEn,
           ...widgets2En,
+          ...pulseEn,
         },
         'ar': {
           ..._ar,
@@ -96,6 +98,7 @@ class AppTranslations extends Translations {
           ...miscAr,
           ...widgetsAr,
           ...widgets2Ar,
+          ...pulseAr,
         },
       };
 }

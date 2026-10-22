@@ -18,6 +18,7 @@ import 'controllers/auth_controller.dart';
 import 'controllers/chat_presence_controller.dart';
 import 'controllers/currency_controller.dart';
 import 'controllers/feed_controller.dart';
+import 'controllers/pulse_controller.dart';
 import 'controllers/language_controller.dart';
 import 'controllers/mute_controller.dart';
 import 'controllers/notifications_controller.dart';
@@ -121,6 +122,8 @@ Future<void> main() async {
   // Saved posts — single source of truth for "is post X bookmarked?"
   // across every card, plus the saved-posts screen list.
   Get.put(SavedController(), permanent: true);
+  // UNMU Pulse — daily briefing state (today's items, saves, analytics events).
+  Get.put(PulseController(), permanent: true);
   // Tracks the community whose chat the user is currently viewing —
   // drives the global new-message banner so we don't toast a chat
   // the user is already reading.

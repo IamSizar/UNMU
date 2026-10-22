@@ -11,9 +11,10 @@ import 'screens/discover/discover_screen.dart';
 import 'screens/feed/feed_screen.dart';
 import 'screens/indexes/indexes_screen.dart';
 import 'screens/profile/profile_screen.dart';
+import 'screens/pulse/pulse_home_screen.dart';
 import 'screens/social/social_hub_screen.dart';
 // Watchlist + Tools live in Profile → Quick Actions (May 2026).
-// The PageView holds four tab screens (Discover, Indexes, Social, Feed)
+// The PageView holds five tab screens (Pulse, Discover, Indexes, Social, Feed)
 // and the bottom nav shows one button per page. Profile is a pushed route
 // opened from the avatar button on each screen, not a tab.
 import 'widgets/modern_bottom_nav.dart';
@@ -90,21 +91,22 @@ class _MainTabScaffoldState extends State<MainTabScaffold> {
 
   @override
   Widget build(BuildContext context) {
-    // ── 4 underlying screens in fixed page-order ────────────────────
-    // Page indices are LITERAL — the PageView always shows these four
+    // ── 5 underlying screens in fixed page-order ────────────────────
+    // Page indices are LITERAL — the PageView always shows these five
     // in this order, and the bottom nav has one button per page.
     // Only feedPage is referenced by name — the reels viewer needs to know
     // when it is on screen. The other three are implied by list order.
-    const feedPage = 3;
+    const feedPage = 4;
 
     final screens = const [
-      DiscoverScreen(),    // page 0
-      IndexesScreen(),     // page 1
-      SocialHubScreen(),   // page 2
-      FeedScreen(),        // page 3
+      PulseHomeScreen(),   // page 0 — UNMU Pulse, the daily briefing
+      DiscoverScreen(),    // page 1
+      IndexesScreen(),     // page 2
+      SocialHubScreen(),   // page 3
+      FeedScreen(),        // page 4
     ];
 
-    // Four permanent destinations, one per page — no contextual slot.
+    // Five permanent destinations, one per page — no contextual slot.
     //
     // Position 1 used to swap between Indexes and Feed depending on where
     // you already were, which meant whichever of the two you were NOT on had
@@ -112,6 +114,11 @@ class _MainTabScaffoldState extends State<MainTabScaffold> {
     // to a top-right avatar on every screen (see ProfileAvatarButton), which
     // freed the slot this needed.
     final navItems = <NavItem>[
+      NavItem(
+        icon: Icons.monitor_heart_outlined,
+        activeIcon: Icons.monitor_heart,
+        label: 'nav.pulse'.tr,
+      ),
       NavItem(
         icon: Icons.explore_outlined,
         activeIcon: Icons.explore,
@@ -139,14 +146,14 @@ class _MainTabScaffoldState extends State<MainTabScaffold> {
 
     // feedTabIndex feeds the existing `isFeedTabActive` Rx so the
     // reels viewer can pause when the user leaves Feed. The flag
-    // takes a page index (not a nav slot), so feedPage (3) is the
+    // takes a page index (not a nav slot), so feedPage (4) is the
     // correct value here.
     const feedTabIndex = feedPage;
 
     final feed = Get.find<FeedController>();
 
     // Shared body — the same PageView on every form factor. Swipes still
-    // work linearly (Discover → Indexes → Social → Feed).
+    // work linearly (Pulse → Discover → Indexes → Social → Feed).
     final pageView = PageView(
       controller: _pageController,
       physics: const BouncingScrollPhysics(),
@@ -188,8 +195,8 @@ class _MainTabScaffoldState extends State<MainTabScaffold> {
       // and defeats the point of a glass surface — there is nothing behind
       // it to blur.
       extendBody: true,
-      // PageView holds the 4 tab screens. Swipes still work
-      // linearly (Discover → Indexes → Social → Feed) — the
+      // PageView holds the 5 tab screens. Swipes still work
+      // linearly (Pulse → Discover → Indexes → Social → Feed) — the
       // navbar shows one button per page.
       body: pageView,
       // Bottom navbar hides when the reels viewer toggles fullscreen.
@@ -230,6 +237,7 @@ class _MainTabScaffoldState extends State<MainTabScaffold> {
     const accent = SocialTokens.cyan;
 
     const items = <(IconData, IconData, String)>[
+      (Icons.monitor_heart_outlined, Icons.monitor_heart, 'nav.pulse'),
       (Icons.explore_outlined, Icons.explore, 'nav.discover'),
       (Icons.bar_chart_outlined, Icons.bar_chart, 'nav.indexes'),
       (Icons.groups_outlined, Icons.groups, 'nav.social'),

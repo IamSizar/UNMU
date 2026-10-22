@@ -26,12 +26,13 @@ import 'package:halalstocks/widgets/aurora/aurora_glass_surface.dart';
 import 'package:halalstocks/widgets/modern_bottom_nav.dart';
 
 void main() {
-  /// Four items mirrors what MainTabScaffold actually passes.
+  /// Five items mirrors what MainTabScaffold actually passes (Pulse is first).
   const items = <NavItem>[
+    NavItem(icon: Icons.monitor_heart_outlined, label: 'Pulse'),
     NavItem(icon: Icons.explore_outlined, label: 'Discover'),
     NavItem(icon: Icons.bar_chart_outlined, label: 'Indexes'),
     NavItem(icon: Icons.groups_outlined, label: 'Social'),
-    NavItem(icon: Icons.person_outline, label: 'Profile'),
+    NavItem(icon: Icons.dynamic_feed_outlined, label: 'Feed'),
   ];
 
   /// Resolves the aurora recipe for one brightness by pumping a throwaway
@@ -200,6 +201,23 @@ void main() {
       );
       expect(tester.takeException(), isNull);
     });
+
+    for (final direction in <TextDirection>[TextDirection.ltr, TextDirection.rtl]) {
+      testWidgets('five tabs fit on a 320pt phone without overflow ($direction)',
+          (tester) async {
+        tester.view.physicalSize = const Size(320, 568);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        await pumpNav(tester, brightness: Brightness.light, direction: direction);
+
+        // A RenderFlex overflow would surface as a thrown exception.
+        expect(tester.takeException(), isNull);
+        for (final item in items) {
+          expect(find.text(item.label), findsOneWidget);
+        }
+      });
+    }
 
     testWidgets('tracks a fractional page offset without throwing',
         (tester) async {
