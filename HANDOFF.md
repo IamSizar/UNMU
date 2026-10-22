@@ -28,13 +28,29 @@ Docs/mockups: `42ac136`, `beeec44`, `df13024`.
 - Dashboard exercised in a real browser against the local API (create → submit → approve → publish, staff view, analytics).
 - A bug found by the new tests and fixed: archive day strip overflowed in Arabic / large text (`lib/screens/pulse/pulse_archive_screen.dart`).
 
-### External actions
-None. Nothing pushed, no Railway change, no staging env created, no production migration.
+### External actions (updated 2026-10-22, after Zaid approved staging)
+- **Created Railway environment `staging`** in project UNMU (`8b72ea8e-...`) by duplicating production's config. It has its own Postgres. Production was only READ (table list, community schema dump); nothing in production changed.
+- On the staging backend I **deleted** the inherited Firebase, Resend and AWS credentials so staging can never push, mail or write to real systems. FCM and sharing-to-S3 are therefore OFF on staging by design.
+- Staging dashboard's `VITE_API_BASE_URL` pointed at the PRODUCTION backend after duplication; changed to the staging backend.
+- Loaded schema into the staging DB from the local dev DB (`pg_dump --schema-only`), plus the 6 `community_*` tables copied from production's schema (the local DB lacked them). One trigram index failed (`gin_trgm_ops`: pg_trgm not installed on staging); irrelevant to Pulse.
+- Deployed local code with `railway up` from the REPO ROOT (not `--path-as-root`: the services' root dir is `backend` / `admin-dashboard` and a path-as-root upload fails with "directory .../backend does not exist"). Backend: live. Dashboard: builds failed twice on a Railway builder outage ("failed to list workers"); a third attempt (3290769b) was still initializing when this was written.
+- URLs: backend https://backend-staging-33c5.up.railway.app/api , dashboard https://dashboard-staging-98ea.up.railway.app (may still be the old production build until 3290769b succeeds).
+- Staging data left behind: throw-away users `pulse-*-<timestamp>@example.test`, items dated 1992-03-1x, and a test stock `ACCP`. Harmless; delete the environment or those rows when done.
+- NOT pushed to git. Commits are local only.
+
+### Acceptance run on staging
+`docs/pulse/acceptance/pulse_acceptance.py` (needs STAGING_API, STAGING_DB_URL, PSQL; refuses production URLs) → **38/38 checks passed** on the spec §22 list: four items, detail, source/evidence/verified time, confirmed vs analysis, save/share, stock link, drafts, review/approve cycle, role enforcement, scheduled publishing (real scheduler, ~90 s), archive + search, versions, change log, corrections, user prefs, analytics, Arabic+English content.
+**Not covered by it:** push delivery (FCM is off on staging), RTL/LTR rendering and the in-app experience on a real device (widget tests only), the dashboard UI on staging.
+Review findings fixed in `68f35cc` (future-dated publish leak, event existence oracle). Review findings left for Zaid: corrections need no second person; one person can both review and approve a sensitive item; Retry button gives no spinner; toggleSave/loadToday races on fast taps or account switch; a saved item disappears when replaced in its slot.
+
+### Production deploy notes
+Production DB lacks the `referrals` / `user_referral_codes` tables that the code needs (they exist locally and on staging only). Migration `0056_pulse.sql` AND the referrals migration must be applied by hand before shipping this backend.
+
+
 
 ### Still open
 - **Ask Zaid before:** creating the staging Railway environment (decision made: test on a new staging env), and any push.
 - Migration 0056 must be applied by hand to staging and production DBs (prod never auto-migrates).
-- Spec §22 acceptance checks on staging not run yet (OPOS Pulse 11). Code + security review was started; check the OPOS task for its result.
 - Flutter was never run on a simulator/device this round; only widget tests and analyze.
 - No widget test for `PulseNotificationPrefsScreen` (its service is static HTTP with no seam).
 - Tapping a Pulse push only opens the app: the app has no push-tap routing at all (no `onMessageOpenedApp`).
