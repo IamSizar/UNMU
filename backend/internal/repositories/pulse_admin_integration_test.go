@@ -495,3 +495,31 @@ func TestPulsePrefsRoundTrip(t *testing.T) {
 		t.Errorf("existing preferences changed by a Pulse update: %+v", p)
 	}
 }
+
+func TestPulseStockSearch(t *testing.T) {
+	f := newCMSFixture(t)
+	ctx := context.Background()
+	db := f.repo.db
+	tag := fmt.Sprintf("%d", time.Now().UnixNano()%1_000_000)
+	var id int64
+	if err := db.QueryRow(`INSERT INTO stocks (ticker, exchange, name) VALUES ($1,'TEST',$2) RETURNING id`,
+		"QZX"+tag, "Quartz 100% Holdings "+tag).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Exec(`DELETE FROM stocks WHERE id = $1`, id) })
+
+	byTicker, err := f.repo.SearchStocks(ctx, "qzx"+tag, 20)
+	if err != nil || len(byTicker) != 1 || byTicker[0].ID != int(id) {
+		t.Fatalf("ticker search (case-insensitive): %+v err=%v", byTicker, err)
+	}
+	byName, _ := f.repo.SearchStocks(ctx, "quartz 100% hold", 20)
+	if len(byName) != 1 {
+		t.Errorf("name search with a literal %%: %d results, want 1", len(byName))
+	}
+	if wild, _ := f.repo.SearchStocks(ctx, "100%", 20); len(wild) != 1 {
+		t.Errorf("a percent sign must match literally, got %d results", len(wild))
+	}
+	if none, _ := f.repo.SearchStocks(ctx, "no-such-stock-"+tag, 20); len(none) != 0 {
+		t.Errorf("unexpected results: %+v", none)
+	}
+}

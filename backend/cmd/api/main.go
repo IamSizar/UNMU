@@ -1101,6 +1101,7 @@ func main() {
 		pulseAdmin.POST("/staff", pulseAdminHandler.AddStaff)
 		pulseAdmin.DELETE("/staff/:id", pulseAdminHandler.RemoveStaff)
 		pulseAdmin.GET("/analytics", pulseAdminHandler.Analytics)
+		pulseAdmin.GET("/stocks", pulseAdminHandler.Stocks)
 	}
 
 	admin := api.Group("/admin")

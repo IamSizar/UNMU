@@ -5,7 +5,9 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"halalstocks/internal/models"
 	"halalstocks/internal/pulse"
@@ -35,6 +37,7 @@ import (
 //	GET    /staff                   role assignments
 //	POST   /staff, DELETE /staff/:id    system admin only
 //	GET    /analytics               engagement summary
+//	GET    /stocks?q=               stock search for the linked-stock picker
 // =============================================================================
 
 const pulseMaxAnalyticsDays = 92
@@ -404,4 +407,24 @@ func (h *PulseAdminHandler) Analytics(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, a)
+}
+
+// Stocks — GET /stocks?q=. Small search for the "linked stock" picker, open to
+// every Pulse staff member (the general /admin/stocks API is admin-only).
+func (h *PulseAdminHandler) Stocks(c *gin.Context) {
+	q := strings.TrimSpace(c.Query("q"))
+	if utf8.RuneCountInString(q) < 2 {
+		c.JSON(http.StatusOK, gin.H{"stocks": []models.PulseStockRef{}})
+		return
+	}
+	if utf8.RuneCountInString(q) > 60 {
+		pulseBadRequest(c, "Search text is too long")
+		return
+	}
+	stocks, err := h.repo.SearchStocks(c.Request.Context(), q, 20)
+	if err != nil {
+		pulseRuleResponse(c, "search stocks", err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"stocks": stocks})
 }

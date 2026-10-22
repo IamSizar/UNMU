@@ -384,3 +384,28 @@ func (r *PulseAdminRepository) ChangeLog(ctx context.Context, itemID int64) ([]m
 	}
 	return out, rows.Err()
 }
+
+// SearchStocks finds stocks by ticker or name for the "linked stock" picker.
+// Text is matched literally (LIKE wildcards are escaped) and capped at limit.
+func (r *PulseAdminRepository) SearchStocks(ctx context.Context, q string, limit int) ([]models.PulseStockRef, error) {
+	pattern := "%" + escapeLike(q) + "%"
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, ticker, exchange, name FROM stocks
+		  WHERE is_active IS NOT FALSE
+		    AND (ticker ILIKE $1 ESCAPE '\' OR name ILIKE $1 ESCAPE '\')
+		  ORDER BY (LOWER(ticker) = LOWER($2)) DESC, ticker
+		  LIMIT $3`, pattern, q, limit)
+	if err != nil {
+		return nil, fmt.Errorf("searching stocks: %w", err)
+	}
+	defer rows.Close()
+	out := []models.PulseStockRef{}
+	for rows.Next() {
+		var s models.PulseStockRef
+		if err := rows.Scan(&s.ID, &s.Ticker, &s.Exchange, &s.Name); err != nil {
+			return nil, fmt.Errorf("scanning stock: %w", err)
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
