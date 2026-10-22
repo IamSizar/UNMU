@@ -641,6 +641,13 @@ type prefsBody struct {
 	SubscriptionsEnabled *bool `json:"subscriptionsEnabled"`
 	CommunitiesEnabled   *bool `json:"communitiesEnabled"`
 	MarketingEnabled     *bool `json:"marketingEnabled"`
+
+	// UNMU Pulse switches (migration 0056).
+	PulseEnabled            *bool `json:"pulseEnabled"`
+	PulseNewEnabled         *bool `json:"pulseNewEnabled"`
+	PulseUpdatesEnabled     *bool `json:"pulseUpdatesEnabled"`
+	PulseCorrectionsEnabled *bool `json:"pulseCorrectionsEnabled"`
+	PulseSavedEnabled       *bool `json:"pulseSavedEnabled"`
 }
 
 // GetNotificationPrefs — GET /api/me/notification-prefs
@@ -682,6 +689,12 @@ func (h *ProfileHandler) UpdateNotificationPrefs(c *gin.Context) {
 		SubscriptionsEnabled: body.SubscriptionsEnabled,
 		CommunitiesEnabled:   body.CommunitiesEnabled,
 		MarketingEnabled:     body.MarketingEnabled,
+
+		PulseEnabled:            body.PulseEnabled,
+		PulseNewEnabled:         body.PulseNewEnabled,
+		PulseUpdatesEnabled:     body.PulseUpdatesEnabled,
+		PulseCorrectionsEnabled: body.PulseCorrectionsEnabled,
+		PulseSavedEnabled:       body.PulseSavedEnabled,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

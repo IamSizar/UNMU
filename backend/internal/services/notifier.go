@@ -125,6 +125,15 @@ func categoryEnabled(p *repositories.NotificationPrefs, cat NotifCategory) bool 
 		return p.CommunitiesEnabled
 	case CatMarketing:
 		return p.MarketingEnabled
+	// Pulse: the master switch AND the event's own switch. Changes to an item
+	// the user saved also need the "saved items" switch (they are only ever
+	// sent to people who saved it).
+	case CatPulseNew:
+		return p.PulseEnabled && p.PulseNewEnabled
+	case CatPulseUpdate:
+		return p.PulseEnabled && p.PulseSavedEnabled && p.PulseUpdatesEnabled
+	case CatPulseCorrection:
+		return p.PulseEnabled && p.PulseSavedEnabled && p.PulseCorrectionsEnabled
 	case CatCompliance:
 		// No dedicated toggle yet (would need a notification_prefs column +
 		// migration) — gated only by the master push switch for now, same

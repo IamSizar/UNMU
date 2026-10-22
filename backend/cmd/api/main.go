@@ -218,11 +218,12 @@ func main() {
 	pulseRepo := repositories.NewPulseRepository(database)
 	pulseHandler := handlers.NewPulseHandler(pulseRepo)
 	// Pulse CMS (editors / reviewers / approvers / admins) + the scheduler that
-	// publishes items when their time arrives. The notification hook is added
-	// together with the notification work; nil means "publish silently".
+	// publishes items when their time arrives. Both tell the notifier, which
+	// pushes "new Pulse" / "updated" / "corrected" to the right users.
 	pulseAdminRepo := repositories.NewPulseAdminRepository(database)
-	pulseAdminHandler := handlers.NewPulseAdminHandler(pulseAdminRepo, nil)
-	services.NewPulsePublisher(pulseAdminRepo, nil).Start(context.Background())
+	pulseNotifier := services.NewPulseNotifier(notifier, pulseAdminRepo)
+	pulseAdminHandler := handlers.NewPulseAdminHandler(pulseAdminRepo, pulseNotifier.OnChange)
+	services.NewPulsePublisher(pulseAdminRepo, pulseNotifier.OnPublished).Start(context.Background())
 	promoHandler.SetAudits(auditRepo)
 	marketHandler := handlers.NewMarketHandler(marketProvider)
 	// SocialHandler needs the post-interactions + post-saves repos (used

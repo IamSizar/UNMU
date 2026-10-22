@@ -392,3 +392,106 @@ func TestPulseCMSWorkflow(t *testing.T) {
 		}
 	})
 }
+
+func TestPulseRecipients(t *testing.T) {
+	f := newCMSFixture(t)
+	ctx := context.Background()
+	db := f.repo.db
+
+	// Four people with a device; the fixture's four users play them.
+	// author: defaults · reviewer: Pulse master off · approver: "new" off · admin: "saved" off
+	ids := []int64{f.author.UserID, f.reviewer.UserID, f.approver.UserID, f.admin.UserID}
+	for i, id := range ids {
+		if _, err := db.Exec(`INSERT INTO user_push_tokens (user_id, token, platform) VALUES ($1,$2,'ios')`,
+			id, fmt.Sprintf("pulse-test-token-%d-%d", id, time.Now().UnixNano())); err != nil {
+			t.Fatalf("token %d: %v", i, err)
+		}
+	}
+	t.Cleanup(func() {
+		for _, id := range ids {
+			db.Exec(`DELETE FROM user_push_tokens WHERE user_id = $1`, id)
+			db.Exec(`DELETE FROM user_notification_prefs WHERE user_id = $1`, id)
+		}
+	})
+	set := func(id int64, col string) {
+		db.Exec(`INSERT INTO user_notification_prefs (user_id) VALUES ($1) ON CONFLICT DO NOTHING`, id)
+		if _, err := db.Exec(`UPDATE user_notification_prefs SET `+col+` = FALSE WHERE user_id = $1`, id); err != nil {
+			t.Fatalf("set %s: %v", col, err)
+		}
+	}
+	set(f.reviewer.UserID, "pulse_enabled")
+	set(f.approver.UserID, "pulse_new_enabled")
+	set(f.admin.UserID, "pulse_saved_enabled")
+
+	has := func(list []int64, id int64) bool {
+		for _, x := range list {
+			if x == id {
+				return true
+			}
+		}
+		return false
+	}
+	got, err := f.repo.NewItemRecipients(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !has(got, f.author.UserID) || !has(got, f.admin.UserID) {
+		t.Errorf("default users should get new-item pushes: %v", got)
+	}
+	if has(got, f.reviewer.UserID) || has(got, f.approver.UserID) {
+		t.Errorf("users with the Pulse master / new switch off must be skipped: %v", got)
+	}
+
+	// Savers: everyone saves the item; only people who still allow saved-item
+	// changes (and Pulse overall) are returned.
+	item := f.create(cmsInput("2091-03-01", "global"))
+	f.must(item.ID, f.author, pulse.DoSubmit)
+	f.must(item.ID, f.approver, pulse.DoApprove)
+	f.must(item.ID, f.approver, pulse.DoPublish)
+	for _, id := range ids {
+		db.Exec(`INSERT INTO pulse_saves (user_id, item_id) VALUES ($1,$2)`, id, item.ID)
+	}
+	savers, err := f.repo.SaverRecipients(ctx, item.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !has(savers, f.author.UserID) || !has(savers, f.approver.UserID) {
+		t.Errorf("author and approver should be told about changes: %v", savers)
+	}
+	if has(savers, f.reviewer.UserID) || has(savers, f.admin.UserID) {
+		t.Errorf("master-off and saved-off users must be skipped: %v", savers)
+	}
+	// A user who did NOT save the item is never a saver recipient.
+	db.Exec(`DELETE FROM pulse_saves WHERE user_id = $1 AND item_id = $2`, f.author.UserID, item.ID)
+	savers, _ = f.repo.SaverRecipients(ctx, item.ID)
+	if has(savers, f.author.UserID) {
+		t.Error("someone who did not save the item must not be notified about it")
+	}
+}
+
+func TestPulsePrefsRoundTrip(t *testing.T) {
+	f := newCMSFixture(t)
+	prefs := NewNotificationPrefsRepository(f.repo.db)
+	uid := f.author.UserID
+	t.Cleanup(func() { f.repo.db.Exec(`DELETE FROM user_notification_prefs WHERE user_id = $1`, uid) })
+
+	p, err := prefs.GetOrDefault(uid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !p.PulseEnabled || !p.PulseNewEnabled || !p.PulseUpdatesEnabled || !p.PulseCorrectionsEnabled || !p.PulseSavedEnabled {
+		t.Errorf("Pulse switches should all default to on: %+v", p)
+	}
+	off := false
+	p, err = prefs.Update(uid, PrefsMutation{PulseNewEnabled: &off, PulseSavedEnabled: &off})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.PulseNewEnabled || p.PulseSavedEnabled || !p.PulseEnabled || !p.PulseUpdatesEnabled || !p.PulseCorrectionsEnabled {
+		t.Errorf("only the two switches sent should change: %+v", p)
+	}
+	// Untouched, older settings are unaffected.
+	if !p.PushEnabled || !p.LikesEnabled {
+		t.Errorf("existing preferences changed by a Pulse update: %+v", p)
+	}
+}

@@ -31,6 +31,11 @@ const (
 	CatCommunities   NotifCategory = "communities"
 	CatMarketing     NotifCategory = "marketing"
 	CatCompliance    NotifCategory = "compliance"
+
+	// UNMU Pulse. Three categories because each has its own on/off switch.
+	CatPulseNew        NotifCategory = "pulse_new"
+	CatPulseUpdate     NotifCategory = "pulse_update"
+	CatPulseCorrection NotifCategory = "pulse_correction"
 )
 
 // NotifTemplate is the bilingual push copy for one notification type.
@@ -46,6 +51,39 @@ type NotifTemplate struct {
 // type starts sending a push. Keep the {placeholder} tokens identical
 // across En/Ar so the same params map fills both.
 var notifTemplates = map[string]NotifTemplate{
+	// UNMU Pulse -----------------------------------------------------------
+	// The item's title is authored in both languages, so each language's copy
+	// uses its own param ({titleEn} / {titleAr}).
+	"pulse_new": {
+		Category: CatPulseNew,
+		TitleEn:  "UNMU Pulse",
+		BodyEn:   "{titleEn}",
+		TitleAr:  "نبض أنمو",
+		BodyAr:   "{titleAr}",
+	},
+	// Several items going live in the same minute collapse into one push.
+	"pulse_new_many": {
+		Category: CatPulseNew,
+		TitleEn:  "UNMU Pulse",
+		BodyEn:   "Today's Pulse is ready: {count} new items.",
+		TitleAr:  "نبض أنمو",
+		BodyAr:   "نبض اليوم جاهز: {count} عناصر جديدة.",
+	},
+	"pulse_updated": {
+		Category: CatPulseUpdate,
+		TitleEn:  "Updated: a Pulse item you saved",
+		BodyEn:   "{titleEn}",
+		TitleAr:  "تحديث: عنصر من نبض حفظته",
+		BodyAr:   "{titleAr}",
+	},
+	"pulse_corrected": {
+		Category: CatPulseCorrection,
+		TitleEn:  "Corrected: a Pulse item you saved",
+		BodyEn:   "{titleEn}",
+		TitleAr:  "تصحيح: عنصر من نبض حفظته",
+		BodyAr:   "{titleAr}",
+	},
+
 	// Community membership ------------------------------------------------
 	// Sent to the community OWNER when someone requests to join.
 	"community_join_request": {
