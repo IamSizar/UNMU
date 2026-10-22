@@ -165,7 +165,6 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                 );
               },
             ),
-          const SliverToBoxAdapter(child: SizedBox(height: 100)),
         ],
       ),
     );

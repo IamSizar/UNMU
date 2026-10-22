@@ -1,36 +1,25 @@
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:get/get.dart';
 
-import '../controllers/feed_controller.dart';
-import '../models/expert_post.dart';
 import '../screens/social/social_tokens.dart';
+import '../theme/aurora_tokens.dart';
+import 'aurora/aurora_glass_surface.dart';
 
 /// =============================================================================
 /// Modern Bottom Navigation — context-aware floating capsule.
 ///
-/// Two modes that swap with a 300ms cross-fade + slide:
+/// Rendered as an Aurora bento glass pill: a stadium-shaped frosted pane
+/// (see widgets/aurora/aurora_glass_surface.dart) lit from behind by the
+/// UNMU accent sweep, with the active tab marked by a sliding aurora pill.
+/// Every colour is derived from [SocialTokens] / [SocialPalette] at build
+/// time, so the bar follows the brand and the current theme.
 ///
-///   1. Regular  — the default 7-tab nav (Discover · Indexes · Social ·
-///                 Feed · Watchlist · Tools · Profile). Inactive tabs
-///                 are icon-only; the active tab expands into a
-///                 cyan-gradient pill with its label.
+/// The bar is identical on every tab. It used to morph into an
+/// Articles/Videos/Reels filter row on the Feed page; that made the
+/// navigation change shape under the user mid-journey, so the filter moved
+/// back to the Feed screen's own menu where it belongs.
 ///
-///   2. Feed     — when the user is on the Feed tab, the bar morphs
-///                 into a filter-aware row:
-///
-///                  [ 🏠 ]  [ Articles ]  [ Videos ]  [ Reels ]  [ 👤 ]
-///
-///                 Tapping a filter pill flips
-///                 [FeedController.setFilter] (same plumbing the in-page
-///                 dropdown uses). Tapping an *active* filter pill
-///                 deselects it → back to "All". The home pill on the
-///                 left bounces back to the Discover tab; the profile
-///                 pill on the right jumps straight to Profile.
-///
-/// Switch is driven by `feedMode` from the scaffold.
 /// =============================================================================
 class ModernBottomNav extends StatelessWidget {
   final int currentIndex;
@@ -39,23 +28,11 @@ class ModernBottomNav extends StatelessWidget {
 
   /// Smooth page offset from the parent `PageController` (e.g. 2.4 means
   /// "40% of the way from Social to Feed during a swipe"). Drives the
-  /// sliding cyan dot indicator and the colour interpolation of each
+  /// sliding aurora pill and the colour interpolation of each
   /// tab's icon + label. When omitted, falls back to [currentIndex] so
   /// the bar still works in static contexts that aren't backed by a
   /// PageView.
   final double? currentPage;
-
-  /// When true, the bar renders the Feed-mode filter row instead of the
-  /// regular tab list. Driven by the scaffold based on `currentIndex`.
-  final bool feedMode;
-
-  /// Tapped when the home pill is pressed in Feed mode — typically
-  /// "switch to Discover" so the user can escape filter mode without
-  /// losing the rest of the nav.
-  final VoidCallback? onGoHome;
-
-  /// Tapped when the profile pill is pressed in Feed mode.
-  final VoidCallback? onGoProfile;
 
   const ModernBottomNav({
     super.key,
@@ -63,14 +40,11 @@ class ModernBottomNav extends StatelessWidget {
     required this.items,
     required this.onTap,
     this.currentPage,
-    this.feedMode = false,
-    this.onGoHome,
-    this.onGoProfile,
   });
 
   /// Effective page offset — honours `currentPage` when provided,
   /// otherwise the integer index. Clamped to `[0, items.length - 1]`
-  /// so a runaway PageView overshoot doesn't drag the dot off the bar.
+  /// so a runaway PageView overshoot can't drag the pill off the bar.
   double get _effectivePage {
     final raw = currentPage ?? currentIndex.toDouble();
     return raw.clamp(0.0, (items.length - 1).toDouble());
@@ -79,83 +53,34 @@ class ModernBottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = SocialTheme.of(context);
+    // Resolve the aurora recipe once for this frame and hand it to both the
+    // surface and the sliding pill, so the two can never disagree about
+    // which brightness they are painting for.
+    final glass = AuroraGlass.of(context);
     return SafeArea(
       top: false,
       child: Padding(
-        // Floating glass bar — a hair of horizontal margin from the
-        // screen edges so the shadow can render cleanly.
-        padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-        child: ClipRRect(
-          // Glass effect — the page content behind the bar gets a real
-          // backdrop blur, so the bar feels like floating glass instead
-          // of a flat panel. Subtle, but it elevates "looks premium".
-          borderRadius: BorderRadius.circular(26),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-            child: Container(
-              // Compact inner padding — the tabs handle their own
-              // internal layout; the bar just needs enough room
-              // for the rounded border + dot indicator overflow.
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-              decoration: BoxDecoration(
-                // Translucent surface so the blur shows through. Falls
-                // back to a fully-opaque surface on light themes where
-                // the translucent variant would wash out.
-                color: palette.surface.withValues(
-                  alpha: palette.isDark ? 0.78 : 0.92,
-                ),
-                borderRadius: BorderRadius.circular(26),
-                border: Border.all(
-                  color: palette.border.withValues(alpha: 0.65),
-                  width: 1,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(
-                      alpha: palette.isDark ? 0.50 : 0.10,
-                    ),
-                    blurRadius: 30,
-                    spreadRadius: -6,
-                    offset: const Offset(0, 14),
-                  ),
-                ],
-              ),
-              // Cross-fade + slide between the two layouts. KeyedSubtree
-              // assigns each layout a stable key so AnimatedSwitcher knows
-              // they're different children and runs the transition.
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                transitionBuilder: (child, anim) {
-                  return FadeTransition(
-                    opacity: anim,
-                    child: SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(0, 0.25),
-                        end: Offset.zero,
-                      ).animate(anim),
-                      child: child,
-                    ),
-                  );
-                },
-                child: feedMode
-                    ? _FeedFilterRow(
-                        key: const ValueKey('feed-filter-row'),
-                        palette: palette,
-                        onGoHome: onGoHome,
-                        onGoProfile: onGoProfile,
-                      )
-                    : _RegularTabRow(
-                        key: const ValueKey('regular-tab-row'),
-                        items: items,
-                        currentIndex: currentIndex,
-                        currentPage: _effectivePage,
-                        onTap: onTap,
-                        palette: palette,
-                      ),
-              ),
-            ),
+        // Floating pill — wider side margins than the old rounded-rect
+        // bar. A stadium shape needs visible gutters to read as a pill
+        // rather than a full-width bar with rounded ends, and the margin
+        // gives the aurora glow somewhere to spill.
+        //
+        // The bottom inset is deliberately small: this sits INSIDE the
+        // SafeArea, so the home indicator is already cleared and anything
+        // larger just floats the bar awkwardly high up the screen.
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 2),
+        child: AuroraGlassSurface(
+          glass: glass,
+          // Wider horizontal padding than before so the first and last
+          // tabs clear the pill's rounded caps instead of being clipped
+          // by them.
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: _RegularTabRow(
+            items: items,
+            currentIndex: currentIndex,
+            currentPage: _effectivePage,
+            onTap: onTap,
+            palette: palette,
           ),
         ),
       ),
@@ -167,12 +92,11 @@ class ModernBottomNav extends StatelessWidget {
 // Regular tab row.
 //
 // LAYOUT (current — June 2026):
-//   All 7 tabs are visible at once, every one the same size. The bar
+//   Every tab is visible at once and all are the same size. The bar
 //   stays at its natural compact height — no scrolling, no off-screen
-//   tabs to hunt for. Sliding cyan dot indicator at the top of each
-//   tab tracks the active page; the dot interpolates with
-//   `currentPage` so body-swipes glide it smoothly between tab
-//   centres.
+//   tabs to hunt for. A sliding aurora pill sits BEHIND the active tab
+//   and interpolates with `currentPage`, so a body-swipe glides it
+//   smoothly between tab centres rather than snapping on release.
 //
 //   Why this over the earlier scrollable variant: navbar tabs that
 //   require swiping to reach hurt navigation. Bigger labels aren't
@@ -182,14 +106,13 @@ class ModernBottomNav extends StatelessWidget {
 class _RegularTabRow extends StatelessWidget {
   final List<NavItem> items;
   final int currentIndex;
-  /// Smooth page offset — used for the sliding dot + per-tab colour
+  /// Smooth page offset — used for the sliding pill + per-tab colour
   /// interpolation. Updated every frame while the user is swiping.
   final double currentPage;
   final ValueChanged<int> onTap;
   final SocialPalette palette;
 
   const _RegularTabRow({
-    super.key,
     required this.items,
     required this.currentIndex,
     required this.currentPage,
@@ -197,9 +120,15 @@ class _RegularTabRow extends StatelessWidget {
     required this.palette,
   });
 
-  static const double _dotWidth = 16;
-  static const double _dotHeight = 3;
-  static const double _dotTopOffset = 3;
+  // The active indicator is a full-height aurora pill sitting behind the
+  // selected tab, not the 3px dot this bar used before. A pill is what
+  // makes the bar read as Aurora bento — a bento cell lit from inside —
+  // and it reads at a glance where a hairline dot did not.
+  //
+  // Inset from the tab's own width so neighbouring pills would never touch
+  // if the slide is interrupted mid-swipe.
+  static const double _pillInsetX = 3;
+  static const double _pillInsetY = 2;
 
   @override
   Widget build(BuildContext context) {
@@ -208,23 +137,42 @@ class _RegularTabRow extends StatelessWidget {
         // Equal-width tabs. Constraints.maxWidth includes the navbar's
         // inner padding (the parent Container handles outer margins).
         final tabWidth = constraints.maxWidth / items.length;
-        // Sliding dot — positioned at the fractional current page so
+        // Sliding pill — positioned at the fractional current page so
         // it glides between tab centres while the user swipes the
         // body PageView.
         //
         // The tab Row auto-reverses under RTL, but Positioned.left is
-        // ALWAYS physical-left — so under RTL we mirror the dot's x,
+        // ALWAYS physical-left — so under RTL we mirror the pill's x,
         // otherwise it lands over the LTR-mirror of the active tab
         // (i.e. the wrong tab) when the language is Arabic.
         final isRtl = Directionality.of(context) == TextDirection.rtl;
-        final dotCenter = (currentPage + 0.5) * tabWidth;
-        final dotLeft =
-            (isRtl ? (constraints.maxWidth - dotCenter) : dotCenter) -
-                (_dotWidth / 2);
+        final pillCenter = (currentPage + 0.5) * tabWidth;
+        final pillLeft =
+            (isRtl ? (constraints.maxWidth - pillCenter) : pillCenter) -
+                (tabWidth / 2) +
+                _pillInsetX;
+
+        // Resolved once here rather than inside the pill so the aurora
+        // colours are looked up a single time per layout pass.
+        final glass = AuroraGlass.of(context);
 
         return Stack(
           clipBehavior: Clip.none,
           children: [
+            // Sliding aurora pill, UNDER the tabs so icons and labels stay
+            // fully legible on top of it. Positioned (not animated) because
+            // `currentPage` is already a smooth fractional value driven by
+            // the body PageView — the pill tracks the user's finger frame
+            // by frame rather than chasing it with its own animation.
+            Positioned(
+              left: pillLeft,
+              top: _pillInsetY,
+              bottom: _pillInsetY,
+              width: tabWidth - (_pillInsetX * 2),
+              child: IgnorePointer(
+                child: _AuroraActivePill(glass: glass),
+              ),
+            ),
             Row(
               children: List.generate(items.length, (i) {
                 // 1.0 when the page is exactly on this tab, 0.0 once
@@ -248,26 +196,6 @@ class _RegularTabRow extends StatelessWidget {
                 );
               }),
             ),
-            // Sliding dot indicator.
-            Positioned(
-              top: _dotTopOffset,
-              left: dotLeft,
-              child: Container(
-                width: _dotWidth,
-                height: _dotHeight,
-                decoration: BoxDecoration(
-                  color: SocialTokens.cyan,
-                  borderRadius: BorderRadius.circular(2),
-                  boxShadow: [
-                    BoxShadow(
-                      color: SocialTokens.cyan.withValues(alpha: 0.55),
-                      blurRadius: 6,
-                      spreadRadius: -1,
-                    ),
-                  ],
-                ),
-              ),
-            ),
           ],
         );
       },
@@ -276,190 +204,37 @@ class _RegularTabRow extends StatelessWidget {
 }
 
 // ============================================================================
-// Feed-mode filter row — home + 3 filter pills + profile.
+// _AuroraActivePill — the lit cell behind the selected tab.
 //
-// The filter state lives in `FeedController` (the same controller the
-// in-page dropdown writes to), so toggling a pill here also flips the
-// dropdown — and vice versa. Wrapped in Obx so the highlighted pill
-// updates the moment the filter state changes from anywhere.
+// The aurora sweep at low alpha, inside a stadium with a brand-tinted rim and
+// a soft outer glow. Alpha is deliberately low: this sits UNDER the icon and
+// label, so anything stronger would cost the 4.5:1 text contrast the design
+// rules require.
 // ============================================================================
-class _FeedFilterRow extends StatelessWidget {
-  final SocialPalette palette;
-  final VoidCallback? onGoHome;
-  final VoidCallback? onGoProfile;
+class _AuroraActivePill extends StatelessWidget {
+  final AuroraGlass glass;
 
-  const _FeedFilterRow({
-    super.key,
-    required this.palette,
-    required this.onGoHome,
-    required this.onGoProfile,
-  });
+  const _AuroraActivePill({required this.glass});
 
   @override
   Widget build(BuildContext context) {
-    return Obx(() {
-      final ctrl = Get.find<FeedController>();
-      final active = ctrl.filter;
-
-      void setOrToggle(PostType type) {
-        HapticFeedback.selectionClick();
-        // Tap-the-active-pill behaviour: implicit "All" by deselecting.
-        ctrl.setFilter(active == type ? null : type);
-      }
-
-      return Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          _MiniRoundButton(
-            icon: Icons.home_rounded,
-            tooltip: 'nav.backToDiscover'.tr,
-            palette: palette,
-            onTap: () {
-              HapticFeedback.selectionClick();
-              onGoHome?.call();
-            },
-          ),
-          _FilterPill(
-            label: 'feed.filter.articles'.tr,
-            icon: Icons.text_snippet_rounded,
-            selected: active == PostType.article,
-            palette: palette,
-            onTap: () => setOrToggle(PostType.article),
-          ),
-          _FilterPill(
-            label: 'feed.filter.videos'.tr,
-            icon: Icons.smart_display_rounded,
-            selected: active == PostType.video,
-            palette: palette,
-            onTap: () => setOrToggle(PostType.video),
-          ),
-          _FilterPill(
-            label: 'feed.filter.reels'.tr,
-            icon: Icons.ondemand_video_rounded,
-            selected: active == PostType.reel,
-            palette: palette,
-            onTap: () => setOrToggle(PostType.reel),
-          ),
-          _MiniRoundButton(
-            icon: Icons.person_rounded,
-            tooltip: 'nav.profile'.tr,
-            palette: palette,
-            onTap: () {
-              HapticFeedback.selectionClick();
-              onGoProfile?.call();
-            },
+    return DecoratedBox(
+      decoration: ShapeDecoration(
+        shape: StadiumBorder(
+          side: BorderSide(color: glass.pillGlow, width: 1),
+        ),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: glass.pillFill,
+        ),
+        shadows: [
+          BoxShadow(
+            color: glass.pillGlow,
+            blurRadius: 14,
+            spreadRadius: -4,
           ),
         ],
-      );
-    });
-  }
-}
-
-class _FilterPill extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final SocialPalette palette;
-  final VoidCallback onTap;
-
-  const _FilterPill({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.palette,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 240),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          gradient: selected
-              ? const LinearGradient(
-                  colors: [SocialTokens.cyan, SocialTokens.cyanSoft],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-              : null,
-          color: selected ? null : Colors.transparent,
-          borderRadius: BorderRadius.circular(22),
-          boxShadow: selected
-              ? [
-                  BoxShadow(
-                    color: SocialTokens.cyan.withValues(alpha: 0.5),
-                    blurRadius: 16,
-                    spreadRadius: -4,
-                    offset: const Offset(0, 4),
-                  ),
-                ]
-              : null,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 18,
-              color: selected
-                  ? const Color(0xFF0A1628)
-                  : palette.textMuted,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                color: selected
-                    ? const Color(0xFF0A1628)
-                    : palette.textMuted,
-                fontWeight: FontWeight.w900,
-                fontSize: 12.5,
-                letterSpacing: 0.2,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _MiniRoundButton extends StatelessWidget {
-  final IconData icon;
-  final String tooltip;
-  final SocialPalette palette;
-  final VoidCallback onTap;
-
-  const _MiniRoundButton({
-    required this.icon,
-    required this.tooltip,
-    required this.palette,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          width: 40,
-          height: 40,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: palette.surfaceElevated,
-            border: Border.all(color: palette.border),
-          ),
-          child: Icon(icon, size: 18, color: palette.textPrimary),
-        ),
       ),
     );
   }
@@ -468,12 +243,11 @@ class _MiniRoundButton extends StatelessWidget {
 // ============================================================================
 // Single regular-mode tab — receives a smooth `selection` (0..1) so the
 // icon + label + halo all interpolate smoothly as the user swipes
-// between pages. The dot indicator is no longer drawn here; it's a
-// single overlay in [_RegularTabRow] that slides between tab centres.
+// between pages. The active indicator is not drawn here; it's a single
+// aurora pill in [_RegularTabRow] that slides between tab centres
+// BEHIND this widget.
 //
 // Layout per tab (top → bottom):
-//   • Spacer matching the overlay dot's height + padding (so labels
-//     align across all tabs whether the dot is over them or not)
 //   • Icon with a halo that fades in proportional to `selection`
 //   • Always-visible label, colour-interpolated from muted → cyan
 //
@@ -530,11 +304,11 @@ class _NavTab extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Reserve vertical space where the sliding dot lives so
-            // every tab's icon + label sit at the same baseline,
-            // whether the dot is hovering over them or not.
-            //   dotTopOffset(3) + dotHeight(3) + 4 extra = 10
-            const SizedBox(height: 10),
+            // No top spacer any more. The old sliding dot lived above the
+            // icon and every tab had to reserve 10px for it to keep a
+            // shared baseline. The aurora pill sits BEHIND the whole tab
+            // instead, so the icon and label can centre in the pill —
+            // reserving space here would push them off-centre inside it.
             // Icon with a halo that brightens as `selection` rises.
             // 30×30 sizes the active state visibly without crowding a
             // narrow tab.

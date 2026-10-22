@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../../controllers/auth_controller.dart';
 import '../../controllers/feed_controller.dart';
 import '../../widgets/common/app_network_image.dart';
 import '../../localization/locale_format.dart';
@@ -19,11 +18,11 @@ import '../../widgets/social/notification_bell.dart';
 import '../../widgets/social/report_sheet.dart';
 import '../../widgets/social/save_button.dart';
 import '../../widgets/social/source_badge.dart';
-import '../profile/edit_profile_screen.dart';
 import '../reels/reel_player_screen.dart';
 import '../social/expert_profile_screen.dart';
 import '../social/social_tokens.dart';
 import 'reels_immersive_view.dart';
+import '../../widgets/profile_avatar_button.dart';
 
 /// Bottom-nav **Feed** tab — every post from every expert the user has an
 /// active subscription to, newest-first. Filter chips switch between All /
@@ -73,7 +72,7 @@ class FeedScreen extends StatelessWidget {
                 ),
                 actions: [
                   const NotificationBell(),
-                  _ProfileAvatarButton(palette: palette),
+                  const ProfileAvatarButton(),
                   const SizedBox(width: 6),
                 ],
               ),
@@ -285,71 +284,6 @@ class _FilterDropdown extends StatelessWidget {
                 color: SocialTokens.cyan,
               ),
             ],
-          ),
-        ),
-      );
-    });
-  }
-}
-
-// ============================================================================
-// _ProfileAvatarButton — small initials circle in the top-right of the app
-// bar. Tapping opens the edit-profile screen so the user can quickly jump
-// to "their account" without bottom-nav-tab switching.
-// ============================================================================
-class _ProfileAvatarButton extends StatelessWidget {
-  final SocialPalette palette;
-  const _ProfileAvatarButton({required this.palette});
-
-  @override
-  Widget build(BuildContext context) {
-    final auth = Get.find<AuthController>();
-    return Obx(() {
-      auth.userObservable.value; // tracker for re-renders
-      final user = auth.user;
-      final letter = ((user?.name ?? user?.email ?? '?')
-              .trim()
-              .characters
-              .firstOrNull ??
-          '?')
-          .toUpperCase();
-
-      return Padding(
-        padding: const EdgeInsetsDirectional.only(end: 4),
-        child: InkWell(
-          onTap: () {
-            HapticUtils.tap();
-            Get.to(() => const EditProfileScreen());
-          },
-          borderRadius: BorderRadius.circular(999),
-          child: Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                colors: [
-                  SocialTokens.cyan,
-                  SocialTokens.cyan.withValues(alpha: 0.6),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              border: Border.all(
-                color: SocialTokens.cyan.withValues(alpha: 0.55),
-                width: 1.4,
-              ),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              letter,
-              style: const TextStyle(
-                color: Color(0xFF0A1628),
-                fontWeight: FontWeight.w900,
-                fontSize: 14,
-                letterSpacing: -0.5,
-              ),
-            ),
           ),
         ),
       );
