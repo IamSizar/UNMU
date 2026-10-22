@@ -5,7 +5,7 @@ context: read this before planning any work here.
 
 ---
 
-## 2026-10-22 — UNMU Pulse (نبض أنمو) Phase 1 built end to end, NOT pushed, NOT deployed
+## 2026-10-22 — UNMU Pulse (نبض أنمو) Phase 1 built end to end; PR #4 open (feat/unmu-pulse → main); staging only, NOT in production
 
 **Asked for:** build Pulse Phase 1 from the spec PDF (daily curated briefing, four
 slots, confirmed/analysis items with source + evidence, CMS with workflow/roles/
@@ -13,7 +13,7 @@ analytics, app archive/saves/share/stock links). Plan and decisions: `docs/pulse
 how to operate it: `docs/pulse/OPERATING.md`. OPOS office for UNMU, tasks "Pulse 1..12"
 (117511-117516 are the last six), recorded as account 6 "Zaid Aqrawi".
 
-### What changed (all local commits on the current branch, none pushed)
+### What changed (commits on `feat/unmu-pulse`, PR #4; the older branch `feat/nav-aurora-pill` is the same history, unpushed)
 `f78ce47` DB schema (migration `0056_pulse.sql` + down + SQL constraint test) · `7a405bb`
 public API · `45f411f` admin CMS API, workflow rules, scheduler, staff, analytics ·
 `5d19c21` push + per-user switches · `a06cc35` stock search · `b6c9f78` dashboard pages ·
@@ -36,7 +36,7 @@ Docs/mockups: `42ac136`, `beeec44`, `df13024`.
 - Deployed local code with `railway up` from the REPO ROOT (not `--path-as-root`: the services' root dir is `backend` / `admin-dashboard` and a path-as-root upload fails with "directory .../backend does not exist"). Backend: live. Dashboard: builds failed twice on a Railway builder outage ("failed to list workers"); a third attempt (3290769b) was still initializing when this was written.
 - URLs: backend https://backend-staging-33c5.up.railway.app/api , dashboard https://dashboard-staging-98ea.up.railway.app (may still be the old production build until 3290769b succeeds).
 - Staging data left behind: throw-away users `pulse-*-<timestamp>@example.test`, items dated 1992-03-1x, and a test stock `ACCP`. Harmless; delete the environment or those rows when done.
-- NOT pushed to git. Commits are local only.
+- Pushed on Zaid's approval: branch `feat/unmu-pulse`, PR https://github.com/IamSizar/UNMU/pull/4 (no CI checks are configured on it). Not merged.
 
 ### Acceptance run on staging
 `docs/pulse/acceptance/pulse_acceptance.py` (needs STAGING_API, STAGING_DB_URL, PSQL; refuses production URLs) → originally 38/38, now **44/44 checks passed** (after the four-eyes change; see below) on the spec §22 list: four items, detail, source/evidence/verified time, confirmed vs analysis, save/share, stock link, drafts, review/approve cycle, role enforcement, scheduled publishing (real scheduler, ~90 s), archive + search, versions, change log, corrections, user prefs, analytics, Arabic+English content.
