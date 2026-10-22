@@ -111,7 +111,7 @@ func (f *cmsFixture) must(id int64, who pulse.Actor, do string) *models.PulseAdm
 func TestPulseCMSWorkflow(t *testing.T) {
 	f := newCMSFixture(t)
 	ctx := context.Background()
-	const day = "2091-02-01"
+	const day = "1991-02-01"
 
 	t.Run("only editors create; edits bump the version and keep history", func(t *testing.T) {
 		if _, err := f.repo.Create(ctx, f.reviewer, cmsInput(day, "global")); ruleKind(err) != "forbidden" {
@@ -187,7 +187,7 @@ func TestPulseCMSWorkflow(t *testing.T) {
 	})
 
 	t.Run("publishing a second item replaces the first for the same slot", func(t *testing.T) {
-		const d = "2091-02-02"
+		const d = "1991-02-02"
 		first := f.create(cmsInput(d, "global"))
 		f.must(first.ID, f.author, pulse.DoSubmit)
 		f.must(first.ID, f.approver, pulse.DoApprove)
@@ -209,7 +209,7 @@ func TestPulseCMSWorkflow(t *testing.T) {
 	})
 
 	t.Run("schedule, unschedule and the due-item promotion", func(t *testing.T) {
-		it := f.create(cmsInput("2091-02-03", "gulf"))
+		it := f.create(cmsInput("1991-02-03", "gulf"))
 		f.must(it.ID, f.author, pulse.DoSubmit)
 		f.must(it.ID, f.approver, pulse.DoApprove)
 
@@ -256,12 +256,12 @@ func TestPulseCMSWorkflow(t *testing.T) {
 	})
 
 	t.Run("corrections keep the item live, mark it, and keep the old version", func(t *testing.T) {
-		it := f.create(cmsInput("2091-02-04", "global"))
+		it := f.create(cmsInput("1991-02-04", "global"))
 		f.must(it.ID, f.author, pulse.DoSubmit)
 		f.must(it.ID, f.approver, pulse.DoApprove)
 		f.must(it.ID, f.approver, pulse.DoPublish)
 
-		fix := cmsInput("2091-02-04", "global")
+		fix := cmsInput("1991-02-04", "global")
 		fix.TitleEn = "Corrected headline"
 		if _, err := f.repo.Correct(ctx, it.ID, f.author, "corrected", fix, "typo"); ruleKind(err) != "forbidden" {
 			t.Errorf("editor correcting a live item: %s, want forbidden", ruleKind(err))
@@ -286,23 +286,45 @@ func TestPulseCMSWorkflow(t *testing.T) {
 			t.Errorf("old version lost: %s", vs[1].Snapshot)
 		}
 		// A correction cannot move the item to another day or slot.
-		moved := cmsInput("2099-01-01", "gulf")
+		moved := cmsInput("1999-01-01", "gulf")
 		moved.TitleEn = "Moved?"
 		got, _ = f.repo.Correct(ctx, it.ID, f.approver, "updated", moved, "try to move")
-		if got == nil || got.PulseDate != "2091-02-04" || got.Slot != "global" {
+		if got == nil || got.PulseDate != "1991-02-04" || got.Slot != "global" {
 			t.Errorf("correction moved the item: %+v", got)
 		}
 	})
 
+	t.Run("a future-dated item cannot be published early", func(t *testing.T) {
+		// Regression: a far-future pulse_date used to go live at once, leaking
+		// into the archive and the "new Pulse" push before its day.
+		it := f.create(cmsInput("2999-01-01", "opportunity"))
+		f.must(it.ID, f.author, pulse.DoSubmit)
+		f.must(it.ID, f.approver, pulse.DoApprove)
+		if _, err := f.apply(it.ID, f.approver, pulse.DoPublish, PulseApplyOptions{}); ruleKind(err) != "state" {
+			t.Errorf("publishing a future-dated item: %s, want state", ruleKind(err))
+		}
+		// The scheduler must also leave it alone even when its time is due.
+		f.repo.db.Exec(`UPDATE pulse_items SET status='scheduled', publish_at = NOW() - interval '1 minute' WHERE id=$1`, it.ID)
+		promoted, err := f.repo.PromoteDue(ctx, time.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, p := range promoted {
+			if p.ID == it.ID {
+				t.Error("scheduler published a future-dated item")
+			}
+		}
+	})
+
 	t.Run("only drafts can be deleted", func(t *testing.T) {
-		d := f.create(cmsInput("2091-02-05", "global"))
+		d := f.create(cmsInput("1991-02-05", "global"))
 		if err := f.repo.Delete(ctx, d.ID, f.author); err != nil {
 			t.Fatalf("delete draft: %v", err)
 		}
 		if _, err := f.repo.Get(ctx, d.ID); !errors.Is(err, ErrPulseNotFound) {
 			t.Errorf("deleted item still found: %v", err)
 		}
-		p := f.create(cmsInput("2091-02-06", "global"))
+		p := f.create(cmsInput("1991-02-06", "global"))
 		f.must(p.ID, f.author, pulse.DoSubmit)
 		if err := f.repo.Delete(ctx, p.ID, f.admin); ruleKind(err) != "state" {
 			t.Errorf("deleting an in-review item: %s, want state", ruleKind(err))
@@ -367,17 +389,17 @@ func TestPulseCMSWorkflow(t *testing.T) {
 
 	t.Run("analytics totals and per-item rows", func(t *testing.T) {
 		var itemID int64
-		f.repo.db.QueryRow(`SELECT id FROM pulse_items WHERE pulse_date = '2091-02-04' AND slot = 'global'`).Scan(&itemID)
+		f.repo.db.QueryRow(`SELECT id FROM pulse_items WHERE pulse_date = '1991-02-04' AND slot = 'global'`).Scan(&itemID)
 		uid := f.author.UserID
 		for _, ev := range []string{"open_item", "open_item", "read_complete", "save", "share"} {
 			f.repo.db.Exec(`INSERT INTO pulse_events (user_id, item_id, event, created_at)
-			                VALUES ($1,$2,$3,'2091-02-04 10:00:00+03')`, uid, itemID, ev)
+			                VALUES ($1,$2,$3,'1991-02-04 10:00:00+03')`, uid, itemID, ev)
 		}
-		for _, d := range []string{"2091-02-04", "2091-02-05"} {
+		for _, d := range []string{"1991-02-04", "1991-02-05"} {
 			f.repo.db.Exec(`INSERT INTO pulse_events (user_id, event, created_at) VALUES ($1,'view_day',$2::timestamptz)`,
 				uid, d+" 09:00:00+03")
 		}
-		a, err := f.repo.Analytics(ctx, "2091-02-04", "2091-02-05")
+		a, err := f.repo.Analytics(ctx, "1991-02-04", "1991-02-05")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -444,7 +466,7 @@ func TestPulseRecipients(t *testing.T) {
 
 	// Savers: everyone saves the item; only people who still allow saved-item
 	// changes (and Pulse overall) are returned.
-	item := f.create(cmsInput("2091-03-01", "global"))
+	item := f.create(cmsInput("1991-03-01", "global"))
 	f.must(item.ID, f.author, pulse.DoSubmit)
 	f.must(item.ID, f.approver, pulse.DoApprove)
 	f.must(item.ID, f.approver, pulse.DoPublish)

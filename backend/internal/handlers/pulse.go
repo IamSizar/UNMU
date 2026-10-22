@@ -178,6 +178,10 @@ func (h *PulseHandler) Archive(c *gin.Context) {
 		pulseBadRequest(c, "Search text is too long")
 		return
 	}
+	// The archive never shows days that have not started yet.
+	if today := pulseToday(h.now()); to == "" || to > today {
+		to = today
+	}
 	items, more, err := h.pulse.Archive(c.Request.Context(), c.GetInt64("user_id"),
 		repositories.ArchiveFilter{From: from, To: to, Query: q}, limit, offset)
 	if err != nil {
@@ -283,7 +287,8 @@ func (h *PulseHandler) RecordEvent(c *gin.Context) {
 	}
 	err := h.pulse.RecordEvent(c.Request.Context(), c.GetInt64("user_id"), req.ItemID, req.Event)
 	var pgErr *pq.Error
-	if errors.As(err, &pgErr) && pgErr.Code == "23503" { // item does not exist
+	if errors.Is(err, repositories.ErrPulseItemUnavailable) ||
+		(errors.As(err, &pgErr) && pgErr.Code == "23503") { // item missing or not public
 		c.JSON(http.StatusNotFound, gin.H{"error": "This Pulse item is not available"})
 		return
 	}

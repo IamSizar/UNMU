@@ -10,8 +10,6 @@ import (
 	"time"
 
 	"halalstocks/internal/models"
-
-	"github.com/lib/pq"
 )
 
 // Integration test for the Pulse read repository.
@@ -54,7 +52,7 @@ func openPulseTestDB(t *testing.T) *sql.DB {
 
 func newPulseFixture(t *testing.T, db *sql.DB) *pulseFixture {
 	t.Helper()
-	f := &pulseFixture{t: t, db: db, day: "2090-01-10"}
+	f := &pulseFixture{t: t, db: db, day: "1990-01-10"}
 	suffix := time.Now().UnixNano()
 
 	mustScan := func(q string, args ...any) int64 {
@@ -207,11 +205,11 @@ func TestPulseRepository(t *testing.T) {
 	})
 
 	t.Run("archive: date range, literal search, paging", func(t *testing.T) {
-		f.item("2090-01-11", "global", "published", "Growth 100% year", false)
-		f.item("2090-01-12", "global", "published", "Growth 1000 year", false)
-		f.item("2090-01-12", "gulf", "published", "Plain_title", false)
+		f.item("1990-01-11", "global", "published", "Growth 100% year", false)
+		f.item("1990-01-12", "global", "published", "Growth 1000 year", false)
+		f.item("1990-01-12", "gulf", "published", "Plain_title", false)
 
-		filter := ArchiveFilter{From: "2090-01-11", To: "2090-01-12"}
+		filter := ArchiveFilter{From: "1990-01-11", To: "1990-01-12"}
 		items, more, err := repo.Archive(ctx, f.userID, filter, 10, 0)
 		if err != nil || len(items) != 3 || more {
 			t.Fatalf("range: len=%d more=%v err=%v, want 3 items", len(items), more, err)
@@ -258,9 +256,13 @@ func TestPulseRepository(t *testing.T) {
 		}
 		missing := int64(999_999_999)
 		err := repo.RecordEvent(ctx, f.userID, &missing, models.PulseEventOpenItem)
-		var pgErr *pq.Error
-		if !errors.As(err, &pgErr) || pgErr.Code != "23503" {
-			t.Errorf("missing item: err = %v, want a foreign-key violation", err)
+		if !errors.Is(err, ErrPulseItemUnavailable) {
+			t.Errorf("missing item: err = %v, want ErrPulseItemUnavailable", err)
+		}
+		// A draft exists but is not public: it must look exactly like a missing item.
+		draft := f.item("1990-01-13", "global", "draft", "Draft title", false)
+		if err := repo.RecordEvent(ctx, f.userID, &draft, models.PulseEventOpenItem); !errors.Is(err, ErrPulseItemUnavailable) {
+			t.Errorf("draft item: err = %v, want ErrPulseItemUnavailable", err)
 		}
 	})
 }

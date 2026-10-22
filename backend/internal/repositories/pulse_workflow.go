@@ -157,6 +157,18 @@ func applySchedule(
 // published before for the same day and slot is archived first and noted in
 // its change log. actor is nil when the scheduler publishes.
 func publishPulseTx(ctx context.Context, q pulseQuerier, it *models.PulseAdminItem, actor *int64, note string) error {
+	// An item dated for a future day must not go live early: it would show in
+	// the archive and trigger a "new Pulse" push before its day (the Pulse day
+	// is UTC+3, matching the public Today endpoint).
+	var early bool
+	if err := q.QueryRowContext(ctx,
+		`SELECT $1::date > (NOW() AT TIME ZONE 'Asia/Baghdad')::date`, it.PulseDate).Scan(&early); err != nil {
+		return fmt.Errorf("checking pulse date of item %d: %w", it.ID, err)
+	}
+	if early {
+		return &pulse.RuleError{Kind: "state",
+			Message: "This item is dated for a future day, so it cannot be published yet"}
+	}
 	rows, err := q.QueryContext(ctx,
 		`UPDATE pulse_items SET status = 'archived'
 		  WHERE pulse_date = $1 AND slot = $2 AND status = 'published' AND id <> $3
@@ -267,6 +279,7 @@ func (r *PulseAdminRepository) PromoteDue(ctx context.Context, now time.Time) ([
 	rows, err := tx.QueryContext(ctx,
 		`SELECT id FROM pulse_items
 		  WHERE status = 'scheduled' AND publish_at <= $1
+		    AND pulse_date <= (NOW() AT TIME ZONE 'Asia/Baghdad')::date
 		  ORDER BY publish_at FOR UPDATE SKIP LOCKED`, now)
 	if err != nil {
 		return nil, fmt.Errorf("finding due pulse items: %w", err)

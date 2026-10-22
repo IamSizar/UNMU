@@ -264,15 +264,26 @@ func (r *PulseRepository) Unsave(ctx context.Context, userID, itemID int64) erro
 	return nil
 }
 
+// ErrPulseItemUnavailable is returned when an event names an item that is not published.
+var ErrPulseItemUnavailable = errors.New("pulse item is not available")
+
 // RecordEvent stores one analytics event. itemID is nil for day-level events.
 // The event name must already be validated by the caller; the table CHECK is
 // the last line of defence.
 func (r *PulseRepository) RecordEvent(ctx context.Context, userID int64, itemID *int64, event string) error {
-	_, err := r.db.ExecContext(ctx,
-		`INSERT INTO pulse_events (user_id, item_id, event) VALUES ($1, $2, $3)`,
+	// Only published items may be referenced: otherwise the response would tell
+	// any user which draft/in-review ids exist.
+	res, err := r.db.ExecContext(ctx,
+		`INSERT INTO pulse_events (user_id, item_id, event)
+		 SELECT $1, $2::bigint, $3
+		  WHERE $2::bigint IS NULL
+		     OR EXISTS (SELECT 1 FROM pulse_items WHERE id = $2::bigint AND status = 'published')`,
 		userID, itemID, event)
 	if err != nil {
 		return fmt.Errorf("recording pulse event %s: %w", event, err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrPulseItemUnavailable
 	}
 	return nil
 }
