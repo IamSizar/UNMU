@@ -43,9 +43,13 @@ export function clearSession() {
 
 export class ApiError extends Error {
   status: number
-  constructor(message: string, status: number) {
+  /** Per-field messages when the server rejects a form (HTTP 422), keyed by
+   *  the JSON field name, e.g. { titleEn: 'Required before review' }. */
+  fields?: Record<string, string>
+  constructor(message: string, status: number, fields?: Record<string, string>) {
     super(message)
     this.status = status
+    this.fields = fields
   }
 }
 
@@ -77,7 +81,11 @@ async function request<T>(
       (body && typeof body === 'object' && body.error) ||
       response.statusText ||
       'Request failed'
-    throw new ApiError(msg, response.status)
+    const fields =
+      body && typeof body === 'object' && body.fields && typeof body.fields === 'object'
+        ? (body.fields as Record<string, string>)
+        : undefined
+    throw new ApiError(msg, response.status, fields)
   }
   return body as T
 }

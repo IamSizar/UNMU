@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './auth/AuthContext'
 import DashboardLayout from './layouts/DashboardLayout'
 import Dashboard from './pages/Dashboard'
@@ -34,6 +34,10 @@ import AuditLogDetail from './pages/AuditLogDetail'
 import CommunitySubscriptions from './pages/CommunitySubscriptions'
 import CommunitySubscriptionDetail from './pages/CommunitySubscriptionDetail'
 import Support from './pages/Support'
+import PulseItems from './pages/pulse/PulseItems'
+import PulseEditor from './pages/pulse/PulseEditor'
+import PulseStaff from './pages/pulse/PulseStaff'
+import PulseAnalytics from './pages/pulse/PulseAnalytics'
 // Network — live platform map (force-directed graph of every
 // expert/user/community relationship + pending events feed).
 import Network from './pages/Network'
@@ -41,7 +45,12 @@ import type { ReactElement } from 'react'
 
 function RequireAdmin({ children }: { children: ReactElement }) {
   const { user } = useAuth()
+  const location = useLocation()
   if (!user) return <Navigate to="/login" replace />
+  // Pulse staff who are not system admins may only use the Pulse pages.
+  if (user.role !== 'ADMIN' && !location.pathname.startsWith('/pulse')) {
+    return <Navigate to="/pulse" replace />
+  }
   return children
 }
 
@@ -63,6 +72,13 @@ export default function App() {
           {/* Live platform-relationship map. Sits in the sidebar
               directly under Overview. */}
           <Route path="network" element={<Network />} />
+          {/* UNMU Pulse (نبض أنمو) — daily curated briefing CMS. */}
+          <Route path="pulse" element={<PulseItems />} />
+          <Route path="pulse/review" element={<PulseItems variant="review" />} />
+          <Route path="pulse/schedule" element={<PulseItems variant="schedule" />} />
+          <Route path="pulse/items/:id" element={<PulseEditor />} />
+          <Route path="pulse/staff" element={<PulseStaff />} />
+          <Route path="pulse/analytics" element={<PulseAnalytics />} />
           <Route path="users" element={<Users />} />
           <Route path="users/:id" element={<UserDetail />} />
           <Route path="experts" element={<Experts />} />

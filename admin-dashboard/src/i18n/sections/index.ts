@@ -8,3 +8,4 @@ export { monetizationEn, monetizationAr } from './monetization';
 export { contentEn, contentAr } from './content';
 export { systemEn, systemAr } from './system';
 export { extrasEn, extrasAr } from './extras';
+export { pulseEn, pulseAr } from './pulse';
