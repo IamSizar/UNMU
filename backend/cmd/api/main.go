@@ -212,6 +212,10 @@ func main() {
 	promoHandler := handlers.NewPromoHandler(promoRepo)
 	referralRepo := repositories.NewReferralRepository(database)
 	referralHandler := handlers.NewReferralHandler(referralRepo, promoRepo)
+	// UNMU Pulse — daily curated briefing (migration 0056). Read side for
+	// logged-in users; the admin CMS routes are added under /admin.
+	pulseRepo := repositories.NewPulseRepository(database)
+	pulseHandler := handlers.NewPulseHandler(pulseRepo)
 	promoHandler.SetAudits(auditRepo)
 	marketHandler := handlers.NewMarketHandler(marketProvider)
 	// SocialHandler needs the post-interactions + post-saves repos (used
@@ -633,6 +637,16 @@ func main() {
 		protected.GET("/referrals/my-code", referralHandler.GetMyCode)
 		protected.GET("/referrals/stats", referralHandler.GetStats)
 		protected.POST("/referrals/redeem", referralHandler.Redeem)
+
+		// UNMU Pulse (login required — decision 2026-10-22).
+		protected.GET("/pulse/today", pulseHandler.Today)
+		protected.GET("/pulse/days/:date", pulseHandler.Day)
+		protected.GET("/pulse/items/:id", pulseHandler.Item)
+		protected.GET("/pulse/archive", pulseHandler.Archive)
+		protected.GET("/pulse/saved", pulseHandler.Saved)
+		protected.POST("/pulse/items/:id/save", pulseHandler.Save)
+		protected.DELETE("/pulse/items/:id/save", pulseHandler.Unsave)
+		protected.POST("/pulse/events", pulseHandler.RecordEvent)
 
 		// Promo codes
 		protected.POST("/promo/validate", promoHandler.ValidatePromo)
