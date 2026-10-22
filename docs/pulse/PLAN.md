@@ -121,12 +121,12 @@ correct, versions, events, analytics, staff management (ADMIN only).
 -> 4 admin API -> 5 notifications -> 6 dashboard -> 7-9 Flutter -> 10 l10n/RTL
 -> 11 tests + staging -> 12 docs. Code review + security review before any PR.
 
-## 8. Open questions
+## 8. Answered questions (Zaid, 2026-10-22)
 
-1. Public or login-required for today's Pulse? (assumed login-required)
-2. Is a test/staging environment separate from production available? Spec
-   section 21 asks for deploy to a test environment first; today the app
-   talks to the live Railway backend in all builds.
-3. Who are the first editors/reviewers/approvers (accounts)?
-4. Are notification texts sent in the user's app language (assumed yes, using
-   the existing locale sync)?
+1. Today's Pulse is **login-required** (protected group).
+2. Testing happens on a **new staging Railway environment** (separate backend
+   + database). Production is untouched until Pulse is approved. Creating it
+   is an external action and needs Zaid's go-ahead at the time.
+3. First Pulse staff = **existing ADMIN accounts only**. Editor / reviewer /
+   approver accounts are added later through the dashboard staff page.
+4. Push notifications use **each user's app language** (existing locale sync).
