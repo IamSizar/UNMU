@@ -39,12 +39,22 @@ Docs/mockups: `42ac136`, `beeec44`, `df13024`.
 - NOT pushed to git. Commits are local only.
 
 ### Acceptance run on staging
-`docs/pulse/acceptance/pulse_acceptance.py` (needs STAGING_API, STAGING_DB_URL, PSQL; refuses production URLs) → **38/38 checks passed** on the spec §22 list: four items, detail, source/evidence/verified time, confirmed vs analysis, save/share, stock link, drafts, review/approve cycle, role enforcement, scheduled publishing (real scheduler, ~90 s), archive + search, versions, change log, corrections, user prefs, analytics, Arabic+English content.
+`docs/pulse/acceptance/pulse_acceptance.py` (needs STAGING_API, STAGING_DB_URL, PSQL; refuses production URLs) → originally 38/38, now **44/44 checks passed** (after the four-eyes change; see below) on the spec §22 list: four items, detail, source/evidence/verified time, confirmed vs analysis, save/share, stock link, drafts, review/approve cycle, role enforcement, scheduled publishing (real scheduler, ~90 s), archive + search, versions, change log, corrections, user prefs, analytics, Arabic+English content.
 **Not covered by it:** push delivery (FCM is off on staging), RTL/LTR rendering and the in-app experience on a real device (widget tests only), the dashboard UI on staging.
-Review findings fixed in `68f35cc` (future-dated publish leak, event existence oracle). Review findings left for Zaid: corrections need no second person; one person can both review and approve a sensitive item; Retry button gives no spinner; toggleSave/loadToday races on fast taps or account switch; a saved item disappears when replaced in its slot.
+Review findings fixed in `68f35cc` (future-dated publish leak, event existence oracle). Review findings now FIXED by Zaid's decision: corrections need a second person; sensitive approver != reviewer. Still open: Retry button gives no spinner; toggleSave/loadToday races on fast taps or account switch; a saved item disappears when replaced in its slot.
+
+### Four-eyes change (Zaid, 2026-10-22, OPOS 117682) — commit 58a5505
+- **Corrections are now two-person.** `POST /pulse-admin/items/:id/correct` only PROPOSES (202, stored in new table `pulse_pending_corrections`); the live item is untouched. A DIFFERENT approver applies/rejects via `POST .../correction/approve|reject` (`GET .../correction` shows the open one). Reject needs a note. One open proposal per item. The old one-step `repo.Correct` no longer exists (removed on purpose so nothing can bypass it).
+- **Sensitive items: approver != reviewer.** Rule in `pulse.CheckApproval(item, actor)` plus DB CHECK `pulse_items_approver_not_reviewer` (NOT VALID, so old rows are not re-checked).
+- **New migration `0057_pulse_pending_corrections.sql` (+ `.down.sql`)**: run up/down/up locally; applied by hand to the STAGING DB. NOT applied to production. It also widens the change-log action list (`correction_proposed`, `correction_rejected`).
+- Code: `internal/repositories/pulse_corrections.go` (new), `internal/pulse/rules.go`, handlers `pulse_admin.go`, route wiring in `cmd/api/main.go`; dashboard `PendingCorrectionCard.tsx`, editor now says "Send for approval", en+ar strings.
+- Tests: rule unit tests, DB integration tests (propose does not change the item, self-apply and editor-apply refused, second proposal refused, reject needs reason, version kept, sensitive reviewer cannot approve), all `ok`. Acceptance script now **44/44** on staging.
+- A system ADMIN holds every Pulse role but is bound by the same proposer/reviewer rules, so a lone admin can no longer correct an item. Normal staff are plain users holding one role via Dashboard → Pulse → Staff (NOT admin accounts; an earlier note and my first test script wrongly assumed they had to be).
+- Trap: the existing fixture inserted published sensitive items with one user as reviewer AND approver; the new CHECK rightly rejected it (fixed in `pulse_integration_test.go`). Any seed script that does the same will fail the same way.
+- Trap: Railway `railway up` must run from the repo root (see above); a stuck "BUILDING" for 10+ minutes is normal for the backend image.
 
 ### Production deploy notes
-Production DB lacks the `referrals` / `user_referral_codes` tables that the code needs (they exist locally and on staging only). Migration `0056_pulse.sql` AND the referrals migration must be applied by hand before shipping this backend.
+Production DB lacks the `referrals` / `user_referral_codes` tables that the code needs (they exist locally and on staging only). Migrations `0056_pulse.sql`, `0057_pulse_pending_corrections.sql` AND the referrals migration must be applied by hand before shipping this backend.
 
 
 

@@ -11,8 +11,9 @@ exits non-zero if any fails.
   STAGING_DB_URL=postgresql://...  PSQL=/path/to/psql  python3 pulse_acceptance.py
 
 The DB URL is used only to mark the throw-away users' e-mail verified and to
-give them the ADMIN role (staging has no mail server; Pulse staff must be ADMIN
-accounts). It refuses to run against a production-looking URL.
+make ONE of them (admin) a system ADMIN (staging has no mail server). The editor,
+reviewer and approver are plain users that hold a single Pulse role each, so the
+role checks are real (a system admin holds every Pulse role). It refuses to run against a production-looking URL.
 """
 import json
 import os
@@ -82,9 +83,9 @@ def make_user(label, admin=False):
 
 
 admin = make_user("admin", admin=True)
-editor = make_user("editor", admin=True)
-reviewer = make_user("reviewer", admin=True)
-approver = make_user("approver", admin=True)
+editor = make_user("editor")      # a plain user holding only the editor role
+reviewer = make_user("reviewer")
+approver = make_user("approver")
 reader = make_user("reader")
 reader2 = make_user("reader2")
 
