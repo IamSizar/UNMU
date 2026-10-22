@@ -1,0 +1,394 @@
+package repositories
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+	"testing"
+	"time"
+
+	"halalstocks/internal/models"
+	"halalstocks/internal/pulse"
+)
+
+// Integration test for the Pulse CMS repository (workflow, history, staff,
+// analytics). Runs only when PULSE_TEST_DSN is set; see pulse_integration_test.go.
+
+type cmsFixture struct {
+	t                                 *testing.T
+	repo                              *PulseAdminRepository
+	author, reviewer, approver, admin pulse.Actor
+	userIDs                           []int64
+	itemIDs                           []int64
+}
+
+func newCMSFixture(t *testing.T) *cmsFixture {
+	db := openPulseTestDB(t)
+	f := &cmsFixture{t: t, repo: NewPulseAdminRepository(db)}
+	suffix := time.Now().UnixNano()
+	mk := func(label, role string) int64 {
+		var id int64
+		err := db.QueryRow(`INSERT INTO users (email, password_hash, role) VALUES ($1,'x',$2) RETURNING id`,
+			fmt.Sprintf("pulse-cms-%s-%d@test.invalid", label, suffix), role).Scan(&id)
+		if err != nil {
+			t.Fatalf("fixture user: %v", err)
+		}
+		f.userIDs = append(f.userIDs, id)
+		return id
+	}
+	roles := func(r ...string) map[string]bool {
+		m := map[string]bool{}
+		for _, x := range r {
+			m[x] = true
+		}
+		return m
+	}
+	f.author = pulse.Actor{UserID: mk("author", "USER"), Roles: roles(models.PulseRoleEditor)}
+	f.reviewer = pulse.Actor{UserID: mk("reviewer", "USER"), Roles: roles(models.PulseRoleReviewer)}
+	f.approver = pulse.Actor{UserID: mk("approver", "USER"), Roles: roles(models.PulseRoleApprover)}
+	f.admin = pulse.Actor{UserID: mk("admin", "ADMIN"), IsAdmin: true, Roles: roles()}
+
+	t.Cleanup(func() {
+		for _, id := range f.itemIDs {
+			db.Exec(`DELETE FROM pulse_items WHERE id = $1`, id)
+		}
+		for _, id := range f.userIDs {
+			db.Exec(`DELETE FROM pulse_staff WHERE user_id = $1`, id)
+			db.Exec(`DELETE FROM pulse_events WHERE user_id = $1`, id)
+			db.Exec(`DELETE FROM users WHERE id = $1`, id)
+		}
+	})
+	return f
+}
+
+func cmsInput(date, slot string) models.PulseItemInput {
+	verified := time.Now().Add(-time.Hour)
+	return models.PulseItemInput{
+		PulseDate: date, Slot: slot, Classification: models.PulseConfirmed,
+		IsSensitive: slot == models.PulseSlotSharia,
+		TitleAr:     "عنوان", TitleEn: "Title " + slot, SummaryAr: "ملخص", SummaryEn: "Summary",
+		SourceName: "Source", VerifiedAt: &verified,
+	}
+}
+
+// ruleKind names the kind of rule error ("ok" when err is nil).
+func ruleKind(err error) string {
+	var re *pulse.RuleError
+	if errors.As(err, &re) {
+		return re.Kind
+	}
+	if err == nil {
+		return "ok"
+	}
+	return "other: " + err.Error()
+}
+
+func (f *cmsFixture) create(in models.PulseItemInput) *models.PulseAdminItem {
+	f.t.Helper()
+	it, err := f.repo.Create(context.Background(), f.author, in)
+	if err != nil {
+		f.t.Fatalf("create: %v", err)
+	}
+	f.itemIDs = append(f.itemIDs, it.ID)
+	return it
+}
+
+func (f *cmsFixture) apply(id int64, who pulse.Actor, do string, o PulseApplyOptions) (*models.PulseAdminItem, error) {
+	return f.repo.Apply(context.Background(), id, who, do, o)
+}
+
+// must applies an action that is expected to succeed.
+func (f *cmsFixture) must(id int64, who pulse.Actor, do string) *models.PulseAdminItem {
+	f.t.Helper()
+	it, err := f.apply(id, who, do, PulseApplyOptions{})
+	if err != nil {
+		f.t.Fatalf("%s: %v", do, err)
+	}
+	return it
+}
+
+func TestPulseCMSWorkflow(t *testing.T) {
+	f := newCMSFixture(t)
+	ctx := context.Background()
+	const day = "2091-02-01"
+
+	t.Run("only editors create; edits bump the version and keep history", func(t *testing.T) {
+		if _, err := f.repo.Create(ctx, f.reviewer, cmsInput(day, "global")); ruleKind(err) != "forbidden" {
+			t.Errorf("reviewer create: %s, want forbidden", ruleKind(err))
+		}
+		it := f.create(cmsInput(day, "global"))
+		if it.Status != "draft" || it.Version != 1 {
+			t.Fatalf("new item: %+v", it)
+		}
+		in := cmsInput(day, "global")
+		in.TitleEn = "Edited title"
+		it, err := f.repo.Update(ctx, it.ID, f.author, in)
+		if err != nil || it.Version != 2 || it.TitleEn != "Edited title" {
+			t.Fatalf("update: %+v err=%v", it, err)
+		}
+		vs, _ := f.repo.Versions(ctx, it.ID)
+		log, _ := f.repo.ChangeLog(ctx, it.ID)
+		if len(vs) != 2 || vs[0].Version != 2 || len(log) != 2 || log[0].Action != "created" || log[1].Action != "edited" {
+			t.Errorf("history wrong: %d versions, log=%+v", len(vs), log)
+		}
+	})
+
+	t.Run("incomplete items cannot be submitted", func(t *testing.T) {
+		in := cmsInput(day, "gulf")
+		in.TitleEn, in.SourceName = "", ""
+		it := f.create(in)
+		_, err := f.apply(it.ID, f.author, pulse.DoSubmit, PulseApplyOptions{})
+		var re *pulse.RuleError
+		if !errors.As(err, &re) || re.Kind != "invalid" || re.Fields["titleEn"] == "" || re.Fields["sourceName"] == "" {
+			t.Errorf("submit incomplete: %v", err)
+		}
+	})
+
+	t.Run("sensitive item: review first, four-eyes, then publish", func(t *testing.T) {
+		it := f.create(cmsInput(day, "sharia"))
+		f.must(it.ID, f.author, pulse.DoSubmit)
+
+		if _, err := f.repo.Update(ctx, it.ID, f.author, cmsInput(day, "sharia")); ruleKind(err) != "state" {
+			t.Errorf("editing an in-review item: %s, want state", ruleKind(err))
+		}
+		if _, err := f.apply(it.ID, f.approver, pulse.DoApprove, PulseApplyOptions{}); ruleKind(err) != "state" {
+			t.Errorf("approve before review: %s, want state", ruleKind(err))
+		}
+		authorReviewer := pulse.Actor{UserID: f.author.UserID, Roles: map[string]bool{models.PulseRoleReviewer: true}}
+		if _, err := f.apply(it.ID, authorReviewer, pulse.DoReview, PulseApplyOptions{}); ruleKind(err) != "forbidden" {
+			t.Errorf("author reviewing own item: %s, want forbidden", ruleKind(err))
+		}
+		f.must(it.ID, f.reviewer, pulse.DoReview)
+		authorApprover := pulse.Actor{UserID: f.author.UserID, Roles: map[string]bool{models.PulseRoleApprover: true}}
+		if _, err := f.apply(it.ID, authorApprover, pulse.DoApprove, PulseApplyOptions{}); ruleKind(err) != "forbidden" {
+			t.Errorf("author approving own item: %s, want forbidden", ruleKind(err))
+		}
+		got := f.must(it.ID, f.approver, pulse.DoApprove)
+		if got.Status != "approved" || got.ApprovedBy == nil || got.ReviewedBy == nil {
+			t.Fatalf("after approve: %+v", got)
+		}
+		got = f.must(it.ID, f.approver, pulse.DoPublish)
+		if got.Status != "published" || got.PublishedAt == nil {
+			t.Fatalf("after publish: %+v", got)
+		}
+	})
+
+	t.Run("reject needs a note and sends the item back to draft", func(t *testing.T) {
+		it := f.create(cmsInput(day, "opportunity"))
+		f.must(it.ID, f.author, pulse.DoSubmit)
+		if _, err := f.apply(it.ID, f.reviewer, pulse.DoReject, PulseApplyOptions{}); ruleKind(err) != "invalid" {
+			t.Errorf("reject without note: %s, want invalid", ruleKind(err))
+		}
+		got, err := f.apply(it.ID, f.reviewer, pulse.DoReject, PulseApplyOptions{Note: "Source is weak"})
+		if err != nil || got.Status != "draft" || got.ReviewedBy != nil {
+			t.Fatalf("reject: %+v err=%v", got, err)
+		}
+	})
+
+	t.Run("publishing a second item replaces the first for the same slot", func(t *testing.T) {
+		const d = "2091-02-02"
+		first := f.create(cmsInput(d, "global"))
+		f.must(first.ID, f.author, pulse.DoSubmit)
+		f.must(first.ID, f.approver, pulse.DoApprove)
+		f.must(first.ID, f.approver, pulse.DoPublish)
+
+		second := f.create(cmsInput(d, "global"))
+		f.must(second.ID, f.author, pulse.DoSubmit)
+		f.must(second.ID, f.approver, pulse.DoApprove)
+		f.must(second.ID, f.admin, pulse.DoPublish)
+
+		old, _ := f.repo.Get(ctx, first.ID)
+		if old.Status != "archived" {
+			t.Errorf("replaced item status = %s, want archived", old.Status)
+		}
+		log, _ := f.repo.ChangeLog(ctx, first.ID)
+		if last := log[len(log)-1]; last.Action != "archived" || last.Note == "" {
+			t.Errorf("replacement not logged: %+v", last)
+		}
+	})
+
+	t.Run("schedule, unschedule and the due-item promotion", func(t *testing.T) {
+		it := f.create(cmsInput("2091-02-03", "gulf"))
+		f.must(it.ID, f.author, pulse.DoSubmit)
+		f.must(it.ID, f.approver, pulse.DoApprove)
+
+		past := time.Now().Add(-time.Hour)
+		if _, err := f.apply(it.ID, f.approver, pulse.DoSchedule, PulseApplyOptions{PublishAt: &past}); ruleKind(err) != "invalid" {
+			t.Errorf("schedule in the past: %s, want invalid", ruleKind(err))
+		}
+		future := time.Now().Add(2 * time.Hour)
+		got, err := f.apply(it.ID, f.approver, pulse.DoSchedule, PulseApplyOptions{PublishAt: &future})
+		if err != nil || got.Status != "scheduled" {
+			t.Fatalf("schedule: %+v err=%v", got, err)
+		}
+		if got = f.must(it.ID, f.approver, pulse.DoUnschedule); got.Status != "approved" || got.PublishAt != nil {
+			t.Fatalf("unschedule: %+v", got)
+		}
+		f.apply(it.ID, f.approver, pulse.DoSchedule, PulseApplyOptions{PublishAt: &future})
+
+		// Not due yet: this item must not be promoted.
+		early, _ := f.repo.PromoteDue(ctx, time.Now())
+		for _, p := range early {
+			if p.ID == it.ID {
+				t.Error("item promoted before its time")
+			}
+		}
+		// Due: promoted exactly once, logged as a system action.
+		promoted, err := f.repo.PromoteDue(ctx, future.Add(time.Minute))
+		found := false
+		for _, p := range promoted {
+			found = found || (p.ID == it.ID && p.Status == "published")
+		}
+		if err != nil || !found {
+			t.Fatalf("promotion failed: %+v err=%v", promoted, err)
+		}
+		again, _ := f.repo.PromoteDue(ctx, future.Add(time.Minute))
+		for _, p := range again {
+			if p.ID == it.ID {
+				t.Error("item promoted twice")
+			}
+		}
+		log, _ := f.repo.ChangeLog(ctx, it.ID)
+		if last := log[len(log)-1]; last.Action != "published" || last.ActorID != nil {
+			t.Errorf("scheduler publish should be a system action: %+v", last)
+		}
+	})
+
+	t.Run("corrections keep the item live, mark it, and keep the old version", func(t *testing.T) {
+		it := f.create(cmsInput("2091-02-04", "global"))
+		f.must(it.ID, f.author, pulse.DoSubmit)
+		f.must(it.ID, f.approver, pulse.DoApprove)
+		f.must(it.ID, f.approver, pulse.DoPublish)
+
+		fix := cmsInput("2091-02-04", "global")
+		fix.TitleEn = "Corrected headline"
+		if _, err := f.repo.Correct(ctx, it.ID, f.author, "corrected", fix, "typo"); ruleKind(err) != "forbidden" {
+			t.Errorf("editor correcting a live item: %s, want forbidden", ruleKind(err))
+		}
+		if _, err := f.repo.Correct(ctx, it.ID, f.approver, "corrected", fix, " "); ruleKind(err) != "invalid" {
+			t.Errorf("correction without a note: %s, want invalid", ruleKind(err))
+		}
+		if _, err := f.repo.Correct(ctx, it.ID, f.approver, "banana", fix, "x"); ruleKind(err) != "invalid" {
+			t.Errorf("bad kind: %s, want invalid", ruleKind(err))
+		}
+		got, err := f.repo.Correct(ctx, it.ID, f.approver, "corrected", fix, "Fixed a wrong figure")
+		if err != nil || got.Status != "published" || got.TitleEn != "Corrected headline" ||
+			got.ChangeKind == nil || *got.ChangeKind != "corrected" || got.LastChangedAt == nil || got.Version != 2 {
+			t.Fatalf("correct: %+v err=%v", got, err)
+		}
+		vs, _ := f.repo.Versions(ctx, it.ID)
+		if len(vs) != 2 || vs[0].Reason != "correction" {
+			t.Fatalf("versions after correction: %+v", vs)
+		}
+		// The previous wording survives in the older snapshot.
+		if !strings.Contains(string(vs[1].Snapshot), "Title global") {
+			t.Errorf("old version lost: %s", vs[1].Snapshot)
+		}
+		// A correction cannot move the item to another day or slot.
+		moved := cmsInput("2099-01-01", "gulf")
+		moved.TitleEn = "Moved?"
+		got, _ = f.repo.Correct(ctx, it.ID, f.approver, "updated", moved, "try to move")
+		if got == nil || got.PulseDate != "2091-02-04" || got.Slot != "global" {
+			t.Errorf("correction moved the item: %+v", got)
+		}
+	})
+
+	t.Run("only drafts can be deleted", func(t *testing.T) {
+		d := f.create(cmsInput("2091-02-05", "global"))
+		if err := f.repo.Delete(ctx, d.ID, f.author); err != nil {
+			t.Fatalf("delete draft: %v", err)
+		}
+		if _, err := f.repo.Get(ctx, d.ID); !errors.Is(err, ErrPulseNotFound) {
+			t.Errorf("deleted item still found: %v", err)
+		}
+		p := f.create(cmsInput("2091-02-06", "global"))
+		f.must(p.ID, f.author, pulse.DoSubmit)
+		if err := f.repo.Delete(ctx, p.ID, f.admin); ruleKind(err) != "state" {
+			t.Errorf("deleting an in-review item: %s, want state", ruleKind(err))
+		}
+	})
+
+	t.Run("list filters and pages", func(t *testing.T) {
+		items, _, err := f.repo.List(ctx, PulseListFilter{Date: day}, 50, 0)
+		if err != nil || len(items) < 3 {
+			t.Fatalf("list by date: %d items err=%v", len(items), err)
+		}
+		published, _, _ := f.repo.List(ctx, PulseListFilter{Date: day, Status: "published"}, 50, 0)
+		for _, it := range published {
+			if it.Status != "published" {
+				t.Errorf("status filter leaked %s", it.Status)
+			}
+		}
+		page, more, _ := f.repo.List(ctx, PulseListFilter{Date: day}, 1, 0)
+		if len(page) != 1 || !more {
+			t.Errorf("paging: %d items more=%v", len(page), more)
+		}
+	})
+
+	t.Run("staff: add by email, roles take effect, unknown email rejected", func(t *testing.T) {
+		var email string
+		f.repo.db.QueryRow(`SELECT email FROM users WHERE id = $1`, f.reviewer.UserID).Scan(&email)
+		if err := f.repo.AddStaff(ctx, email, models.PulseRoleReviewer, f.admin.UserID); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.repo.AddStaff(ctx, email, models.PulseRoleReviewer, f.admin.UserID); err != nil {
+			t.Errorf("adding twice should be a no-op: %v", err)
+		}
+		actor, err := f.repo.ActorFor(ctx, f.reviewer.UserID)
+		if err != nil || !actor.Has(models.PulseRoleReviewer) || actor.Has(models.PulseRoleApprover) || actor.IsAdmin {
+			t.Errorf("actor roles wrong: %+v err=%v", actor, err)
+		}
+		adminActor, _ := f.repo.ActorFor(ctx, f.admin.UserID)
+		if !adminActor.IsAdmin || !adminActor.Has(models.PulseRoleApprover) {
+			t.Error("admin should hold every role")
+		}
+		if err := f.repo.AddStaff(ctx, "nobody-here@test.invalid", models.PulseRoleEditor, f.admin.UserID); ruleKind(err) != "invalid" {
+			t.Errorf("unknown email: %s, want invalid", ruleKind(err))
+		}
+		if err := f.repo.AddStaff(ctx, email, "boss", f.admin.UserID); ruleKind(err) != "invalid" {
+			t.Errorf("unknown role: %s, want invalid", ruleKind(err))
+		}
+		members, _ := f.repo.ListStaff(ctx)
+		var id int64
+		for _, m := range members {
+			if m.UserID == f.reviewer.UserID {
+				id = m.ID
+			}
+		}
+		if id == 0 {
+			t.Fatal("added staff member not listed")
+		}
+		f.repo.RemoveStaff(ctx, id)
+		if actor, _ = f.repo.ActorFor(ctx, f.reviewer.UserID); actor.Has(models.PulseRoleReviewer) {
+			t.Error("role still present after removal")
+		}
+	})
+
+	t.Run("analytics totals and per-item rows", func(t *testing.T) {
+		var itemID int64
+		f.repo.db.QueryRow(`SELECT id FROM pulse_items WHERE pulse_date = '2091-02-04' AND slot = 'global'`).Scan(&itemID)
+		uid := f.author.UserID
+		for _, ev := range []string{"open_item", "open_item", "read_complete", "save", "share"} {
+			f.repo.db.Exec(`INSERT INTO pulse_events (user_id, item_id, event, created_at)
+			                VALUES ($1,$2,$3,'2091-02-04 10:00:00+03')`, uid, itemID, ev)
+		}
+		for _, d := range []string{"2091-02-04", "2091-02-05"} {
+			f.repo.db.Exec(`INSERT INTO pulse_events (user_id, event, created_at) VALUES ($1,'view_day',$2::timestamptz)`,
+				uid, d+" 09:00:00+03")
+		}
+		a, err := f.repo.Analytics(ctx, "2091-02-04", "2091-02-05")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if a.DayViews != 2 || a.ItemOpens != 2 || a.UniqueReaders != 1 || a.Saves != 1 || a.Shares != 1 {
+			t.Errorf("totals wrong: %+v", a)
+		}
+		if a.ReadCompletion != 0.5 || a.ReturnRate != 1 {
+			t.Errorf("rates wrong: completion=%v return=%v", a.ReadCompletion, a.ReturnRate)
+		}
+		if len(a.Items) == 0 || a.Items[0].ItemID != itemID || a.Items[0].Opens != 2 {
+			t.Errorf("per-item rows wrong: %+v", a.Items)
+		}
+	})
+}

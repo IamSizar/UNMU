@@ -175,7 +175,7 @@ CREATE TABLE IF NOT EXISTS pulse_item_events (
     action       TEXT        NOT NULL
                  CHECK (action IN ('created', 'edited', 'submitted', 'reviewed',
                                    'rejected', 'approved', 'scheduled',
-                                   'published', 'updated', 'corrected',
+                                   'published', 'updated', 'corrected', 'unscheduled',
                                    'archived')),
     actor_id     BIGINT      REFERENCES users(id) ON DELETE SET NULL,
     from_status  TEXT,

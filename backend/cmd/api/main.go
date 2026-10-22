@@ -7,6 +7,7 @@ import (
 	"halalstocks/internal/handlers"
 	"halalstocks/internal/marketdata"
 	"halalstocks/internal/middleware"
+	"halalstocks/internal/pulse"
 	"halalstocks/internal/realtime"
 	"halalstocks/internal/repositories"
 	"halalstocks/internal/services"
@@ -216,6 +217,12 @@ func main() {
 	// logged-in users; the admin CMS routes are added under /admin.
 	pulseRepo := repositories.NewPulseRepository(database)
 	pulseHandler := handlers.NewPulseHandler(pulseRepo)
+	// Pulse CMS (editors / reviewers / approvers / admins) + the scheduler that
+	// publishes items when their time arrives. The notification hook is added
+	// together with the notification work; nil means "publish silently".
+	pulseAdminRepo := repositories.NewPulseAdminRepository(database)
+	pulseAdminHandler := handlers.NewPulseAdminHandler(pulseAdminRepo, nil)
+	services.NewPulsePublisher(pulseAdminRepo, nil).Start(context.Background())
 	promoHandler.SetAudits(auditRepo)
 	marketHandler := handlers.NewMarketHandler(marketProvider)
 	// SocialHandler needs the post-interactions + post-saves repos (used
@@ -1069,6 +1076,32 @@ func main() {
 	}
 
 	// ─────── Admin-only routes ───────
+	// UNMU Pulse CMS. Open to system admins AND Pulse staff (editor / reviewer /
+	// approver); roles are read from the database on every request.
+	pulseAdmin := api.Group("/pulse-admin")
+	pulseAdmin.Use(middleware.AuthMiddleware(), pulseAdminHandler.RequireStaff())
+	{
+		pulseAdmin.GET("/me", pulseAdminHandler.Me)
+		pulseAdmin.GET("/items", pulseAdminHandler.List)
+		pulseAdmin.POST("/items", pulseAdminHandler.Create)
+		pulseAdmin.GET("/items/:id", pulseAdminHandler.Get)
+		pulseAdmin.PUT("/items/:id", pulseAdminHandler.Update)
+		pulseAdmin.DELETE("/items/:id", pulseAdminHandler.Delete)
+		for _, action := range []string{
+			pulse.DoSubmit, pulse.DoReview, pulse.DoReject, pulse.DoApprove,
+			pulse.DoSchedule, pulse.DoUnschedule, pulse.DoPublish, pulse.DoArchive,
+		} {
+			pulseAdmin.POST("/items/:id/"+action, pulseAdminHandler.Action(action))
+		}
+		pulseAdmin.POST("/items/:id/correct", pulseAdminHandler.Correct)
+		pulseAdmin.GET("/items/:id/versions", pulseAdminHandler.Versions)
+		pulseAdmin.GET("/items/:id/events", pulseAdminHandler.Events)
+		pulseAdmin.GET("/staff", pulseAdminHandler.ListStaff)
+		pulseAdmin.POST("/staff", pulseAdminHandler.AddStaff)
+		pulseAdmin.DELETE("/staff/:id", pulseAdminHandler.RemoveStaff)
+		pulseAdmin.GET("/analytics", pulseAdminHandler.Analytics)
+	}
+
 	admin := api.Group("/admin")
 	admin.Use(middleware.AuthMiddleware(), middleware.RequireAdmin(userRepo))
 	{
