@@ -255,7 +255,7 @@ func TestPulseCMSWorkflow(t *testing.T) {
 		}
 	})
 
-	t.Run("corrections keep the item live, mark it, and keep the old version", func(t *testing.T) {
+	t.Run("a correction needs a second person: propose, then a different approver applies", func(t *testing.T) {
 		it := f.create(cmsInput("1991-02-04", "global"))
 		f.must(it.ID, f.author, pulse.DoSubmit)
 		f.must(it.ID, f.approver, pulse.DoApprove)
@@ -263,19 +263,47 @@ func TestPulseCMSWorkflow(t *testing.T) {
 
 		fix := cmsInput("1991-02-04", "global")
 		fix.TitleEn = "Corrected headline"
-		if _, err := f.repo.Correct(ctx, it.ID, f.author, "corrected", fix, "typo"); ruleKind(err) != "forbidden" {
-			t.Errorf("editor correcting a live item: %s, want forbidden", ruleKind(err))
+		// Input rules.
+		if _, err := f.repo.ProposeCorrection(ctx, it.ID, f.approver, "corrected", fix, " "); ruleKind(err) != "invalid" {
+			t.Errorf("proposal without a note: %s, want invalid", ruleKind(err))
 		}
-		if _, err := f.repo.Correct(ctx, it.ID, f.approver, "corrected", fix, " "); ruleKind(err) != "invalid" {
-			t.Errorf("correction without a note: %s, want invalid", ruleKind(err))
-		}
-		if _, err := f.repo.Correct(ctx, it.ID, f.approver, "banana", fix, "x"); ruleKind(err) != "invalid" {
+		if _, err := f.repo.ProposeCorrection(ctx, it.ID, f.approver, "banana", fix, "x"); ruleKind(err) != "invalid" {
 			t.Errorf("bad kind: %s, want invalid", ruleKind(err))
 		}
-		got, err := f.repo.Correct(ctx, it.ID, f.approver, "corrected", fix, "Fixed a wrong figure")
+		if _, err := f.repo.ProposeCorrection(ctx, it.ID, f.reviewer, "corrected", fix, "typo"); ruleKind(err) != "forbidden" {
+			t.Errorf("reviewer proposing: %s, want forbidden", ruleKind(err))
+		}
+		// Proposing changes NOTHING on the live item.
+		pending, err := f.repo.ProposeCorrection(ctx, it.ID, f.approver, "corrected", fix, "Fixed a wrong figure")
+		if err != nil || pending == nil || pending.Input.TitleEn != "Corrected headline" {
+			t.Fatalf("propose: %+v err=%v", pending, err)
+		}
+		live, _ := f.repo.Get(ctx, it.ID)
+		if live.TitleEn == "Corrected headline" || live.Version != 1 {
+			t.Fatalf("proposal changed the live item: %+v", live)
+		}
+		// The proposer cannot apply or reject their own proposal.
+		if _, _, err := f.repo.ResolveCorrection(ctx, it.ID, f.approver, true, ""); ruleKind(err) != "forbidden" {
+			t.Errorf("self-approval: %s, want forbidden", ruleKind(err))
+		}
+		if _, _, err := f.repo.ResolveCorrection(ctx, it.ID, f.approver, false, "never mind"); ruleKind(err) != "forbidden" {
+			t.Errorf("self-rejection: %s, want forbidden", ruleKind(err))
+		}
+		// An editor cannot apply one, and someone else cannot overwrite it.
+		if _, _, err := f.repo.ResolveCorrection(ctx, it.ID, f.author, true, ""); ruleKind(err) != "forbidden" {
+			t.Errorf("editor applying: %s, want forbidden", ruleKind(err))
+		}
+		if _, err := f.repo.ProposeCorrection(ctx, it.ID, f.admin, "updated", fix, "mine"); ruleKind(err) != "state" {
+			t.Errorf("second open proposal: %s, want state", ruleKind(err))
+		}
+		// A different approver (the admin holds every role) applies it.
+		got, _, err := f.repo.ResolveCorrection(ctx, it.ID, f.admin, true, "looks right")
 		if err != nil || got.Status != "published" || got.TitleEn != "Corrected headline" ||
 			got.ChangeKind == nil || *got.ChangeKind != "corrected" || got.LastChangedAt == nil || got.Version != 2 {
-			t.Fatalf("correct: %+v err=%v", got, err)
+			t.Fatalf("apply: %+v err=%v", got, err)
+		}
+		if p, _ := f.repo.PendingCorrection(ctx, it.ID); p != nil {
+			t.Error("the proposal should be closed after it was applied")
 		}
 		vs, _ := f.repo.Versions(ctx, it.ID)
 		if len(vs) != 2 || vs[0].Reason != "correction" {
@@ -285,12 +313,60 @@ func TestPulseCMSWorkflow(t *testing.T) {
 		if !strings.Contains(string(vs[1].Snapshot), "Title global") {
 			t.Errorf("old version lost: %s", vs[1].Snapshot)
 		}
+		// The change log shows who proposed and who applied.
+		evs, _ := f.repo.ChangeLog(ctx, it.ID)
+		var actions []string
+		for _, e := range evs {
+			actions = append(actions, e.Action)
+		}
+		if !strings.Contains(strings.Join(actions, ","), "correction_proposed") ||
+			!strings.Contains(strings.Join(actions, ","), "corrected") {
+			t.Errorf("change log missing the two-step trail: %v", actions)
+		}
 		// A correction cannot move the item to another day or slot.
 		moved := cmsInput("1999-01-01", "gulf")
 		moved.TitleEn = "Moved?"
-		got, _ = f.repo.Correct(ctx, it.ID, f.approver, "updated", moved, "try to move")
+		if _, err := f.repo.ProposeCorrection(ctx, it.ID, f.approver, "updated", moved, "try to move"); err != nil {
+			t.Fatal(err)
+		}
+		got, _, _ = f.repo.ResolveCorrection(ctx, it.ID, f.admin, true, "")
 		if got == nil || got.PulseDate != "1991-02-04" || got.Slot != "global" {
 			t.Errorf("correction moved the item: %+v", got)
+		}
+	})
+
+	t.Run("a rejected correction leaves the item alone and needs a reason", func(t *testing.T) {
+		it := f.create(cmsInput("1991-02-07", "global"))
+		f.must(it.ID, f.author, pulse.DoSubmit)
+		f.must(it.ID, f.approver, pulse.DoApprove)
+		f.must(it.ID, f.approver, pulse.DoPublish)
+		fix := cmsInput("1991-02-07", "global")
+		fix.TitleEn = "Should not go live"
+		if _, err := f.repo.ProposeCorrection(ctx, it.ID, f.approver, "corrected", fix, "wrong idea"); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := f.repo.ResolveCorrection(ctx, it.ID, f.admin, false, " "); ruleKind(err) != "invalid" {
+			t.Errorf("rejection without a reason: %s, want invalid", ruleKind(err))
+		}
+		got, _, err := f.repo.ResolveCorrection(ctx, it.ID, f.admin, false, "figure is right as is")
+		if err != nil || got.TitleEn == "Should not go live" || got.Version != 1 {
+			t.Fatalf("reject: %+v err=%v", got, err)
+		}
+		if _, _, err := f.repo.ResolveCorrection(ctx, it.ID, f.admin, true, ""); ruleKind(err) != "state" {
+			t.Errorf("resolving with nothing pending: %s, want state", ruleKind(err))
+		}
+	})
+
+	t.Run("a sensitive item cannot be approved by its own reviewer", func(t *testing.T) {
+		it := f.create(cmsInput("1991-02-08", "sharia"))
+		f.must(it.ID, f.author, pulse.DoSubmit)
+		// The admin holds every role: they review, so they may not also approve.
+		f.must(it.ID, f.admin, pulse.DoReview)
+		if _, err := f.apply(it.ID, f.admin, pulse.DoApprove, PulseApplyOptions{}); ruleKind(err) != "forbidden" {
+			t.Errorf("reviewer approving a sensitive item: %s, want forbidden", ruleKind(err))
+		}
+		if _, err := f.apply(it.ID, f.approver, pulse.DoApprove, PulseApplyOptions{}); err != nil {
+			t.Errorf("a different approver should be allowed: %v", err)
 		}
 	})
 

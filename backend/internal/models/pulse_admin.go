@@ -32,6 +32,9 @@ const (
 	PulseActionCorrected   = "corrected"
 	PulseActionArchived    = "archived"
 	PulseActionUnscheduled = "unscheduled"
+	// Two-person correction flow (migration 0057).
+	PulseActionCorrectionProposed = "correction_proposed"
+	PulseActionCorrectionRejected = "correction_rejected"
 )
 
 // PulseItemInput is what an editor sends to create or change an item.
@@ -143,4 +146,16 @@ type PulseAnalytics struct {
 	Shares         int              `json:"shares"`
 	ReturnRate     float64          `json:"returnRate"` // users seen on 2+ days / users seen, 0..1
 	Items          []PulseItemStats `json:"items"`      // sorted and compared client-side
+}
+
+// PulsePendingCorrection is a correction proposed for a published item that a
+// different approver has not yet applied or rejected (migration 0057).
+type PulsePendingCorrection struct {
+	ID         int64          `json:"id"`
+	ItemID     int64          `json:"itemId"`
+	ProposedBy *int64         `json:"proposedBy"`
+	Kind       string         `json:"kind"` // "updated" or "corrected"
+	Note       string         `json:"note"`
+	Input      PulseItemInput `json:"input"`
+	CreatedAt  time.Time      `json:"createdAt"`
 }

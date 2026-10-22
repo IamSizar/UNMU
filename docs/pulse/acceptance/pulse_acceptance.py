@@ -186,6 +186,16 @@ check("8 reject needs a note", s in (400, 422), str(s))
 s, b = call("POST", f"/pulse-admin/items/{draft_id}/reject", reviewer["token"], {"note": "needs a clearer source"})
 check("8 reject with a note returns it to draft", s == 200 and b.get("status") == "draft", f"{s} {b}")
 
+# A sensitive item's reviewer cannot also approve it.
+s, sens = call("POST", "/pulse-admin/items", editor["token"], item_body("sharia", DAY + "13", sensitive=True))
+sens_id = sens.get("id")
+call("POST", f"/pulse-admin/items/{sens_id}/submit", editor["token"], {})
+call("POST", f"/pulse-admin/items/{sens_id}/review", admin["token"], {})
+check("9 the reviewer of a sensitive item cannot approve it",
+      call("POST", f"/pulse-admin/items/{sens_id}/approve", admin["token"], {})[0] == 403)
+check("9 a different approver can approve it",
+      call("POST", f"/pulse-admin/items/{sens_id}/approve", approver["token"], {})[0] == 200)
+
 # ─── Scheduled publishing ─────────────────────────────────────────────────
 s, d = call("POST", "/pulse-admin/items", editor["token"], item_body("opportunity", DAY + "12"))
 sched_id = d.get("id")
@@ -223,9 +233,17 @@ check("11 a future-dated item cannot be published early",
 gid = ids["global"]
 fixed = item_body("global", DAY + "10") | {"titleEn": "Title global (fixed)"}
 s, c = call("POST", f"/pulse-admin/items/{gid}/correct", approver["token"], {"kind": "corrected", "note": "fixed the figure", "item": fixed})
-check("13 a correction on a published item works", s == 200, f"{s} {c}")
+check("13 a correction is only PROPOSED (202)", s == 202, f"{s} {c}")
+s, live = call("GET", f"/pulse/items/{gid}", reader["token"])
+check("13 the live item is unchanged until a second person applies it", live.get("titleEn") == "Title global", str(live.get("titleEn")))
+check("13 the proposer cannot apply their own correction",
+      call("POST", f"/pulse-admin/items/{gid}/correction/approve", approver["token"], {})[0] == 403)
+check("13 an editor cannot apply a correction",
+      call("POST", f"/pulse-admin/items/{gid}/correction/approve", editor["token"], {})[0] == 403)
 check("13 a correction without a note is refused",
-      call("POST", f"/pulse-admin/items/{gid}/correct", approver["token"], {"kind": "corrected", "note": "", "item": fixed})[0] in (400, 422))
+      call("POST", f"/pulse-admin/items/{gid}/correct", admin["token"], {"kind": "corrected", "note": "", "item": fixed})[0] in (400, 422))
+s, c = call("POST", f"/pulse-admin/items/{gid}/correction/approve", admin["token"], {"note": "checked"})
+check("13 a different approver applies the correction", s == 200, f"{s} {c}")
 s, vers = call("GET", f"/pulse-admin/items/{gid}/versions", admin["token"])
 vlist = vers if isinstance(vers, list) else vers.get("versions", [])
 check("12 previous versions are kept", s == 200 and len(vlist) >= 1, str(vers)[:100])

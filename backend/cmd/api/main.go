@@ -1095,6 +1095,9 @@ func main() {
 			pulseAdmin.POST("/items/:id/"+action, pulseAdminHandler.Action(action))
 		}
 		pulseAdmin.POST("/items/:id/correct", pulseAdminHandler.Correct)
+		pulseAdmin.GET("/items/:id/correction", pulseAdminHandler.GetCorrection)
+		pulseAdmin.POST("/items/:id/correction/approve", pulseAdminHandler.ResolveCorrection(true))
+		pulseAdmin.POST("/items/:id/correction/reject", pulseAdminHandler.ResolveCorrection(false))
 		pulseAdmin.GET("/items/:id/versions", pulseAdminHandler.Versions)
 		pulseAdmin.GET("/items/:id/events", pulseAdminHandler.Events)
 		pulseAdmin.GET("/staff", pulseAdminHandler.ListStaff)

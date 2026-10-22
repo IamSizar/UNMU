@@ -174,7 +174,10 @@ const (
 	DoUnschedule = "unschedule"
 	DoPublish    = "publish"
 	DoArchive    = "archive"
-	DoCorrect    = "correct"
+	DoCorrect    = "correct" // APPLY a proposed correction (a different approver than the proposer)
+	// DoProposeCorrection files a correction/update for a published item. It does
+	// not change the item: a second person must apply it via DoCorrect.
+	DoProposeCorrection = "propose_correction"
 )
 
 // pulseRule describes one workflow action: which statuses it may start from,
@@ -197,6 +200,8 @@ var actionRules = map[string]pulseRule{
 	DoPublish:    {[]string{models.PulseStatusApproved, models.PulseStatusScheduled}, []string{models.PulseRoleApprover}, false},
 	DoArchive:    {[]string{models.PulseStatusPublished}, []string{models.PulseRoleApprover}, false},
 	DoCorrect:    {[]string{models.PulseStatusPublished}, []string{models.PulseRoleApprover}, false},
+	DoProposeCorrection: {[]string{models.PulseStatusPublished},
+		[]string{models.PulseRoleEditor, models.PulseRoleApprover}, false},
 }
 
 func contains(list []string, v string) bool {
@@ -231,15 +236,34 @@ func CheckAction(action string, it models.PulseAdminItem, actor Actor) error {
 	return nil
 }
 
-// CheckApproval adds the two rules that need the whole item:
+// CheckApproval adds the rules that need the whole item:
 //   - a sensitive item must have been reviewed first;
+//   - a sensitive item's approver must be someone other than its reviewer
+//     (decision 2026-10-22: three people touch a sensitive item);
 //   - nothing is approved while required fields are missing.
-func CheckApproval(it models.PulseAdminItem) error {
+func CheckApproval(it models.PulseAdminItem, actor Actor) error {
 	if it.IsSensitive && it.ReviewedBy == nil {
 		return ruleErr("state", "This item is sensitive: a reviewer must review it before approval")
 	}
+	if it.IsSensitive && it.ReviewedBy != nil && *it.ReviewedBy == actor.UserID {
+		return ruleErr("forbidden", "You reviewed this sensitive item, so someone else must approve it")
+	}
 	if errs := CompletenessErrors(it); len(errs) > 0 {
 		return &RuleError{Kind: "invalid", Message: "The item is incomplete", Fields: errs}
+	}
+	return nil
+}
+
+// CheckCorrectionReview decides whether the actor may apply or reject a
+// proposed correction: they need the approver role and must not be the person
+// who proposed it (decision 2026-10-22: a correction is never applied by its
+// own author).
+func CheckCorrectionReview(it models.PulseAdminItem, proposedBy *int64, actor Actor) error {
+	if err := CheckAction(DoCorrect, it, actor); err != nil {
+		return err
+	}
+	if proposedBy != nil && *proposedBy == actor.UserID {
+		return ruleErr("forbidden", "You proposed this correction, so someone else must apply it")
 	}
 	return nil
 }

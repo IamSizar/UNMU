@@ -155,22 +155,77 @@ func TestCheckAction(t *testing.T) {
 }
 
 func TestCheckApproval(t *testing.T) {
+	approver := Actor{UserID: 3, Roles: map[string]bool{"approver": true}}
 	sensitive := completeItem("in_review", 1)
 	sensitive.IsSensitive = true
-	if kindOf(CheckApproval(sensitive)) != "state" {
+	if kindOf(CheckApproval(sensitive, approver)) != "state" {
 		t.Error("a sensitive item without a reviewer must not be approvable")
 	}
 	sensitive.ReviewedBy = ptr(int64(2))
-	if err := CheckApproval(sensitive); err != nil {
+	if err := CheckApproval(sensitive, approver); err != nil {
 		t.Errorf("reviewed sensitive item should pass: %v", err)
+	}
+	// Decision 2026-10-22: the reviewer of a sensitive item cannot also approve it.
+	sensitive.ReviewedBy = ptr(approver.UserID)
+	if kindOf(CheckApproval(sensitive, approver)) != "forbidden" {
+		t.Error("the reviewer of a sensitive item must not be able to approve it")
+	}
+	// ...but a non-sensitive item has no such restriction (the reviewer step is optional there).
+	plain := completeItem("in_review", 1)
+	plain.ReviewedBy = ptr(approver.UserID)
+	if err := CheckApproval(plain, approver); err != nil {
+		t.Errorf("non-sensitive item reviewed by the approver should pass: %v", err)
 	}
 	incomplete := completeItem("in_review", 1)
 	incomplete.TitleEn = ""
-	if kindOf(CheckApproval(incomplete)) != "invalid" {
+	if kindOf(CheckApproval(incomplete, approver)) != "invalid" {
 		t.Error("an incomplete item must not be approvable")
 	}
-	if err := CheckApproval(completeItem("in_review", 1)); err != nil {
+	if err := CheckApproval(completeItem("in_review", 1), approver); err != nil {
 		t.Errorf("complete non-sensitive item should pass without a reviewer: %v", err)
+	}
+}
+
+func TestCheckCorrectionReview(t *testing.T) {
+	live := completeItem("published", 1)
+	approver := Actor{UserID: 3, Roles: map[string]bool{"approver": true}}
+	proposer := ptr(int64(7))
+	if err := CheckCorrectionReview(live, proposer, approver); err != nil {
+		t.Errorf("a different approver should be allowed: %v", err)
+	}
+	if kindOf(CheckCorrectionReview(live, ptr(approver.UserID), approver)) != "forbidden" {
+		t.Error("the proposer must not apply their own correction")
+	}
+	editor := Actor{UserID: 4, Roles: map[string]bool{"editor": true}}
+	if kindOf(CheckCorrectionReview(live, proposer, editor)) != "forbidden" {
+		t.Error("an editor must not apply a correction")
+	}
+	if kindOf(CheckCorrectionReview(completeItem("archived", 1), proposer, approver)) != "state" {
+		t.Error("a correction cannot be applied to an item that is no longer published")
+	}
+	// An admin holds every role but is still bound by the proposer rule.
+	admin := Actor{UserID: 9, IsAdmin: true}
+	if kindOf(CheckCorrectionReview(live, ptr(admin.UserID), admin)) != "forbidden" {
+		t.Error("an admin must not apply their own correction")
+	}
+}
+
+func TestCheckProposeCorrection(t *testing.T) {
+	live := completeItem("published", 1)
+	for name, actor := range map[string]Actor{
+		"editor":   {UserID: 4, Roles: map[string]bool{"editor": true}},
+		"approver": {UserID: 3, Roles: map[string]bool{"approver": true}},
+	} {
+		if err := CheckAction(DoProposeCorrection, live, actor); err != nil {
+			t.Errorf("%s should be able to propose: %v", name, err)
+		}
+	}
+	reviewer := Actor{UserID: 5, Roles: map[string]bool{"reviewer": true}}
+	if kindOf(CheckAction(DoProposeCorrection, live, reviewer)) != "forbidden" {
+		t.Error("a reviewer-only user must not propose corrections")
+	}
+	if kindOf(CheckAction(DoProposeCorrection, completeItem("draft", 1), Actor{IsAdmin: true})) != "state" {
+		t.Error("only published items can have corrections proposed")
 	}
 }
 

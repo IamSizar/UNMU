@@ -78,6 +78,17 @@ export interface PulseMe {
   roles: PulseRole[]
 }
 
+/** A correction proposed for a live item, waiting for a different approver. */
+export interface PulsePendingCorrection {
+  id: number
+  itemId: number
+  proposedBy: number | null
+  kind: 'updated' | 'corrected'
+  note: string
+  input: PulseItemInput
+  createdAt: string
+}
+
 export interface PulseChangeLogEntry {
   id: number
   action: string
@@ -172,10 +183,15 @@ export const pulseApi = {
 
   action: (id: number, action: PulseAction, body: { note?: string; publishAt?: string } = {}) =>
     api.post<PulseItem>(`${BASE}/items/${id}/${action}`, body),
+  /** Proposes a correction. The live item changes only after a different approver applies it. */
   correct: (
     id: number,
     body: { kind: 'updated' | 'corrected'; note: string; item: PulseItemInput },
-  ) => api.post<PulseItem>(`${BASE}/items/${id}/correct`, body),
+  ) => api.post<{ pending: PulsePendingCorrection }>(`${BASE}/items/${id}/correct`, body),
+  getCorrection: (id: number) =>
+    api.get<{ pending: PulsePendingCorrection | null }>(`${BASE}/items/${id}/correction`),
+  resolveCorrection: (id: number, approve: boolean, note: string) =>
+    api.post<PulseItem>(`${BASE}/items/${id}/correction/${approve ? 'approve' : 'reject'}`, { note }),
 
   versions: (id: number) =>
     api.get<{ versions: PulseVersion[] }>(`${BASE}/items/${id}/versions`),

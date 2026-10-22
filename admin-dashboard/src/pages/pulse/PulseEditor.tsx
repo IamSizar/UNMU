@@ -21,6 +21,7 @@ import {
 } from '../../api/pulse'
 import { useI18n } from '../../i18n/I18nContext'
 import type { TranslationKey } from '../../i18n/translations'
+import PendingCorrectionCard from './PendingCorrectionCard'
 import PulseHistory from './PulseHistory'
 import { notifyPulseChanged } from './pulseEvents'
 import PulseItemForm from './PulseItemForm'
@@ -63,6 +64,7 @@ export default function PulseEditor() {
   const [saving, setSaving] = useState(false)
   const [busy, setBusy] = useState(false)
   const [historyKey, setHistoryKey] = useState(0)
+  const [correctionKey, setCorrectionKey] = useState(0)
 
   // "Update or correct" mode for live items.
   const [correcting, setCorrecting] = useState(false)
@@ -209,22 +211,32 @@ export default function PulseEditor() {
     setBusy(true)
     setServerErrors({})
     try {
-      const updated = await pulseApi.correct(itemId, { kind, note: note.trim(), item: draft })
-      setItem(updated)
-      setDraft(toInput(updated))
-      setSaved(toInput(updated))
-      setStock(updated.stock)
+      // Only PROPOSES: the live item is unchanged until a different approver applies it.
+      await pulseApi.correct(itemId, { kind, note: note.trim(), item: draft })
+      if (item) setDraft(toInput(item))
       setCorrecting(false)
       setNote('')
       setNoteTouched(false)
+      setCorrectionKey((k) => k + 1)
       setHistoryKey((k) => k + 1)
-      show('ok', t('pulse.action.done'))
+      show('ok', t('pulse.correction.proposed'))
       notifyPulseChanged()
     } catch (e) {
       reportError(e, t('pulse.action.failed'))
     } finally {
       setBusy(false)
     }
+  }
+
+  /** A pending correction was applied (item changed) or rejected (unchanged). */
+  function correctionResolved(live: PulseItem, applied: boolean) {
+    setItem(live)
+    setDraft(toInput(live))
+    setSaved(toInput(live))
+    setStock(live.stock)
+    setHistoryKey((k) => k + 1)
+    show('ok', t(applied ? 'pulse.correction.applied' : 'pulse.correction.rejected'))
+    notifyPulseChanged()
   }
 
   function cancelCorrection() {
@@ -301,6 +313,16 @@ export default function PulseEditor() {
         </div>
       )}
 
+      {item && me && item.status === 'published' && (
+        <PendingCorrectionCard
+          item={item}
+          me={me}
+          refreshKey={correctionKey}
+          onResolved={correctionResolved}
+          onError={(m) => show('error', m)}
+        />
+      )}
+
       {item && !editableDraft && !correcting && (
         <p className="text-sm text-fg-muted bg-white/5 ring-1 ring-line rounded-lg px-4 py-3">
           {t('pulse.editor.readOnly', { status: t(`pulse.status.${item.status}` as TranslationKey) })}
@@ -347,7 +369,7 @@ export default function PulseEditor() {
           </label>
           <div className="flex gap-2">
             <button onClick={confirmCorrection} disabled={busy} className={PULSE_PRIMARY_BTN}>
-              {busy ? t('pulse.saving') : t('pulse.dialog.confirm')}
+              {busy ? t('pulse.saving') : t('pulse.dialog.confirmPropose')}
             </button>
             <button onClick={cancelCorrection} disabled={busy} className={PULSE_GHOST_BTN}>
               {t('pulse.dialog.cancel')}

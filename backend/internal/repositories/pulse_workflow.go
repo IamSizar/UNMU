@@ -78,7 +78,7 @@ func (r *PulseAdminRepository) Apply(
 		}
 		err = applySimple(ctx, tx, it, do, &by, opts.Note)
 	case pulse.DoApprove:
-		if err = pulse.CheckApproval(*it); err == nil {
+		if err = pulse.CheckApproval(*it, actor); err == nil {
 			err = applySimple(ctx, tx, it, do, &by, opts.Note)
 		}
 	case pulse.DoReject, pulse.DoUnschedule, pulse.DoArchive:
@@ -199,70 +199,6 @@ func publishPulseTx(ctx context.Context, q pulseQuerier, it *models.PulseAdminIt
 	}
 	return logPulseEvent(ctx, q, it.ID, models.PulseActionPublished, actor, it.Status,
 		models.PulseStatusPublished, note)
-}
-
-// Correct changes a PUBLISHED item: it stays live, shows the "updated" or
-// "corrected" marker, keeps the previous version and logs the reason.
-// Date, slot and sensitivity cannot change here (that would move the item).
-func (r *PulseAdminRepository) Correct(
-	ctx context.Context, id int64, actor pulse.Actor, kind string,
-	in models.PulseItemInput, note string,
-) (*models.PulseAdminItem, error) {
-	if kind != models.PulseChangeUpdated && kind != models.PulseChangeCorrected {
-		return nil, &pulse.RuleError{Kind: "invalid", Message: "Choose \"updated\" or \"corrected\"",
-			Fields: pulse.FieldErrors{"kind": "Choose updated or corrected"}}
-	}
-	if err := pulse.ValidateNote(note, true); err != nil {
-		return nil, err
-	}
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, fmt.Errorf("starting pulse correction: %w", err)
-	}
-	defer tx.Rollback()
-
-	it, err := getPulseAdminItem(ctx, tx, id, true)
-	if err != nil {
-		return nil, err
-	}
-	if err := pulse.CheckAction(pulse.DoCorrect, *it, actor); err != nil {
-		return nil, err
-	}
-	in.PulseDate, in.Slot, in.IsSensitive = it.PulseDate, it.Slot, it.IsSensitive
-
-	// The corrected item is live, so it must still be complete.
-	candidate := *it
-	candidate.TitleAr, candidate.TitleEn = in.TitleAr, in.TitleEn
-	candidate.SummaryAr, candidate.SummaryEn = in.SummaryAr, in.SummaryEn
-	candidate.SourceName, candidate.VerifiedAt = in.SourceName, in.VerifiedAt
-	if errs := pulse.CompletenessErrors(candidate); len(errs) > 0 {
-		return nil, &pulse.RuleError{Kind: "invalid", Message: "A published item must stay complete", Fields: errs}
-	}
-
-	reason, action := "update", models.PulseActionUpdated
-	if kind == models.PulseChangeCorrected {
-		reason, action = "correction", models.PulseActionCorrected
-	}
-	_, err = tx.ExecContext(ctx,
-		`UPDATE pulse_items SET (`+inputColumns+`) =
-		   ($3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18),
-		   version = version + 1, change_kind = $2, last_changed_at = NOW()
-		 WHERE id = $1`,
-		append([]any{id, kind}, inputArgs(in)...)...)
-	if err != nil {
-		return nil, mapPulseDBError(fmt.Errorf("correcting pulse item %d: %w", id, err))
-	}
-	by := actor.UserID
-	if err := snapshotPulseItem(ctx, tx, id, reason, &by); err != nil {
-		return nil, err
-	}
-	if err := logPulseEvent(ctx, tx, id, action, &by, it.Status, it.Status, note); err != nil {
-		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("committing pulse correction: %w", err)
-	}
-	return getPulseAdminItem(ctx, r.db, id, false)
 }
 
 // PromoteDue publishes every scheduled item whose time has come. It is called

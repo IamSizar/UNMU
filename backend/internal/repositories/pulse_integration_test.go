@@ -101,9 +101,9 @@ func (f *pulseFixture) item(date, slot, status, titleEn string, stock bool) int6
 		        'Full details','Evidence text','Source',now(),$6,
 		        CASE WHEN $3='scheduled' THEN now() + interval '1 day' END,
 		        CASE WHEN $3='published' THEN now() END,
-		        $7,$7,$7)
+		        $7,$7,$8)
 		RETURNING id`,
-		date, slot, status, sensitive, titleEn, stockID, f.userID).Scan(&id)
+		date, slot, status, sensitive, titleEn, stockID, f.userID, f.otherID).Scan(&id) // reviewer != approver: the DB forbids them being the same on a sensitive item
 	if err != nil {
 		f.t.Fatalf("insert item %q: %v", titleEn, err)
 	}

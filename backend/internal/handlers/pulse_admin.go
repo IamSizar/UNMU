@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -31,7 +32,9 @@ import (
 //	PUT    /items/:id               edit a draft
 //	DELETE /items/:id               delete a draft
 //	POST   /items/:id/{submit|review|reject|approve|schedule|unschedule|publish|archive}
-//	POST   /items/:id/correct       update / correct a published item
+//	POST   /items/:id/correct       PROPOSE an update / correction (202; a second approver applies it)
+//	GET    /items/:id/correction    the open proposal, or null
+//	POST   /items/:id/correction/{approve|reject}   apply / reject it (not the proposer)
 //	GET    /items/:id/versions      stored snapshots
 //	GET    /items/:id/events        change log
 //	GET    /staff                   role assignments
@@ -255,7 +258,8 @@ type pulseCorrectRequest struct {
 	Item models.PulseItemInput `json:"item"`
 }
 
-// Correct — POST /items/:id/correct.
+// Correct — POST /items/:id/correct. PROPOSES a correction; the live item does
+// not change until a different approver applies it (decision 2026-10-22).
 func (h *PulseAdminHandler) Correct(c *gin.Context) {
 	id, ok := pulseItemID(c)
 	if !ok {
@@ -274,15 +278,55 @@ func (h *PulseAdminHandler) Correct(c *gin.Context) {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "Please fix the highlighted fields", "fields": errs})
 		return
 	}
-	it, err := h.repo.Correct(c.Request.Context(), id, pulseActor(c), req.Kind, req.Item, req.Note)
+	pending, err := h.repo.ProposeCorrection(c.Request.Context(), id, pulseActor(c), req.Kind, req.Item, req.Note)
 	if err != nil {
-		pulseRuleResponse(c, "correct item", err)
+		pulseRuleResponse(c, "propose correction", err)
 		return
 	}
-	if h.onChange != nil {
-		h.onChange(c.Request.Context(), req.Kind, *it)
+	c.JSON(http.StatusAccepted, gin.H{"pending": pending})
+}
+
+// GetCorrection — GET /items/:id/correction. The open proposal, or null.
+func (h *PulseAdminHandler) GetCorrection(c *gin.Context) {
+	id, ok := pulseItemID(c)
+	if !ok {
+		return
 	}
-	c.JSON(http.StatusOK, it)
+	pending, err := h.repo.PendingCorrection(c.Request.Context(), id)
+	if err != nil {
+		pulseRuleResponse(c, "load correction", err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"pending": pending})
+}
+
+type pulseResolveRequest struct {
+	Note string `json:"note"`
+}
+
+// ResolveCorrection — POST /items/:id/correction/{approve|reject}. Applies or
+// rejects the open proposal; only an approver other than the proposer may.
+func (h *PulseAdminHandler) ResolveCorrection(approve bool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, ok := pulseItemID(c)
+		if !ok {
+			return
+		}
+		var req pulseResolveRequest
+		if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
+			pulseBadRequest(c, "Invalid request")
+			return
+		}
+		it, pending, err := h.repo.ResolveCorrection(c.Request.Context(), id, pulseActor(c), approve, req.Note)
+		if err != nil {
+			pulseRuleResponse(c, "resolve correction", err)
+			return
+		}
+		if approve && h.onChange != nil {
+			h.onChange(c.Request.Context(), pending.Kind, *it)
+		}
+		c.JSON(http.StatusOK, it)
+	}
 }
 
 // Versions — GET /items/:id/versions.
