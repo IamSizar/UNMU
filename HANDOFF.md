@@ -5,6 +5,39 @@ context: read this before planning any work here.
 
 ---
 
+## 2026-10-27 — Pulse run on the iOS simulator against staging; 2 real bugs fixed, push-tap NOT device-verified (3 commits local, NOT pushed)
+
+**Asked for:** keep building Pulse; run it on the iOS simulator against staging (OPOS 137987) and fix what breaks. OPOS office 16, tasks 137986 (push tap, Under Review), 137987 (this run), 137988 (review leftovers, still To Do), as account 6.
+
+### What changed (branch `feat/unmu-pulse`, 3 commits ahead of origin, not pushed)
+- `3df2ef4` push tap: new `lib/services/pulse_push_router.dart` (+ test), wired in `push_token_service.dart` (`onMessageOpenedApp`, `handleLaunchNotification`) and `main.dart`.
+- `648c460` **fix:** teal/ink Pulse cards painted no solid base (a `BoxDecoration` paints gradient OR color, never both), so white text sat on a pale see-through card. Now two nested boxes in `pulse_tokens.dart`. Test `test/widgets/pulse_surface_box_test.dart`. Same commit adds a `--dart-define=API_BASE_URL=...` override in `lib/config/api_config.dart` (default is still production).
+- `e96fc52` **fix:** `LanguageController._loadLanguage` never called `Get.updateLocale`, so after a restart layout and content were Arabic but every `.tr` label was English, for the WHOLE app, not just Pulse. Test `test/controllers/language_controller_test.dart` (fails without the fix, passes with it). Also `debugPrint` lines in the push path.
+
+### Verified (commands and results, 2026-10-27)
+- `flutter test` -> 75 pass, 1 fail (`test/widget_test.dart` template counter test, pre-existing). `flutter analyze lib test` -> No issues found.
+- Built with `flutter build ios --simulator --debug --dart-define=API_BASE_URL=https://backend-staging-33c5.up.railway.app/api`, run on iPhone 17 Pro Max 26.1, logged in as a throw-away staging reader. Seen working: Pulse home with 4 items, confirmed/analysis, "In your portfolio" chip, item detail (source, link, evidence, verified/published times), save + Saved tab, archive with day strip, notification prefs, switching to Arabic (RTL mirrored, Arabic content), and after the fix a cold restart stays fully Arabic.
+
+### NOT verified / still open
+- **Push tap does not work on the simulator and I could not prove why.** `xcrun simctl push` with a `gcm.message_id` payload shows the banner and opens the app, but neither `[push] onMessageOpenedApp fired` nor the existing foreground `onMessage` log appears, so the simulated payload may not be treated as an FCM message at all. Staging has no Firebase credentials by design, so a real FCM push cannot be sent. Only the payload-to-route function is unit tested. Needs a real device plus a real FCM push.
+- `pulse_new_many` push only returns to the first screen; it does not switch tab.
+- Share sheet, "Open source" and stock-link tap were not exercised. OPOS 137988 (Retry spinner, save/load races, saved item replaced in slot) not started.
+- Not pushed; PR #4 does not contain these commits. Production still untouched.
+- Seen, not Pulse and not fixed: the profile Language/Currency dropdowns use a Material popup on iOS (house rule is Cupertino on iOS).
+
+### External actions
+- Staging DB/API only: ran `scratchpad/seed_staging.py` (not in repo), which created 5 `sim-*@example.test` users and 8 published Pulse items (2026-10-26 and 10-27), linked the `opportunity` items to the one staging stock and gave the reader a holding. Rows are harmless; delete them with the 1992 acceptance data when done. The simulator registered a real APNs token for the reader on staging.
+- Nothing pushed to GitHub, nothing deployed.
+
+### Traps
+- Another session (Nav iQ) put its app on the shared simulator `iPhone 17 Pro` mid-run. Boot your own device by UDID and pass `device` on every simulator call.
+- Build lock `~/.cache/heavy-build.lock` was held for a long time by another session; wait with a monitor, release it after your build.
+- The login form on a fresh install is pre-filled with `demo@unmu.app`; typing fast right after "Allow notifications" loses the input. Type step by step and check a screenshot before tapping Log in.
+- In a plain `test()` `Get.updateLocale` fails (`inTest` assertion); use `testWidgets` with a `GetMaterialApp`.
+- The fact-forcing hook demands the importers and the instruction quote before the first edit or write of each file.
+
+---
+
 ## 2026-10-22 — UNMU Pulse (نبض أنمو) Phase 1 built end to end; PR #4 open (feat/unmu-pulse → main); staging only, NOT in production
 
 **Asked for:** build Pulse Phase 1 from the spec PDF (daily curated briefing, four
