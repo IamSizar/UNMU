@@ -228,6 +228,12 @@ class _AppEntryState extends State<_AppEntry> {
     // URL can push the post viewer on top of the splash / main scaffold.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       DeepLinkService.instance.init();
+      // Launched by tapping a Pulse push: wait a beat so the main scaffold
+      // is mounted, then open the item (mirrors the deep-link delay).
+      Future<void>.delayed(
+        const Duration(milliseconds: 600),
+        () => PushTokenService.instance.handleLaunchNotification(),
+      );
     });
   }
 
