@@ -119,6 +119,7 @@ class PushTokenService {
     // Notification tap while the app is in the background: route Pulse
     // pushes to the item they are about. Non-Pulse pushes are ignored here.
     FirebaseMessaging.onMessageOpenedApp.listen((msg) {
+      debugPrint('[push] onMessageOpenedApp fired');
       openPulsePush(msg.data);
     });
 

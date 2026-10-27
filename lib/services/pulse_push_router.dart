@@ -64,6 +64,7 @@ PulsePushRoute? resolvePulsePush(Map<String, dynamic> data) {
 /// was a Pulse push and was handled.
 bool openPulsePush(Map<String, dynamic> data) {
   final route = resolvePulsePush(data);
+  debugPrint('[push] tap data=$data -> ${route?.target} ${route?.itemId}');
   if (route == null) return false;
   // Drop anything stacked on top (an open item, archive...) so back from the
   // item returns to the app's first screen, not a stale one.
