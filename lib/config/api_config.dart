@@ -21,7 +21,13 @@ class ApiConfig {
   /// can reach the laptop on the same Wi-Fi.
   static const String devMacLanIp = '192.168.1.75';
 
+  /// Build-time override, e.g. `--dart-define=API_BASE_URL=https://staging.../api`.
+  /// Lets a debug/simulator build target the Railway staging environment
+  /// without editing code. Empty (the default) keeps production behaviour.
+  static const String _overrideUrl = String.fromEnvironment('API_BASE_URL');
+
   static String get baseUrl {
+    if (_overrideUrl.isNotEmpty) return _overrideUrl;
     if (!useLocalBackend) return railwayUrl;
 
     // Web: served from the same Mac, localhost is fine.

@@ -200,53 +200,70 @@ class PulseSurfaceBox extends StatelessWidget {
           ),
         );
       case PulseSurface.teal:
-        return DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: radius,
-            color: dark ? const Color(0xFF06383D) : PulseColors.tealDeep,
-            gradient: RadialGradient(
-              center: const Alignment(0.95, -0.9),
-              radius: 1.1,
-              colors: [
-                PulseColors.teal.withValues(alpha: dark ? 0.5 : 0.9),
-                PulseColors.teal.withValues(alpha: 0),
-              ],
-            ),
-            border: dark
-                ? Border.all(color: PulseColors.teal.withValues(alpha: 0.28))
-                : null,
-            boxShadow: dark
-                ? null
-                : [
-                    BoxShadow(
-                      color: PulseColors.tealInk.withValues(alpha: 0.35),
-                      blurRadius: 28,
-                      offset: const Offset(0, 14),
-                      spreadRadius: -10,
-                    ),
-                  ],
-          ),
-          child: Padding(padding: padding, child: child),
+        return _toneBox(
+          radius: radius,
+          base: dark ? const Color(0xFF06383D) : PulseColors.tealDeep,
+          glow: PulseColors.teal.withValues(alpha: dark ? 0.5 : 0.9),
+          glowRadius: 1.1,
+          border: dark
+              ? Border.all(color: PulseColors.teal.withValues(alpha: 0.28))
+              : null,
+          shadow: dark
+              ? null
+              : [
+                  BoxShadow(
+                    color: PulseColors.tealInk.withValues(alpha: 0.35),
+                    blurRadius: 28,
+                    offset: const Offset(0, 14),
+                    spreadRadius: -10,
+                  ),
+                ],
         );
       case PulseSurface.ink:
-        return DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: radius,
-            color: dark ? const Color(0xFF0E2226) : PulseColors.ink,
-            gradient: RadialGradient(
-              center: const Alignment(0.95, -0.9),
-              radius: 1.0,
-              colors: [
-                PulseColors.teal.withValues(alpha: dark ? 0.30 : 0.42),
-                PulseColors.teal.withValues(alpha: 0),
-              ],
-            ),
-            border: dark
-                ? Border.all(color: Colors.white.withValues(alpha: 0.10))
-                : null,
-          ),
-          child: Padding(padding: padding, child: child),
+        return _toneBox(
+          radius: radius,
+          base: dark ? const Color(0xFF0E2226) : PulseColors.ink,
+          glow: PulseColors.teal.withValues(alpha: dark ? 0.30 : 0.42),
+          glowRadius: 1.0,
+          border: dark
+              ? Border.all(color: Colors.white.withValues(alpha: 0.10))
+              : null,
         );
     }
+  }
+
+  /// A tone card: a SOLID base colour with a soft light source on top.
+  ///
+  /// Two nested boxes on purpose. A single BoxDecoration paints its gradient
+  /// OR its colour, never both, so putting both on one box drops the base and
+  /// the fading glow lets the pale page show through, which made the white
+  /// text on these cards unreadable.
+  Widget _toneBox({
+    required BorderRadius radius,
+    required Color base,
+    required Color glow,
+    required double glowRadius,
+    BoxBorder? border,
+    List<BoxShadow>? shadow,
+  }) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        color: base,
+        border: border,
+        boxShadow: shadow,
+      ),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          gradient: RadialGradient(
+            center: const Alignment(0.95, -0.9),
+            radius: glowRadius,
+            colors: [glow, glow.withValues(alpha: 0)],
+          ),
+        ),
+        child: Padding(padding: padding, child: child),
+      ),
+    );
   }
 }
