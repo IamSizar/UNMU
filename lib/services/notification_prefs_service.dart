@@ -15,6 +15,14 @@ class NotificationPrefs {
   final bool communitiesEnabled;
   final bool marketingEnabled;
 
+  /// UNMU Pulse switches (backend migration 0056). [pulseEnabled] is the
+  /// master switch; the other four choose which events are sent.
+  final bool pulseEnabled;
+  final bool pulseNewEnabled;
+  final bool pulseUpdatesEnabled;
+  final bool pulseCorrectionsEnabled;
+  final bool pulseSavedEnabled;
+
   const NotificationPrefs({
     required this.pushEnabled,
     required this.emailEnabled,
@@ -23,6 +31,11 @@ class NotificationPrefs {
     required this.subscriptionsEnabled,
     required this.communitiesEnabled,
     required this.marketingEnabled,
+    this.pulseEnabled = true,
+    this.pulseNewEnabled = true,
+    this.pulseUpdatesEnabled = true,
+    this.pulseCorrectionsEnabled = true,
+    this.pulseSavedEnabled = true,
   });
 
   /// Backend defaults — used as the on-screen starting state while the
@@ -46,6 +59,12 @@ class NotificationPrefs {
         subscriptionsEnabled: json['subscriptionsEnabled'] as bool? ?? true,
         communitiesEnabled: json['communitiesEnabled'] as bool? ?? true,
         marketingEnabled: json['marketingEnabled'] as bool? ?? false,
+        pulseEnabled: json['pulseEnabled'] as bool? ?? true,
+        pulseNewEnabled: json['pulseNewEnabled'] as bool? ?? true,
+        pulseUpdatesEnabled: json['pulseUpdatesEnabled'] as bool? ?? true,
+        pulseCorrectionsEnabled:
+            json['pulseCorrectionsEnabled'] as bool? ?? true,
+        pulseSavedEnabled: json['pulseSavedEnabled'] as bool? ?? true,
       );
 
   NotificationPrefs copyWith({
@@ -56,6 +75,11 @@ class NotificationPrefs {
     bool? subscriptionsEnabled,
     bool? communitiesEnabled,
     bool? marketingEnabled,
+    bool? pulseEnabled,
+    bool? pulseNewEnabled,
+    bool? pulseUpdatesEnabled,
+    bool? pulseCorrectionsEnabled,
+    bool? pulseSavedEnabled,
   }) =>
       NotificationPrefs(
         pushEnabled: pushEnabled ?? this.pushEnabled,
@@ -65,6 +89,12 @@ class NotificationPrefs {
         subscriptionsEnabled: subscriptionsEnabled ?? this.subscriptionsEnabled,
         communitiesEnabled: communitiesEnabled ?? this.communitiesEnabled,
         marketingEnabled: marketingEnabled ?? this.marketingEnabled,
+        pulseEnabled: pulseEnabled ?? this.pulseEnabled,
+        pulseNewEnabled: pulseNewEnabled ?? this.pulseNewEnabled,
+        pulseUpdatesEnabled: pulseUpdatesEnabled ?? this.pulseUpdatesEnabled,
+        pulseCorrectionsEnabled:
+            pulseCorrectionsEnabled ?? this.pulseCorrectionsEnabled,
+        pulseSavedEnabled: pulseSavedEnabled ?? this.pulseSavedEnabled,
       );
 }
 
@@ -115,6 +145,11 @@ class NotificationPrefsService {
     bool? subscriptionsEnabled,
     bool? communitiesEnabled,
     bool? marketingEnabled,
+    bool? pulseEnabled,
+    bool? pulseNewEnabled,
+    bool? pulseUpdatesEnabled,
+    bool? pulseCorrectionsEnabled,
+    bool? pulseSavedEnabled,
   }) async {
     final body = <String, dynamic>{};
     if (pushEnabled != null) body['pushEnabled'] = pushEnabled;
@@ -128,6 +163,15 @@ class NotificationPrefsService {
       body['communitiesEnabled'] = communitiesEnabled;
     }
     if (marketingEnabled != null) body['marketingEnabled'] = marketingEnabled;
+    if (pulseEnabled != null) body['pulseEnabled'] = pulseEnabled;
+    if (pulseNewEnabled != null) body['pulseNewEnabled'] = pulseNewEnabled;
+    if (pulseUpdatesEnabled != null) {
+      body['pulseUpdatesEnabled'] = pulseUpdatesEnabled;
+    }
+    if (pulseCorrectionsEnabled != null) {
+      body['pulseCorrectionsEnabled'] = pulseCorrectionsEnabled;
+    }
+    if (pulseSavedEnabled != null) body['pulseSavedEnabled'] = pulseSavedEnabled;
 
     try {
       final res = await http

@@ -45,9 +45,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const data = await api.post<LoginResponse>('/auth/login', { email, password })
       const role = (data.user.role ?? 'USER').toUpperCase()
-      if (role !== 'ADMIN') {
-        return { ok: false, error: 'This account is not an admin.' }
-      }
       const adminUser: AdminUser = {
         id: data.user.id,
         email: data.user.email,
@@ -55,6 +52,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role,
       }
       setSession(data.token, adminUser)
+      if (role !== 'ADMIN') {
+        // Not a system admin: still allowed in if they hold a Pulse role
+        // (editor / reviewer / approver). The server answers 403 otherwise.
+        try {
+          await api.get('/pulse-admin/me')
+        } catch {
+          clearSession()
+          return { ok: false, error: 'This account is not an admin.' }
+        }
+      }
       setUser(adminUser)
       return { ok: true }
     } catch (e: any) {

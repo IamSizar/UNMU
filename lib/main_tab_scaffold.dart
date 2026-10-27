@@ -11,14 +11,12 @@ import 'screens/discover/discover_screen.dart';
 import 'screens/feed/feed_screen.dart';
 import 'screens/indexes/indexes_screen.dart';
 import 'screens/profile/profile_screen.dart';
+import 'screens/pulse/pulse_home_screen.dart';
 import 'screens/social/social_hub_screen.dart';
 // Watchlist + Tools live in Profile → Quick Actions (May 2026).
-// Feed is NOT a top-level button anymore — it sits in the PageView
-// at position 3, but the bottom nav only shows 4 buttons at a time
-// and position #2 is contextual: shows Indexes by default, swaps to
-// Feed when the user is on the Social tab (or already on Feed). The
-// swap is purely a navbar concern; the underlying PageView always
-// holds all 5 screens.
+// The PageView holds five tab screens (Pulse, Discover, Indexes, Social, Feed)
+// and the bottom nav shows one button per page. Profile is a pushed route
+// opened from the avatar button on each screen, not a tab.
 import 'widgets/modern_bottom_nav.dart';
 
 /// Main tab scaffold using a unified modern floating bottom navigation
@@ -27,7 +25,7 @@ import 'widgets/modern_bottom_nav.dart';
 ///
 /// May 2026 refresh — swap from `IndexedStack` to a `PageView` so users
 /// can SWIPE horizontally between tabs (Discover ↔ Indexes ↔ Social ↔
-/// Feed ↔ Watchlist ↔ Tools ↔ Profile). State is preserved per page via
+/// Feed). State is preserved per page via
 /// a [_KeepAlivePage] wrapper using `AutomaticKeepAliveClientMixin`, so
 /// scroll positions, fetched lists, etc. don't reset on tab change.
 ///
@@ -95,92 +93,67 @@ class _MainTabScaffoldState extends State<MainTabScaffold> {
   Widget build(BuildContext context) {
     // ── 5 underlying screens in fixed page-order ────────────────────
     // Page indices are LITERAL — the PageView always shows these five
-    // in this order. The bottom nav only renders 4 buttons at a time;
-    // the 2nd button is contextual (see navItems + helpers below).
-    const discoverPage = 0;
-    const indexesPage  = 1;
-    const socialPage   = 2;
-    const feedPage     = 3;
-    const profilePage  = 4;
+    // in this order, and the bottom nav has one button per page.
+    // Only feedPage is referenced by name — the reels viewer needs to know
+    // when it is on screen. The other three are implied by list order.
+    const feedPage = 4;
 
     final screens = const [
-      DiscoverScreen(),    // page 0
-      IndexesScreen(),     // page 1
-      SocialHubScreen(),   // page 2
-      FeedScreen(),        // page 3
-      ProfileScreen(),     // page 4
+      PulseHomeScreen(),   // page 0 — UNMU Pulse, the daily briefing
+      DiscoverScreen(),    // page 1
+      IndexesScreen(),     // page 2
+      SocialHubScreen(),   // page 3
+      FeedScreen(),        // page 4
     ];
 
-    // The "Social context" includes both the Social hub AND the Feed
-    // screen. Whenever the user is on either one, the 2nd nav slot
-    // swaps from Indexes → Feed. Elsewhere it's Indexes.
-    final inSocialContext =
-        _currentIndex == socialPage || _currentIndex == feedPage;
-
-    // Build the 4 visible nav items. Position 1 is the contextual one.
+    // Five permanent destinations, one per page — no contextual slot.
+    //
+    // Position 1 used to swap between Indexes and Feed depending on where
+    // you already were, which meant whichever of the two you were NOT on had
+    // no button at all and could only be reached by swiping. Profile moved
+    // to a top-right avatar on every screen (see ProfileAvatarButton), which
+    // freed the slot this needed.
     final navItems = <NavItem>[
+      NavItem(
+        icon: Icons.monitor_heart_outlined,
+        activeIcon: Icons.monitor_heart,
+        label: 'nav.pulse'.tr,
+      ),
       NavItem(
         icon: Icons.explore_outlined,
         activeIcon: Icons.explore,
         label: 'nav.discover'.tr,
       ),
-      inSocialContext
-          ? NavItem(
-              icon: Icons.dynamic_feed_outlined,
-              activeIcon: Icons.dynamic_feed,
-              label: 'nav.feed'.tr,
-            )
-          : NavItem(
-              icon: Icons.bar_chart_outlined,
-              activeIcon: Icons.bar_chart,
-              label: 'nav.indexes'.tr,
-            ),
+      NavItem(
+        icon: Icons.bar_chart_outlined,
+        activeIcon: Icons.bar_chart,
+        label: 'nav.indexes'.tr,
+      ),
       NavItem(
         icon: Icons.groups_outlined,
         activeIcon: Icons.groups,
         label: 'nav.social'.tr,
       ),
       NavItem(
-        icon: Icons.person_outline,
-        activeIcon: Icons.person,
-        label: 'nav.profile'.tr,
+        icon: Icons.dynamic_feed_outlined,
+        activeIcon: Icons.dynamic_feed,
+        label: 'nav.feed'.tr,
       ),
     ];
 
-    // Map page index (0-4) → active nav-button index (0-3).
-    int navActive;
-    switch (_currentIndex) {
-      case discoverPage:  navActive = 0; break;
-      case indexesPage:   navActive = 1; break;   // Indexes shown in slot 1
-      case socialPage:    navActive = 2; break;
-      case feedPage:      navActive = 1; break;   // Feed shown in slot 1
-      case profilePage:   navActive = 3; break;
-      default:            navActive = 0;
-    }
-
-    // Map nav-button index (0-3) → page index (0-4). Position 1 is
-    // contextual: it represents Indexes by default but Feed when the
-    // viewer is already inside the Social context.
-    int navPositionToPage(int navIndex) {
-      switch (navIndex) {
-        case 0: return discoverPage;
-        case 1: return inSocialContext ? feedPage : indexesPage;
-        case 2: return socialPage;
-        case 3: return profilePage;
-        default: return discoverPage;
-      }
-    }
+    // Nav button index and page index are now the same number, so the two
+    // lookup tables this used to need are gone.
 
     // feedTabIndex feeds the existing `isFeedTabActive` Rx so the
     // reels viewer can pause when the user leaves Feed. The flag
-    // takes a page index (not a nav slot), so feedPage (3) is the
+    // takes a page index (not a nav slot), so feedPage (4) is the
     // correct value here.
     const feedTabIndex = feedPage;
 
     final feed = Get.find<FeedController>();
 
     // Shared body — the same PageView on every form factor. Swipes still
-    // work linearly (Discover → Indexes → Social → Feed → Profile).
+    // work linearly (Pulse → Discover → Indexes → Social → Feed).
     final pageView = PageView(
       controller: _pageController,
       physics: const BouncingScrollPhysics(),
@@ -192,11 +165,12 @@ class _MainTabScaffoldState extends State<MainTabScaffold> {
 
     // ── iPad / wide layout ───────────────────────────────────────────
     // A side NavigationRail replaces the bottom bar. A rail has room for
-    // all FIVE real destinations, so we skip the phone navbar's contextual
-    // Indexes↔Feed slot entirely and map 1:1 to pages. The bottom bar is
-    // kept ONLY on the Feed page so its Articles/Videos/Reels filter (the
-    // feedMode pill row) still works — the rail owns navigation, the bar
-    // owns the filter.
+    // all FOUR real destinations, so we skip the phone navbar's contextual
+    // Indexes↔Feed slot entirely and map 1:1 to pages. There is no bottom
+    // bar here at all: it used to appear on the Feed page purely to host the
+    // Articles/Videos/Reels filter, and that filter now lives only in the
+    // Feed screen's own menu (see feed_screen.dart). The rail owns
+    // navigation; nothing is left for a bottom bar to do.
     if (context.isWide) {
       return Scaffold(
         body: Obx(() {
@@ -210,59 +184,37 @@ class _MainTabScaffoldState extends State<MainTabScaffold> {
             ],
           );
         }),
-        bottomNavigationBar: Obx(() {
-          if (feed.reelsFullscreen.value) return const SizedBox.shrink();
-          // Only the Feed page needs the bottom row here (the filter). Every
-          // other destination is reachable from the rail.
-          if (_currentIndex != feedPage) return const SizedBox.shrink();
-          return ModernBottomNav(
-            currentIndex: navActive,
-            currentPage: navActive.toDouble(),
-            items: navItems,
-            onTap: (navIndex) =>
-                _goToTab(navPositionToPage(navIndex), feed, feedTabIndex),
-            feedMode: true,
-            onGoHome: () => _goToTab(socialPage, feed, feedTabIndex),
-            onGoProfile: () => _goToTab(profilePage, feed, feedTabIndex),
-          );
-        }),
       );
     }
 
     // ── Phone layout (unchanged) ──────────────────────────────────────
     return Scaffold(
-      // PageView holds all 5 underlying screens. Swipes still work
-      // linearly (Discover → Indexes → Social → Feed → Profile) — the
-      // navbar simply shows 4 buttons and visually swaps position 1
-      // between Indexes and Feed based on the current page.
+      // The floating aurora pill is drawn OVER the page, not in a reserved
+      // slot beneath it. Without extendBody the Scaffold paints its own
+      // background in that slot, which reads as a dark band behind the bar
+      // and defeats the point of a glass surface — there is nothing behind
+      // it to blur.
+      extendBody: true,
+      // PageView holds the 5 tab screens. Swipes still work
+      // linearly (Pulse → Discover → Indexes → Social → Feed) — the
+      // navbar shows one button per page.
       body: pageView,
       // Bottom navbar hides when the reels viewer toggles fullscreen.
-      // We pass the integer `navActive` (0-3) so the cyan indicator
-      // dot maps to the correct nav button regardless of which of the
-      // 5 underlying pages the user is on.
+      // The page index and the nav button index are the same number.
       //
-      // feedMode = true when the user is on the Feed page (3) → the
-      // navbar morphs into the Articles/Videos/Reels filter pill bar
-      // (the home + profile shortcuts re-appear on either end). The
-      // home pill drops the user back to Social Hub since Feed lives
-      // inside the Social context.
+      // The bar is the SAME on every tab, Feed included. It used to morph
+      // into an Articles/Videos/Reels filter row on the Feed page, which
+      // meant the navigation changed shape under the user mid-journey. The
+      // filter is still available, from the Feed screen's own menu, where
+      // it belongs — filtering a list is the list's job, not the nav's.
       bottomNavigationBar: Obx(
         () {
           if (feed.reelsFullscreen.value) return const SizedBox.shrink();
-          final onFeedPage = _currentIndex == feedPage;
           return ModernBottomNav(
-            currentIndex: navActive,
-            currentPage: navActive.toDouble(),
+            currentIndex: _currentIndex,
+            currentPage: _currentIndex.toDouble(),
             items: navItems,
-            onTap: (navIndex) {
-              final targetPage = navPositionToPage(navIndex);
-              _goToTab(targetPage, feed, feedTabIndex);
-            },
-            feedMode: onFeedPage,
-            // Home pill (only visible in feedMode) → back to Social
-            // Hub, which is the "non-feed" half of the Social context.
-            onGoHome: () => _goToTab(socialPage, feed, feedTabIndex),
-            onGoProfile: () => _goToTab(profilePage, feed, feedTabIndex),
+            onTap: (page) => _goToTab(page, feed, feedTabIndex),
           );
         },
       ),
@@ -285,11 +237,11 @@ class _MainTabScaffoldState extends State<MainTabScaffold> {
     const accent = SocialTokens.cyan;
 
     const items = <(IconData, IconData, String)>[
+      (Icons.monitor_heart_outlined, Icons.monitor_heart, 'nav.pulse'),
       (Icons.explore_outlined, Icons.explore, 'nav.discover'),
       (Icons.bar_chart_outlined, Icons.bar_chart, 'nav.indexes'),
       (Icons.groups_outlined, Icons.groups, 'nav.social'),
       (Icons.dynamic_feed_outlined, Icons.dynamic_feed, 'nav.feed'),
-      (Icons.person_outline, Icons.person, 'nav.profile'),
     ];
 
     return Container(
@@ -349,7 +301,9 @@ class _MainTabScaffoldState extends State<MainTabScaffold> {
             _SideNavUserChip(
               extended: extended,
               accent: accent,
-              onTap: () => _goToTab(4, feed, feedTabIndex),
+              // Profile is a pushed route, not a page, so the rail's user
+              // chip opens it the same way the phone's top-right avatar does.
+              onTap: () => Get.to(() => const ProfileScreen()),
             ),
             const SizedBox(height: 14),
           ],

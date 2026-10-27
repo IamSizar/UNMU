@@ -7,6 +7,7 @@ import (
 	"halalstocks/internal/handlers"
 	"halalstocks/internal/marketdata"
 	"halalstocks/internal/middleware"
+	"halalstocks/internal/pulse"
 	"halalstocks/internal/realtime"
 	"halalstocks/internal/repositories"
 	"halalstocks/internal/services"
@@ -212,6 +213,17 @@ func main() {
 	promoHandler := handlers.NewPromoHandler(promoRepo)
 	referralRepo := repositories.NewReferralRepository(database)
 	referralHandler := handlers.NewReferralHandler(referralRepo, promoRepo)
+	// UNMU Pulse — daily curated briefing (migration 0056). Read side for
+	// logged-in users; the admin CMS routes are added under /admin.
+	pulseRepo := repositories.NewPulseRepository(database)
+	pulseHandler := handlers.NewPulseHandler(pulseRepo)
+	// Pulse CMS (editors / reviewers / approvers / admins) + the scheduler that
+	// publishes items when their time arrives. Both tell the notifier, which
+	// pushes "new Pulse" / "updated" / "corrected" to the right users.
+	pulseAdminRepo := repositories.NewPulseAdminRepository(database)
+	pulseNotifier := services.NewPulseNotifier(notifier, pulseAdminRepo)
+	pulseAdminHandler := handlers.NewPulseAdminHandler(pulseAdminRepo, pulseNotifier.OnChange)
+	services.NewPulsePublisher(pulseAdminRepo, pulseNotifier.OnPublished).Start(context.Background())
 	promoHandler.SetAudits(auditRepo)
 	marketHandler := handlers.NewMarketHandler(marketProvider)
 	// SocialHandler needs the post-interactions + post-saves repos (used
@@ -634,6 +646,16 @@ func main() {
 		protected.GET("/referrals/stats", referralHandler.GetStats)
 		protected.POST("/referrals/redeem", referralHandler.Redeem)
 
+		// UNMU Pulse (login required — decision 2026-10-22).
+		protected.GET("/pulse/today", pulseHandler.Today)
+		protected.GET("/pulse/days/:date", pulseHandler.Day)
+		protected.GET("/pulse/items/:id", pulseHandler.Item)
+		protected.GET("/pulse/archive", pulseHandler.Archive)
+		protected.GET("/pulse/saved", pulseHandler.Saved)
+		protected.POST("/pulse/items/:id/save", pulseHandler.Save)
+		protected.DELETE("/pulse/items/:id/save", pulseHandler.Unsave)
+		protected.POST("/pulse/events", pulseHandler.RecordEvent)
+
 		// Promo codes
 		protected.POST("/promo/validate", promoHandler.ValidatePromo)
 		protected.POST("/promo/redeem", promoHandler.RedeemPromo)
@@ -1055,6 +1077,36 @@ func main() {
 	}
 
 	// ─────── Admin-only routes ───────
+	// UNMU Pulse CMS. Open to system admins AND Pulse staff (editor / reviewer /
+	// approver); roles are read from the database on every request.
+	pulseAdmin := api.Group("/pulse-admin")
+	pulseAdmin.Use(middleware.AuthMiddleware(), pulseAdminHandler.RequireStaff())
+	{
+		pulseAdmin.GET("/me", pulseAdminHandler.Me)
+		pulseAdmin.GET("/items", pulseAdminHandler.List)
+		pulseAdmin.POST("/items", pulseAdminHandler.Create)
+		pulseAdmin.GET("/items/:id", pulseAdminHandler.Get)
+		pulseAdmin.PUT("/items/:id", pulseAdminHandler.Update)
+		pulseAdmin.DELETE("/items/:id", pulseAdminHandler.Delete)
+		for _, action := range []string{
+			pulse.DoSubmit, pulse.DoReview, pulse.DoReject, pulse.DoApprove,
+			pulse.DoSchedule, pulse.DoUnschedule, pulse.DoPublish, pulse.DoArchive,
+		} {
+			pulseAdmin.POST("/items/:id/"+action, pulseAdminHandler.Action(action))
+		}
+		pulseAdmin.POST("/items/:id/correct", pulseAdminHandler.Correct)
+		pulseAdmin.GET("/items/:id/correction", pulseAdminHandler.GetCorrection)
+		pulseAdmin.POST("/items/:id/correction/approve", pulseAdminHandler.ResolveCorrection(true))
+		pulseAdmin.POST("/items/:id/correction/reject", pulseAdminHandler.ResolveCorrection(false))
+		pulseAdmin.GET("/items/:id/versions", pulseAdminHandler.Versions)
+		pulseAdmin.GET("/items/:id/events", pulseAdminHandler.Events)
+		pulseAdmin.GET("/staff", pulseAdminHandler.ListStaff)
+		pulseAdmin.POST("/staff", pulseAdminHandler.AddStaff)
+		pulseAdmin.DELETE("/staff/:id", pulseAdminHandler.RemoveStaff)
+		pulseAdmin.GET("/analytics", pulseAdminHandler.Analytics)
+		pulseAdmin.GET("/stocks", pulseAdminHandler.Stocks)
+	}
+
 	admin := api.Group("/admin")
 	admin.Use(middleware.AuthMiddleware(), middleware.RequireAdmin(userRepo))
 	{

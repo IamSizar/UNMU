@@ -27,6 +27,7 @@ import 'community_preview_screen.dart';
 import 'expert_profile_screen.dart';
 import 'mock_social_data.dart';
 import 'social_tokens.dart';
+import '../../widgets/profile_avatar_button.dart';
 
 /// Social & Community Hub — editorial bento layout.
 ///
@@ -550,9 +551,9 @@ class _SocialHubScreenState extends State<SocialHubScreen> {
         title: Text(title, style: TextStyle(color: palette.textPrimary)),
         iconTheme: IconThemeData(color: palette.textPrimary),
         actions: [
-          // Feed shortcut icon REMOVED (May 2026) — Feed is now
-          // reached via the contextual bottom-nav button-swap (the
-          // 2nd slot turns from Indexes → Feed when on Social).
+          // Feed is a permanent bottom-nav destination again (Sep 2026) —
+          // it no longer shares a contextual slot with Indexes, so it needs
+          // no shortcut icon here.
           //
           // Step-19 (mig 0019, item 2.15) — community discovery search.
           // Hidden by the community kill-switch.
@@ -589,6 +590,8 @@ class _SocialHubScreenState extends State<SocialHubScreen> {
             onPressed: () {},
           ),
           const SizedBox(width: 4),
+          // Profile lives here on every tab now, not in the bottom bar.
+          const ProfileAvatarButton(),
         ],
       ),
       body: body,

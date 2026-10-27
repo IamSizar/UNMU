@@ -27,6 +27,8 @@ import {
   systemAr,
   extrasEn,
   extrasAr,
+  pulseEn,
+  pulseAr,
 } from './sections'
 
 export type Locale = 'en' | 'ar'
@@ -220,6 +222,7 @@ export const en = {
   ...contentEn,
   ...systemEn,
   ...extrasEn,
+  ...pulseEn,
 }
 
 export const ar: Partial<Record<TranslationKey, string>> = {
@@ -401,6 +404,7 @@ export const ar: Partial<Record<TranslationKey, string>> = {
   ...contentAr,
   ...systemAr,
   ...extrasAr,
+  ...pulseAr,
 }
 
 export const TRANSLATIONS: Record<Locale, Partial<Record<TranslationKey, string>>> = {
