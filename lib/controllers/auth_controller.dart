@@ -27,6 +27,11 @@ class AuthController extends GetxController {
   final Rxn<User> _user = Rxn<User>();
   final RxnString _token = RxnString();
   final RxBool _isLoading = false.obs;
+  // True once the persisted-session check at launch has finished. Kept
+  // apart from _isLoading: the app root shows the splash until this is
+  // true, and tying it to _isLoading flipped back to the splash on every
+  // later request, destroying the login screen mid-login.
+  final RxBool _authChecked = false.obs;
   final RxnString _error = RxnString();
   // True right after a Google/Apple sign-in for a user who has never set a
   // local password. _AppEntry (main.dart) shows the OnboardingScreen
@@ -59,7 +64,7 @@ class AuthController extends GetxController {
   /// premium surface. Admins still see everything via separate role checks.
   bool get isPremium => _user.value?.subscriptionTier == 'PREMIUM';
   bool get isLoading => _isLoading.value;
-  bool get authChecked => !_isLoading.value;
+  bool get authChecked => _authChecked.value;
   String? get error => _error.value;
   bool get needsOnboarding => _needsOnboarding.value;
 
@@ -109,6 +114,7 @@ class AuthController extends GetxController {
       _user.value = null;
     } finally {
       _isLoading.value = false;
+      _authChecked.value = true;
     }
   }
 
