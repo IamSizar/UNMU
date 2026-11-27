@@ -180,6 +180,7 @@ func (h *DevHandler) Impersonate(c *gin.Context) {
 			Role:     user.Role,
 			ExpertID: expertID,
 			Tier:     user.SubscriptionTier,
+			CreatedAt: memberSince(user.CreatedAt),
 		},
 	})
 }

@@ -939,6 +939,8 @@ class AuthController extends GetxController {
         subscriptionStatus: body['status'] as String? ?? 'ACTIVE',
         role: UserRoleX.fromWire(body['role'] as String?),
         expertId: body['expertId'] as String?,
+        // /me doesn't send the sign-up time; keep the one from login.
+        createdAt: _user.value?.createdAt,
       );
       _user.value = updated;
       try {

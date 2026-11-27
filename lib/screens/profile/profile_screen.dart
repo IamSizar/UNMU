@@ -5,6 +5,8 @@ import '../../widgets/directional_icon.dart';
 import 'package:get/get.dart';
 
 import '../../models/user.dart';
+import '../../controllers/watchlist_controller.dart';
+import '../../localization/locale_format.dart';
 import '../../controllers/app_config_controller.dart';
 import '../../controllers/auth_controller.dart';
 import '../../controllers/currency_controller.dart';
@@ -122,7 +124,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
             // ─────── STATS STRIP ───────
             if (auth.isAuthenticated)
-              _StatsBento(palette: palette),
+              _StatsBento(palette: palette, user: auth.user),
             if (auth.isAuthenticated) const SizedBox(height: 22),
 
             // ─────── BECOME AN EXPERT (Step 1) ───────
@@ -682,44 +684,59 @@ class _EditProfilePill extends StatelessWidget {
 }
 
 // ============================================================================
-// Stats bento — 3 cells (Watchlist · Network · Member since)
+// Stats bento — Watchlist count · Member since. Both come from real data;
+// "Member since" is hidden for sessions saved before the backend sent it.
 // ============================================================================
-class _StatsBento extends StatelessWidget {
+class _StatsBento extends StatefulWidget {
   final SocialPalette palette;
-  const _StatsBento({required this.palette});
+  final User? user;
+  const _StatsBento({required this.palette, required this.user});
+
+  @override
+  State<_StatsBento> createState() => _StatsBentoState();
+}
+
+class _StatsBentoState extends State<_StatsBento> {
+  final WatchlistController _watchlist = Get.find<WatchlistController>();
+  SocialPalette get palette => widget.palette;
+
+  @override
+  void initState() {
+    super.initState();
+    // The count is only known once the list has been fetched.
+    _watchlist.loadWatchlist(Get.find<AuthController>().token);
+  }
 
   @override
   Widget build(BuildContext context) {
+    final joined = widget.user?.createdAt;
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
-            child: _statCell(
-              icon: Icons.bookmark_rounded,
-              accent: SocialTokens.cyan,
-              value: '12',
-              label: 'profile.statWatchlist'.tr,
+            child: Obx(
+              () => _statCell(
+                icon: Icons.bookmark_rounded,
+                accent: SocialTokens.cyan,
+                value: _watchlist.isLoading && _watchlist.watchlist.isEmpty
+                    ? '–'
+                    : '${_watchlist.watchlist.length}',
+                label: 'profile.statWatchlist'.tr,
+              ),
             ),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _statCell(
-              icon: Icons.trending_up_rounded,
-              accent: SocialTokens.up,
-              value: '+8.2%',
-              label: 'profile.statNetwork'.tr,
+          if (joined != null) ...[
+            const SizedBox(width: 10),
+            Expanded(
+              child: _statCell(
+                icon: Icons.calendar_today_rounded,
+                accent: SocialTokens.gold,
+                value: LocaleFormat.monthYear(joined.toLocal()),
+                label: 'profile.statMember'.tr,
+              ),
             ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _statCell(
-              icon: Icons.calendar_today_rounded,
-              accent: SocialTokens.gold,
-              value: 'May \'26',
-              label: 'profile.statMember'.tr,
-            ),
-          ),
+          ],
         ],
       ),
     );

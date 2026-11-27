@@ -97,6 +97,8 @@ type UserResponse struct {
 	Role     string `json:"role,omitempty"`
 	ExpertID string `json:"expertId,omitempty"`
 	Tier     string `json:"subscriptionTier,omitempty"`
+	// CreatedAt — RFC 3339 sign-up time; the profile shows "member since".
+	CreatedAt string `json:"createdAt,omitempty"`
 }
 
 // RegisterResponse is what Register returns now. Note the absence of a JWT:
@@ -274,6 +276,7 @@ func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 			Role:     user.Role,
 			ExpertID: expertID,
 			Tier:     user.SubscriptionTier,
+			CreatedAt: memberSince(user.CreatedAt),
 		},
 	})
 }
@@ -423,6 +426,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			Role:     user.Role,
 			ExpertID: expertID,
 			Tier:     user.SubscriptionTier,
+			CreatedAt: memberSince(user.CreatedAt),
 		},
 	})
 }
@@ -550,6 +554,7 @@ func (h *AuthHandler) Signup(c *gin.Context) {
 			Name:  name,
 			Role:  user.Role,
 			Tier:  user.SubscriptionTier,
+			CreatedAt: memberSince(user.CreatedAt),
 		},
 	})
 }
