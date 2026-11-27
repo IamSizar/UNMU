@@ -169,6 +169,7 @@ func main() {
 	// scheduled push survives the dashboard being closed.
 	scheduledPushRepo := repositories.NewScheduledPushRepository(database)
 	pushHandler.SetScheduledRepo(scheduledPushRepo)
+	pushHandler.SetSendLog(repositories.NewPushSendLogRepository(database))
 	services.NewScheduledPushSender(scheduledPushRepo, pushTokenRepo, fcmSender).
 		Start(context.Background())
 	profileHandler := handlers.NewProfileHandler(
@@ -1179,6 +1180,7 @@ func main() {
 		// from the DB inline so the next broadcast doesn't re-attempt
 		// them.
 		admin.POST("/push/send", pushHandler.AdminSend)
+		admin.GET("/push/history", pushHandler.History)
 		// Scheduled "countdown" push (mig 0048): queue / list / cancel.
 		admin.POST("/push/schedule", pushHandler.ScheduleSend)
 		admin.GET("/push/scheduled", pushHandler.ListScheduled)

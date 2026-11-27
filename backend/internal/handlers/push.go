@@ -24,6 +24,8 @@ type PushHandler struct {
 	users    *repositories.UserRepository
 	// Scheduled "countdown" pushes (mig 0048). Wired post-construction.
 	scheduled *repositories.ScheduledPushRepository
+	// Admin send history (mig 0060). Wired post-construction.
+	sendLog *repositories.PushSendLogRepository
 }
 
 // SetScheduledRepo wires the scheduled-push store used by the schedule
@@ -235,6 +237,7 @@ func (h *PushHandler) AdminSend(c *gin.Context) {
 		return
 	}
 	if len(recipients) == 0 {
+		h.recordSend(c, body, target, 0, services.SendResult{}, nil)
 		c.JSON(http.StatusOK, gin.H{
 			"success_count": 0,
 			"failure_count": 0,
@@ -260,6 +263,7 @@ func (h *PushHandler) AdminSend(c *gin.Context) {
 	for _, t := range result.InvalidTokens {
 		_ = h.tokens.DeleteToken(t)
 	}
+	h.recordSend(c, body, target, len(recipients), result, sendErr)
 	if sendErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":          sendErr.Error(),

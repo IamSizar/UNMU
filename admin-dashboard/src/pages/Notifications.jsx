@@ -31,23 +31,24 @@ import {
 import { api, ApiError } from '../api/client'
 import { useI18n } from '../i18n/I18nContext'
 
-// Mock delivery history — kept as a visual placeholder until we add a real
-// /admin/push/history endpoint. The compose form on the left is fully wired
-// to POST /api/admin/push/send.
-const history = [
-  { id: 1, title: 'Eid Mubarak — 30% off Premium Annual', segment: 'All users', sent: '14,238 users', date: 'Apr 30, 09:00', open: '38.2%', icon: Crown, tone: 'gold' },
-  { id: 2, title: 'New article: Top 10 Halal Tech Stocks', segment: 'Premium subscribers', sent: '1,260 users', date: 'May 01, 12:30', open: '64.8%', icon: TrendingUp, tone: 'cyan' },
-  { id: 3, title: 'AAPL status changed to Compliant (Grade B)', segment: 'AAPL watchers', sent: '842 users', date: 'May 02, 14:18', open: '74.2%', icon: ShieldCheck, tone: 'emerald' },
-  { id: 4, title: 'Server maintenance — May 5, 02:00 UTC', segment: 'All users', sent: '14,238 users', date: 'May 02, 16:42', open: '22.4%', icon: AlertCircle, tone: 'rose' },
-  { id: 5, title: '3 new experts joined this week', segment: 'All users', sent: '14,238 users', date: 'May 03, 10:00', open: '41.6%', icon: GraduationCap, tone: 'violet' }
-]
+// Recent sends come from GET /api/admin/push/history (mig 0060); the
+// compose form posts to POST /api/admin/push/send, which records each send.
+const HISTORY_LIMIT = 20
 
-const toneColors = {
-  cyan: 'text-cyan-400 bg-cyan-500/10',
-  gold: 'text-gold-400 bg-gold-500/10',
-  emerald: 'text-emerald-400 bg-emerald-500/10',
-  rose: 'text-rose-400 bg-rose-500/10',
-  violet: 'text-violet-400 bg-violet-500/10'
+// Label for a recorded send's audience. Role sends are stored as
+// "role:EXPERT" etc. so the role survives.
+function historyTargetLabel(target, t) {
+  const byTarget = {
+    all: 'notifications.segAll',
+    'role:EXPERT': 'notifications.segExperts',
+    'role:USER': 'notifications.segUsers',
+    'role:ADMIN': 'notifications.segAdmins',
+    community: 'notifications.segCommunity',
+    user: 'notifications.segUser',
+    ios: 'notifications.historyIos',
+    android: 'notifications.historyAndroid',
+  }
+  return byTarget[target] ? t(byTarget[target]) : target
 }
 
 // Audience segments. Each maps to a `target` the backend understands
@@ -514,6 +515,9 @@ export default function Notifications() {
   const [repeatWeekdays, setRepeatWeekdays] = useState(() => [new Date().getDay()]) // 0=Sun..6=Sat
   const [repeatTime, setRepeatTime] = useState('09:00') // HH:MM for daily/weekly
   const [scheduling, setScheduling] = useState(false)
+  const [history, setHistory] = useState([])
+  const [historyErr, setHistoryErr] = useState(null)
+  const [historyLoading, setHistoryLoading] = useState(true)
   const [scheduled, setScheduled] = useState([])
   const [scheduledErr, setScheduledErr] = useState(null)
   const [schedFilter, setSchedFilter] = useState('all') // 'all' | 'upcoming' | 'sent'
@@ -618,6 +622,26 @@ export default function Notifications() {
     return () => clearInterval(id)
   }, [isScheduling, scheduled])
 
+  // Load the sent history whenever the "Send now" tab is shown.
+  useEffect(() => {
+    if (mode !== 'send') return
+    loadHistory()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode])
+
+  async function loadHistory() {
+    setHistoryLoading(true)
+    try {
+      const res = await api.get(`/admin/push/history?limit=${HISTORY_LIMIT}`)
+      setHistory(res?.items ?? [])
+      setHistoryErr(null)
+    } catch (err) {
+      setHistoryErr(err instanceof ApiError ? err.message : t('notifications.historyLoadFailed'))
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
   async function loadScheduled() {
     try {
       const res = await api.get('/admin/push/scheduled')
@@ -690,6 +714,7 @@ export default function Notifications() {
       setBody('')
       setTitleAr('')
       setBodyAr('')
+      loadHistory()
     } catch (err) {
       const message =
         err instanceof ApiError
@@ -1239,33 +1264,52 @@ export default function Notifications() {
           <div className="lg:col-span-2 card overflow-hidden">
             <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-white/5 flex items-center justify-between gap-2 flex-wrap">
               <h3 className="font-semibold text-white">{t('notifications.recent')}</h3>
-              <span className="text-[10px] uppercase tracking-wider text-slate-500 font-medium">{t('notifications.mockData')}</span>
             </div>
-            <ul className="divide-y divide-white/5">
-              {history.map((n) => (
-                <li key={n.id} className="px-3 sm:px-5 py-3 sm:py-4 hover:bg-white/[0.02] transition-colors">
-                  <div className="flex items-start gap-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${toneColors[n.tone]}`}>
-                      <n.icon className="w-5 h-5" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-white line-clamp-2">{n.title}</p>
-                      <div className="flex items-center gap-x-2 gap-y-0.5 text-xs text-slate-500 mt-1 flex-wrap">
-                        <span className="truncate max-w-[10rem]">{n.segment}</span>
-                        <span className="hidden sm:inline">·</span>
-                        <span className="truncate max-w-[10rem]">{n.sent}</span>
-                        <span className="hidden sm:inline">·</span>
-                        <span className="hidden sm:inline">{n.date}</span>
+            {historyLoading && history.length === 0 ? (
+              <div className="flex justify-center py-10">
+                <Loader2 className="w-5 h-5 animate-spin text-slate-500" />
+              </div>
+            ) : historyErr ? (
+              <div className="px-5 py-8 text-center space-y-3">
+                <p className="text-sm text-rose-400">{historyErr}</p>
+                <button type="button" onClick={loadHistory} className="text-xs font-semibold text-cyan-400 hover:underline">
+                  {t('notifications.historyRetry')}
+                </button>
+              </div>
+            ) : history.length === 0 ? (
+              <p className="px-5 py-10 text-center text-sm text-slate-500">{t('notifications.historyEmpty')}</p>
+            ) : (
+              <ul className="divide-y divide-white/5">
+                {history.map((n) => (
+                  <li key={n.id} className="px-3 sm:px-5 py-3 sm:py-4 hover:bg-white/[0.02] transition-colors">
+                    <div className="flex items-start gap-3">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${n.sendError ? 'text-rose-400 bg-rose-500/10' : 'text-cyan-400 bg-cyan-500/10'}`}>
+                        {n.sendError ? <AlertCircle className="w-5 h-5" /> : <Send className="w-5 h-5" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-white line-clamp-2">{n.title}</p>
+                        <div className="flex items-center gap-x-2 gap-y-0.5 text-xs text-slate-500 mt-1 flex-wrap">
+                          <span className="truncate max-w-[10rem]">{historyTargetLabel(n.target, t)}</span>
+                          <span className="hidden sm:inline">·</span>
+                          <span>{t('notifications.historyDevices', { count: n.recipients })}</span>
+                          <span className="hidden sm:inline">·</span>
+                          <span className="hidden sm:inline">{fmtDateTime(new Date(n.createdAt).getTime())}</span>
+                        </div>
+                        {n.sendError && (
+                          <p className="text-xs text-rose-400 mt-1 truncate" title={n.sendError}>{t('notifications.historyError')}</p>
+                        )}
+                      </div>
+                      <div className="text-end shrink-0 text-xs">
+                        <p className="font-bold text-emerald-400">{t('notifications.historyDelivered', { count: n.successCount })}</p>
+                        {n.failureCount > 0 && (
+                          <p className="text-rose-400">{t('notifications.historyFailed', { count: n.failureCount })}</p>
+                        )}
                       </div>
                     </div>
-                    <div className="text-end shrink-0">
-                      <p className="text-[11px] text-slate-500">{t('notifications.openRate')}</p>
-                      <p className="text-sm font-bold text-cyan-400">{n.open}</p>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         ) : (
           (() => {
