@@ -11,6 +11,7 @@ import '../../controllers/app_config_controller.dart';
 import '../../controllers/auth_controller.dart';
 import '../../controllers/upload_controller.dart';
 import '../../models/expert_post.dart';
+import '../../screens/social/community_directory.dart';
 import '../../screens/social/mock_social_data.dart' as mock;
 import '../../screens/social/social_tokens.dart';
 import '../../services/community_service.dart';
@@ -152,10 +153,11 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     }
   }
 
-  /// Pull the list of communities the expert has joined and
-  /// cross-reference the mock community catalog for display
-  /// metadata. Failure leaves the destination list empty — the
-  /// picker degrades to "Profile only" gracefully.
+  /// Pull the communities the expert has joined, with their real
+  /// metadata from GET /api/communities. (This used to look them up in
+  /// the hard-coded sample list, so any community missing from it could
+  /// never be posted to.) Failure leaves the destination list empty —
+  /// the picker degrades to "Profile only" gracefully.
   Future<void> _loadDestinations() async {
     // Community kill-switch — when communities are disabled, don't offer
     // any community destinations; the composer degrades to "Profile only".
@@ -163,13 +165,20 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       if (mounted) setState(() => _destinationsLoaded = true);
       return;
     }
-    final res = await CommunityService.myCommunityIds();
+    final results = await Future.wait([
+      CommunityService.myCommunityIds(),
+      CommunityService.listAllCommunities(),
+    ]);
     if (!mounted) return;
-    final ids = res.ids ?? const <String>{};
-    final list = <mock.Community>[];
-    for (final entry in mock.MockSocialData.communities) {
-      if (ids.contains(entry.id)) list.add(entry);
-    }
+    final ids = (results[0] as ({Set<String>? ids, String? error})).ids ??
+        const <String>{};
+    final all = (results[1]
+            as ({List<CommunityMeta>? communities, String? error}))
+        .communities;
+    final list = (all ?? const <CommunityMeta>[])
+        .where((m) => ids.contains(m.id))
+        .map(communityFromMeta)
+        .toList();
     setState(() {
       _destinations = list;
       _destinationsLoaded = true;

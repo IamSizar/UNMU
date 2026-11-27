@@ -8,7 +8,7 @@ import '../../controllers/chat_presence_controller.dart';
 import '../../controllers/mute_controller.dart';
 import '../../controllers/realtime_controller.dart';
 import '../../screens/social/community_chat_screen.dart';
-import '../../screens/social/mock_social_data.dart';
+import '../../screens/social/community_directory.dart';
 import '../../screens/social/social_tokens.dart';
 import '../../services/community_messages_service.dart';
 
@@ -98,17 +98,6 @@ class _CommunityMessageBannerState extends State<CommunityMessageBanner> {
     return true;
   }
 
-  /// Look up the community in mock data so the snackbar's accent +
-  /// "Open" target match the rest of the social UI. Returns null
-  /// when the message is from a community we don't know about
-  /// (shouldn't happen in practice — backend only broadcasts on
-  /// channels we've subscribed to).
-  Community? _findCommunity(String id) {
-    for (final entry in MockSocialData.communities) {
-      if (entry.id == id) return entry;
-    }
-    return null;
-  }
 
   /// Region → flag emoji used in the snackbar's tag line. Lets the
   /// user recognize which community a message is from at a glance
@@ -124,8 +113,12 @@ class _CommunityMessageBannerState extends State<CommunityMessageBanner> {
     'GLOBAL': '🌍',
   };
 
-  void _showSnack(CommunityMessage m) {
-    final community = _findCommunity(m.communityId);
+  /// Looks the community up on the backend (cached) so the snackbar's
+  /// accent, name and "Open" target are right for every community, not
+  /// only the ones in the old sample list.
+  Future<void> _showSnack(CommunityMessage m) async {
+    final community = await CommunityDirectory.find(m.communityId);
+    if (!mounted) return;
     final accent = community == null
         ? SocialTokens.cyan
         : SocialTokens.regionColor(community.regionCode);

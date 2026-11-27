@@ -3,8 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
 import '../../screens/social/community_detail_screen.dart';
+import '../../screens/social/community_directory.dart';
 import '../../screens/social/expert_profile_screen.dart';
-import '../../screens/social/mock_social_data.dart';
 import '../../screens/social/social_tokens.dart';
 import '../platform_adaptive/platform_dialog.dart';
 
@@ -202,16 +202,11 @@ class _CommunityVariant extends StatelessWidget {
     );
   }
 
-  void _openCommunity(BuildContext context) {
+  Future<void> _openCommunity(BuildContext context) async {
     if (communityId.isEmpty) return;
     HapticFeedback.selectionClick();
-    Community? c;
-    for (final entry in MockSocialData.communities) {
-      if (entry.id == communityId) {
-        c = entry;
-        break;
-      }
-    }
+    final c = await CommunityDirectory.find(communityId);
+    if (!context.mounted) return;
     if (c == null) {
       // Community hidden/removed by an admin — show a clear modal instead of
       // a transient snackbar.
@@ -225,7 +220,7 @@ class _CommunityVariant extends StatelessWidget {
     }
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => CommunityDetailScreen(community: c!),
+        builder: (_) => CommunityDetailScreen(community: c),
       ),
     );
   }
