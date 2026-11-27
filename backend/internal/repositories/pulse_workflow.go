@@ -24,6 +24,11 @@ import (
 // =============================================================================
 
 // PulseApplyOptions carries the optional inputs of a transition.
+// ReplacedNotePrefix starts the change-log note written when publishing an
+// item archives the one it replaces. The read side matches on it to keep
+// replaced items in users' Saved lists (pulse.go, pulseSelectSaveable).
+const ReplacedNotePrefix = "Replaced by item "
+
 type PulseApplyOptions struct {
 	Note      string     // free text; required for reject
 	PublishAt *time.Time // required for schedule
@@ -187,7 +192,7 @@ func publishPulseTx(ctx context.Context, q pulseQuerier, it *models.PulseAdminIt
 	}
 	rows.Close()
 	for _, rid := range replaced {
-		msg := fmt.Sprintf("Replaced by item %d", it.ID)
+		msg := fmt.Sprintf("%s%d", ReplacedNotePrefix, it.ID)
 		if err := logPulseEvent(ctx, q, rid, models.PulseActionArchived, actor,
 			models.PulseStatusPublished, models.PulseStatusArchived, msg); err != nil {
 			return err

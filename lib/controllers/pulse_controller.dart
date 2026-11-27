@@ -1,8 +1,10 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 
 import '../models/pulse_item.dart';
+import '../models/user.dart';
 import '../services/pulse_service.dart';
 import 'auth_controller.dart';
 
@@ -28,6 +30,21 @@ class PulseController extends GetxController {
   // ── Today ───────────────────────────────────────────────────────────
   final Rxn<PulseDay> day = Rxn<PulseDay>();
   final RxBool loading = false.obs;
+
+  /// True while a silent reload (pull-to-refresh, the refresh notice's
+  /// Retry) runs, so the notice can show a spinner instead of a dead button.
+  final RxBool refreshing = false.obs;
+
+  /// Bumped on every loadToday start: only the newest request may write.
+  int _loadSeq = 0;
+
+  /// Bumped on every account change: replies for an older account are
+  /// dropped so one account never sees another's day or saves.
+  int _accountSeq = 0;
+
+  /// Items with a save/unsave request in flight. Further taps on them are
+  /// ignored, and a today/archive snapshot must not overwrite their state.
+  final Set<int> _savingIds = <int>{};
 
   /// Why the LAST load failed; null after a success.
   final Rxn<PulseFailure> failure = Rxn<PulseFailure>();
@@ -69,19 +86,27 @@ class PulseController extends GetxController {
   void _wireAuthLifecycle() {
     if (!Get.isRegistered<AuthController>()) return;
     final auth = Get.find<AuthController>();
-    _authSub = auth.userObservable.stream.listen((user) {
-      if (user == null) {
-        day.value = null;
-        failure.value = null;
-        _savedIds.clear();
-        savedItems.clear();
-        savedHasMore.value = false;
-        _savedLoaded = false;
-        _sentOnce.clear();
-      } else {
-        loadToday();
-      }
-    });
+    _authSub = auth.userObservable.stream.listen(handleUserChanged);
+  }
+
+  /// Reacts to sign-in / sign-out (wired to the auth stream; public for tests).
+  @visibleForTesting
+  void handleUserChanged(User? user) {
+    _accountSeq++;
+    if (user == null) {
+      day.value = null;
+      failure.value = null;
+      loading.value = false;
+      refreshing.value = false;
+      _savedIds.clear();
+      _savingIds.clear();
+      savedItems.clear();
+      savedHasMore.value = false;
+      _savedLoaded = false;
+      _sentOnce.clear();
+    } else {
+      loadToday();
+    }
   }
 
   // ── Today ───────────────────────────────────────────────────────────
@@ -89,9 +114,19 @@ class PulseController extends GetxController {
   /// Loads today's Pulse. With [silent] the existing content stays visible and
   /// [loading] is not raised (used by pull-to-refresh, which has its own
   /// spinner).
+  ///
+  /// If another load starts, or the account changes, before the reply
+  /// arrives, that reply is dropped.
   Future<void> loadToday({bool silent = false}) async {
-    if (!silent) loading.value = true;
+    final seq = ++_loadSeq;
+    final account = _accountSeq;
+    if (silent) {
+      refreshing.value = true;
+    } else {
+      loading.value = true;
+    }
     final res = await _api.today();
+    if (seq != _loadSeq || account != _accountSeq) return;
     if (res.ok) {
       day.value = res.data;
       failure.value = null;
@@ -100,6 +135,7 @@ class PulseController extends GetxController {
       failure.value = res.failure;
     }
     loading.value = false;
+    refreshing.value = false;
   }
 
   /// Pull-to-refresh entry point.
@@ -109,8 +145,9 @@ class PulseController extends GetxController {
 
   /// Loads one item with full details (used by the detail screen).
   Future<PulseResult<PulseItem>> loadItem(int id) async {
+    final account = _accountSeq;
     final res = await _api.item(id);
-    if (res.ok) _rememberSaved([res.data!]);
+    if (res.ok && account == _accountSeq) _rememberSaved([res.data!]);
     return res;
   }
 
@@ -122,13 +159,14 @@ class PulseController extends GetxController {
     String? query,
     int offset = 0,
   }) async {
+    final account = _accountSeq;
     final res = await _api.archive(
       from: from,
       to: to,
       query: query,
       offset: offset,
     );
-    if (res.ok) _rememberSaved(res.data!.items);
+    if (res.ok && account == _accountSeq) _rememberSaved(res.data!.items);
     return res;
   }
 
@@ -136,9 +174,12 @@ class PulseController extends GetxController {
 
   bool isSaved(int itemId) => _savedIds.contains(itemId);
 
-  /// Makes the saved ids match what the server just told us for these items.
+  /// Makes the saved ids match what the server just told us for these items,
+  /// except items with a save/unsave still in flight (the snapshot may
+  /// predate it; the in-flight reply decides).
   void _rememberSaved(List<PulseItem> items) {
     for (final it in items) {
+      if (_savingIds.contains(it.id)) continue;
       if (it.isSaved) {
         _savedIds.add(it.id);
       } else {
@@ -149,8 +190,10 @@ class PulseController extends GetxController {
 
   /// Loads the first page of the user's saved items.
   Future<void> loadSaved() async {
+    final account = _accountSeq;
     savedLoading.value = true;
     final res = await _api.saved();
+    if (account != _accountSeq) return;
     if (res.ok) {
       savedItems.assignAll(res.data!.items);
       savedHasMore.value = res.data!.hasMore;
@@ -167,8 +210,10 @@ class PulseController extends GetxController {
 
   Future<void> loadMoreSaved() async {
     if (!savedHasMore.value || savedLoading.value) return;
+    final account = _accountSeq;
     savedLoading.value = true;
     final res = await _api.saved(offset: savedItems.length);
+    if (account != _accountSeq) return;
     if (res.ok) {
       savedItems.addAll(res.data!.items);
       savedHasMore.value = res.data!.hasMore;
@@ -181,11 +226,20 @@ class PulseController extends GetxController {
 
   /// Saves / unsaves with an optimistic update (the bookmark flips at once)
   /// and reverts if the server refuses. Returns the resulting saved state.
+  ///
+  /// A tap while this item's request is still in flight is ignored (two
+  /// opposite requests could land in either order on the server), and a
+  /// reply arriving after an account change touches nothing.
   Future<bool> toggleSave(PulseItem item) async {
+    if (_savingIds.contains(item.id)) return isSaved(item.id);
+    final account = _accountSeq;
     final wasSaved = isSaved(item.id);
+    _savingIds.add(item.id);
     _applySaved(item, !wasSaved);
 
     final ok = wasSaved ? await _api.unsave(item.id) : await _api.save(item.id);
+    if (account != _accountSeq) return false;
+    _savingIds.remove(item.id);
     if (!ok) {
       _applySaved(item, wasSaved); // revert
       return wasSaved;
