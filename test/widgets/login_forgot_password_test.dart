@@ -30,4 +30,22 @@ void main() {
     await t.pumpAndSettle();
     expect(find.byType(ForgotPasswordScreen), findsOneWidget);
   });
+
+  // Found in the 2026-11-28 simulator run: the screen read auth.isLoading /
+  // auth.error without observing them, so a wrong password left the button
+  // spinning with no message.
+  testWidgets('shows the auth error and stops spinning after a failed request',
+      (t) async {
+    t.view.physicalSize = const Size(390 * 3, 844 * 3);
+    t.view.devicePixelRatio = 3;
+    addTearDown(t.view.reset);
+    await t.pumpWidget(const GetMaterialApp(home: LoginScreen()));
+    await t.pump();
+    final auth = Get.find<AuthController>();
+    await t.runAsync(() => auth.checkEmail('someone@example.test'));
+    expect(auth.isLoading, isFalse);
+    expect(auth.error, isNotNull);
+    await t.pump();
+    expect(find.text(auth.error!), findsOneWidget);
+  });
 }

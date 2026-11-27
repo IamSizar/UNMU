@@ -183,7 +183,13 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final palette = SocialTheme.of(context);
     final auth = Get.find<AuthController>();
-    final shownError = _formError ?? auth.error;
+
+    // Obx: auth.isLoading / auth.error change while this screen is up (a
+    // failed login must stop the spinner and show the message).
+    return Obx(() {
+    final authError = auth.error;
+    final authLoading = auth.isLoading;
+    final shownError = _formError ?? authError;
 
     return Scaffold(
       backgroundColor: palette.background,
@@ -277,7 +283,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           label: 'auth.login.cta'.tr,
                           trailingIcon: Icons.arrow_forward_rounded,
                           enabled: _canSubmit,
-                          loading: auth.isLoading,
+                          loading: authLoading,
                           onPressed: () => _handleLogin(),
                         ),
                         const SizedBox(height: 22),
@@ -291,7 +297,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               SocialAuthButton(
                                 icon: Icons.apple_rounded,
                                 label: 'Apple',
-                                onPressed: auth.isLoading
+                                onPressed: authLoading
                                     ? null
                                     : () => _handleApple(),
                               ),
@@ -301,7 +307,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               icon: Icons.g_mobiledata_rounded,
                               label: 'Google',
                               iconColor: const Color(0xFFEA4335),
-                              onPressed: auth.isLoading
+                              onPressed: authLoading
                                   ? null
                                   : () => _handleGoogle(),
                             ),
@@ -324,7 +330,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     icon: Icons.science_rounded,
                                     label: 'auth.testAccount'.tr,
                                     iconColor: SocialTokens.gold,
-                                    onPressed: auth.isLoading
+                                    onPressed: authLoading
                                         ? null
                                         : _openTestPicker,
                                   ),
@@ -357,6 +363,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       ),
     );
+    });
   }
 }
 
