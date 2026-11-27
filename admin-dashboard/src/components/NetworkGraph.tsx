@@ -38,6 +38,9 @@ export type GraphNode = {
   pending?: boolean
   // Set by the parent when a row in the right panel is hovered.
   spotlight?: boolean
+  // Positions written by react-force-graph's simulation.
+  x?: number
+  y?: number
 }
 
 export type GraphLink = {
