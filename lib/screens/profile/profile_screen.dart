@@ -186,8 +186,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             // shows/hides live when the admin flips the toggle.
             if (auth.isAuthenticated)
               Obx(() {
-                final show =
-                    Get.find<AppConfigController>().testAccountEnabled.value;
+                final show = Get.find<AppConfigController>().showTestTools;
                 if (!show) return const SizedBox.shrink();
                 return Column(
                   children: [

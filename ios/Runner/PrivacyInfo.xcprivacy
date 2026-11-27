@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  App privacy manifest (required by App Store Connect since 2024-05).
+  UNMU does not track users (no IDFA, no tracking domains).
+  Required-reason APIs used by the app itself: UserDefaults (app settings and
+  session, read/written only by this app → reason CA92.1). Plugins ship their
+  own manifests for the APIs they use.
+  NSPrivacyCollectedDataTypes is intentionally NOT declared here yet: it must
+  match the App Privacy answers in App Store Connect; add it from those.
+-->
+<plist version="1.0">
+<dict>
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

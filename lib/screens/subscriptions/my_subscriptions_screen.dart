@@ -5,6 +5,8 @@ import '../../controllers/subscription_controller.dart';
 import '../../localization/locale_format.dart';
 import '../../models/expert_subscription.dart';
 import '../../services/community_subscription_service.dart';
+import '../../services/iap_service.dart';
+import '../../widgets/subscriptions/restore_purchases_button.dart';
 import 'subscribe_modal.dart';
 
 /// User-facing list of every subscription request the user has ever made.
@@ -26,12 +28,23 @@ class _MySubscriptionsScreenState extends State<MySubscriptionsScreen> {
   List<CommunitySubscriptionRow> _communitySubs = const [];
   bool _loadingCommunitySubs = true;
 
+  /// Reloads the list when a restored App Store purchase is verified.
+  Worker? _restoreWorker;
+
   @override
   void initState() {
     super.initState();
     controller = Get.find<SubscriptionController>();
     controller.refreshAll();
     _loadCommunitySubs();
+    _restoreWorker =
+        ever<int>(IAPService.instance.verifiedRestores, (_) => _refreshAll());
+  }
+
+  @override
+  void dispose() {
+    _restoreWorker?.dispose();
+    super.dispose();
   }
 
   Future<void> _loadCommunitySubs() async {
@@ -154,6 +167,7 @@ class _MySubscriptionsScreenState extends State<MySubscriptionsScreen> {
       appBar: AppBar(
         title: Text('mySubscriptions.title'.tr),
         actions: [
+          const RestorePurchasesButton(),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _refreshAll,

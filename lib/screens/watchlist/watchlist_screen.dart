@@ -10,6 +10,7 @@ import '../../utils/haptic_utils.dart';
 import '../../utils/responsive.dart';
 import '../../widgets/platform_adaptive/platform_dialog.dart';
 import '../../widgets/stock_card.dart';
+import '../../widgets/common/load_error_view.dart';
 
 /// =============================================================================
 /// Watchlist Screen — editorial bento redesign.
@@ -138,6 +139,16 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
               hasScrollBody: false,
               child: Center(
                 child: CircularProgressIndicator(color: SocialTokens.cyan),
+              ),
+            )
+          else if (wl.watchlist.isEmpty && wl.error != null)
+            // Load failed: say so with Retry instead of the "empty" state.
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(
+                child: LoadErrorView(
+                  onRetry: () => wl.loadWatchlist(auth.token),
+                ),
               ),
             )
           else if (wl.watchlist.isEmpty)

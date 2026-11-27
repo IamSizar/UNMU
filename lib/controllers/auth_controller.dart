@@ -496,13 +496,7 @@ class AuthController extends GetxController {
     );
   }
 
-  // ── test / dev login (no backend) ──
-  /// Shared password for every preset test account. Must match the bcrypt
-  /// hash installed by the seed migrations (currently 0012). When changing
-  /// the password, regenerate the hash with `bcrypt.GenerateFromPassword`
-  /// at cost 10 and update both the migration and this constant in lockstep.
-  static const String testPassword = 'test1234';
-
+  // ── test accounts (debug-only switcher fallback list) ──
   /// Preset test accounts. Public so the "switch test account" sheet can
   /// list them. Three groups:
   ///
@@ -621,45 +615,6 @@ class AuthController extends GetxController {
     ),
   };
 
-  Future<bool> loginTest(String email, String password) async {
-    _isLoading.value = true;
-    _error.value = null;
-    await Future<void>.delayed(const Duration(milliseconds: 320));
-    final user = _userFromTestEmail(email);
-    final token = 'test-token-${DateTime.now().millisecondsSinceEpoch}';
-    try {
-      await AuthService.saveSession(token, user);
-    } catch (_) {/* persistence is best-effort */}
-    _user.value = user;
-    _token.value = token;
-    await _loadSubs();
-    _isLoading.value = false;
-    return true;
-  }
-
-  Future<bool> registerTest(String name, String email, String password) async {
-    _isLoading.value = true;
-    _error.value = null;
-    await Future<void>.delayed(const Duration(milliseconds: 320));
-    final user = User(
-      id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      email: email,
-      name: name,
-      subscriptionTier: 'FREE',
-      subscriptionStatus: 'ACTIVE',
-      role: UserRole.user,
-    );
-    final token = 'test-token-${DateTime.now().millisecondsSinceEpoch}';
-    try {
-      await AuthService.saveSession(token, user);
-    } catch (_) {/* ignore */}
-    _user.value = user;
-    _token.value = token;
-    await _loadSubs();
-    _isLoading.value = false;
-    return true;
-  }
-
   /// Replace the current session with the given (token, user) pair —
   /// persists to SharedPreferences and refreshes any per-user state like
   /// the expert-subscription list.
@@ -735,57 +690,6 @@ class AuthController extends GetxController {
     Future<(String, User)?> Function(String email) fn,
   ) {
     _devImpersonate = fn;
-  }
-
-  /// Switch to one of the seeded test accounts in-place. Tries a REAL
-  /// backend login first (using [testPassword] — the seed migration
-  /// installs the matching bcrypt hash) so the user gets a real JWT and
-  /// the WebSocket can connect to receive realtime events.
-  ///
-  /// Falls back to a synthetic local-only user when the backend is
-  /// unreachable, so dev still works without a server running.
-  Future<void> switchTestAccount(String email) async {
-    final result = await AuthService.login(email, testPassword);
-    if (result['success'] == true) {
-      _user.value = result['user'] as User;
-      _token.value = result['token'] as String;
-      await _loadSubs();
-      return;
-    }
-
-    // Backend isn't reachable — fall back to local-only fake session so
-    // the dev experience doesn't fully break.
-    final user = _userFromTestEmail(email);
-    final token = 'test-token-${DateTime.now().millisecondsSinceEpoch}';
-    try {
-      await AuthService.saveSession(token, user);
-    } catch (_) {/* ignore */}
-    _user.value = user;
-    _token.value = token;
-    await _loadSubs();
-  }
-
-  User _userFromTestEmail(String email) {
-    final preset = testAccounts[email.toLowerCase()];
-    if (preset != null) {
-      return User(
-        id: preset.id,
-        email: email,
-        name: preset.name,
-        subscriptionTier: preset.tier,
-        subscriptionStatus: 'ACTIVE',
-        role: preset.role,
-        expertId: preset.expertId,
-      );
-    }
-    return User(
-      id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      email: email,
-      name: email.split('@').first,
-      subscriptionTier: 'FREE',
-      subscriptionStatus: 'ACTIVE',
-      role: UserRole.user,
-    );
   }
 
   Future<void> logout() async {

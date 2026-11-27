@@ -13,6 +13,7 @@ import '../../utils/responsive.dart';
 import '../../widgets/auth/auth_widgets.dart';
 import '../../widgets/dismiss_keyboard_on_tap.dart';
 import '../../widgets/social/test_account_switcher.dart';
+import 'forgot_password_screen.dart';
 
 /// =============================================================================
 /// Login Screen — one screen: email + password + Apple/Google.
@@ -71,6 +72,14 @@ class _LoginScreenState extends State<LoginScreen> {
     _email.dispose();
     _password.dispose();
     super.dispose();
+  }
+
+  void _openForgotPassword() {
+    final email = _email.text.trim();
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) =>
+          ForgotPasswordScreen(initialEmail: email.isEmpty ? null : email),
+    ));
   }
 
   // Email + password — LOGIN ONLY. checkEmail first so we can show the
@@ -256,7 +265,14 @@ class _LoginScreenState extends State<LoginScreen> {
                           textInputAction: TextInputAction.done,
                           onSubmitted: (_) => _handleLogin(),
                         ),
-                        const SizedBox(height: 20),
+                        Align(
+                          alignment: AlignmentDirectional.centerEnd,
+                          child: TextButton(
+                            onPressed: _openForgotPassword,
+                            child: Text('auth.forgotPassword'.tr),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
                         GradientCTA(
                           label: 'auth.login.cta'.tr,
                           trailingIcon: Icons.arrow_forward_rounded,
@@ -291,14 +307,13 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ],
                         ),
-                        // Test account quick-switch — visibility is
-                        // admin-controlled via the dashboard Settings toggle
+                        // Test account quick-switch — debug builds only, and
+                        // only when the dashboard Settings toggle is on
                         // (app-config `testAccountEnabled`). Hidden instantly
                         // when an admin turns it off.
                         Obx(() {
-                          final show = Get.find<AppConfigController>()
-                              .testAccountEnabled
-                              .value;
+                          final show =
+                              Get.find<AppConfigController>().showTestTools;
                           if (!show) return const SizedBox.shrink();
                           return Column(
                             children: [

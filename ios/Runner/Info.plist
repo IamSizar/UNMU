@@ -47,19 +47,15 @@
 	<true/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
-		<key>NSAllowsArbitraryLoads</key>
-		<true/>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>UNMU needs access to your camera so you can take a profile picture.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>UNMU does not need microphone access; this is only declared because the camera component requires it on some iOS versions.</string>
+	<string>UNMU uses the microphone to record voice messages you send in community chats.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>UNMU needs access to your photos so you can choose a profile picture.</string>
-	<key>NSUserTrackingUsageDescription</key>
-	<string>UNMU asks for permission so we can recognize your device across sessions and improve the app. You can change this any time in iOS Settings → Privacy.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

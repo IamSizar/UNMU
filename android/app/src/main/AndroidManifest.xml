@@ -5,8 +5,7 @@
     <application
         android:label="UNMU"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher"
-        android:usesCleartextTraffic="true"><!-- dev: HTTP traffic to LAN backend; remove for prod HTTPS -->
+        android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"
             android:exported="true"

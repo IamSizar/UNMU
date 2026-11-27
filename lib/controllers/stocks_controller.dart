@@ -138,12 +138,23 @@ class StocksController extends GetxController {
       <Map<String, dynamic>>[].obs;
   List<Map<String, dynamic>> get marketIndexes => _marketIndexes;
 
+  /// True after the last index load failed (cleared on success). With no
+  /// cached indexes the screen shows an error with Retry, not a skeleton
+  /// that never resolves.
+  final RxBool indexesFailed = false.obs;
+  final RxBool indexesLoading = false.obs;
+
   Future<void> loadMarketIndexes() async {
+    indexesLoading.value = true;
     try {
-      final data = await ApiService.getMarketIndexes();
+      final data = await ApiService.fetchMarketIndexes();
       _marketIndexes.assignAll(data);
+      indexesFailed.value = false;
     } catch (e) {
       debugPrint('Error loading market indexes: $e');
+      indexesFailed.value = true;
+    } finally {
+      indexesLoading.value = false;
     }
   }
 

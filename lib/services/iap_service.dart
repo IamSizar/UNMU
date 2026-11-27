@@ -85,6 +85,10 @@ class IAPService extends GetxService {
   /// True while a buy() is awaiting a result on the stream.
   final RxBool isPurchasing = false.obs;
 
+  /// Bumped each time a restored purchase is verified by the backend, so
+  /// screens listing subscriptions can reload.
+  final RxInt verifiedRestores = 0.obs;
+
   /// Per-purchase-token Completer so the UI can `await buy(...)` and
   /// receive a typed outcome. Keyed on productID + nanoid so two
   /// concurrent buys (rare but possible) don't collide.
@@ -200,9 +204,30 @@ class IAPService extends GetxService {
   /// Restore previously-bought subscriptions. The store re-delivers
   /// PurchaseDetails for every active SKU; each one is sent to the
   /// backend for verification just like a fresh buy.
-  Future<void> restorePurchases() async {
-    if (!isAvailable.value) return;
+  ///
+  /// Returns false when the store is unavailable (nothing was started).
+  Future<bool> restorePurchases() async {
+    if (!isAvailable.value) return false;
     await _store.restorePurchases();
+    return true;
+  }
+
+  static const String _expertSkuPrefix = 'com.unmu.expert.';
+  static const List<String> _planSuffixes = ['.monthly', '.yearly'];
+
+  /// The expert id inside an expert SKU (`com.unmu.expert.{id}.{plan}`), or
+  /// null for any other SKU. Restored purchases have no pending buy, so this
+  /// is the only way to know which expert they belong to.
+  static String? expertIdFromProductId(String productId) {
+    if (!productId.startsWith(_expertSkuPrefix)) return null;
+    final rest = productId.substring(_expertSkuPrefix.length);
+    for (final suffix in _planSuffixes) {
+      if (rest.endsWith(suffix)) {
+        final id = rest.substring(0, rest.length - suffix.length);
+        return id.isEmpty ? null : id;
+      }
+    }
+    return null;
   }
 
   void _onPurchaseUpdates(List<PurchaseDetails> updates) {
@@ -240,8 +265,13 @@ class IAPService extends GetxService {
       case PurchaseStatus.restored:
         // Verify with backend; complete locally only if backend accepts.
         final pending = _firstPendingFor(p.productID);
-        final result = await _verifyWithBackend(p, pending?.expertId);
+        final expertId =
+            pending?.expertId ?? expertIdFromProductId(p.productID);
+        final result = await _verifyWithBackend(p, expertId);
         if (p.pendingCompletePurchase) await _store.completePurchase(p);
+        if (p.status == PurchaseStatus.restored && result.ok) {
+          verifiedRestores.value++;
+        }
         _completeMatching(p.productID, result);
         return;
     }
