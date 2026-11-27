@@ -42,6 +42,11 @@ class PulseController extends GetxController {
   /// dropped so one account never sees another's day or saves.
   int _accountSeq = 0;
 
+  /// Id of the signed-in user Pulse state belongs to (null when signed out).
+  /// The auth stream also re-emits the SAME user after profile/email edits
+  /// (User has no ==); those must not count as an account change.
+  int? _userId;
+
   /// Items with a save/unsave request in flight. Further taps on them are
   /// ignored, and a today/archive snapshot must not overwrite their state.
   final Set<int> _savingIds = <int>{};
@@ -71,6 +76,7 @@ class PulseController extends GetxController {
     _wireAuthLifecycle();
     if (Get.isRegistered<AuthController>() &&
         Get.find<AuthController>().isAuthenticated) {
+      _userId = Get.find<AuthController>().userObservable.value?.id;
       loadToday();
     }
   }
@@ -89,24 +95,32 @@ class PulseController extends GetxController {
     _authSub = auth.userObservable.stream.listen(handleUserChanged);
   }
 
-  /// Reacts to sign-in / sign-out (wired to the auth stream; public for tests).
+  /// Reacts to sign-in / sign-out / switching accounts (wired to the auth
+  /// stream; public for tests). Same user id → nothing to do. Any real
+  /// change drops the previous account's state, including in-flight
+  /// "saving" marks and spinners, so nothing stays stuck.
   @visibleForTesting
   void handleUserChanged(User? user) {
+    if (user?.id == _userId) return;
+    _userId = user?.id;
     _accountSeq++;
-    if (user == null) {
-      day.value = null;
-      failure.value = null;
-      loading.value = false;
-      refreshing.value = false;
-      _savedIds.clear();
-      _savingIds.clear();
-      savedItems.clear();
-      savedHasMore.value = false;
-      _savedLoaded = false;
-      _sentOnce.clear();
-    } else {
-      loadToday();
-    }
+    _clearAccountState();
+    if (user != null) loadToday();
+  }
+
+  void _clearAccountState() {
+    day.value = null;
+    failure.value = null;
+    loading.value = false;
+    refreshing.value = false;
+    _savedIds.clear();
+    _savingIds.clear();
+    savedItems.clear();
+    savedLoading.value = false;
+    savedFailure.value = null;
+    savedHasMore.value = false;
+    _savedLoaded = false;
+    _sentOnce.clear();
   }
 
   // ── Today ───────────────────────────────────────────────────────────
@@ -238,6 +252,8 @@ class PulseController extends GetxController {
     _applySaved(item, !wasSaved);
 
     final ok = wasSaved ? await _api.unsave(item.id) : await _api.save(item.id);
+    // Account changed meanwhile: its state (incl. _savingIds) was already
+    // cleared; touching it now could corrupt the new account's state.
     if (account != _accountSeq) return false;
     _savingIds.remove(item.id);
     if (!ok) {

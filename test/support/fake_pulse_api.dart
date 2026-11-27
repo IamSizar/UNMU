@@ -32,6 +32,9 @@ class FakePulseApi implements PulseApi {
   bool holdSaves = false;
   final List<Completer<bool>> heldSaves = [];
 
+  /// When set, saved() waits until the test completes it.
+  Completer<void>? savedGate;
+
   @override
   Future<PulseResult<PulseDay>> today() async {
     calls.add('today');
@@ -67,6 +70,7 @@ class FakePulseApi implements PulseApi {
   @override
   Future<PulseResult<PulsePage>> saved({int offset = 0, int limit = 30}) async {
     calls.add('saved offset=$offset');
+    await savedGate?.future;
     return savedResult;
   }
 
