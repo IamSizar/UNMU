@@ -36,6 +36,7 @@ import 'reels_player_screen.dart';
 import 'social_tokens.dart';
 import 'video_player_screen.dart';
 import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_dialog.dart';
 
 /// =============================================================================
 /// Community Detail & Live Market Forums.
@@ -2343,27 +2344,13 @@ class _CommunityMembersTabState extends State<_CommunityMembersTab> {
   /// Owner-only — confirm + fire DELETE /communities/:id/members/:userId,
   /// then prune the row from local state without a full refetch.
   Future<void> _confirmKick(CommunityMember m) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await PlatformDialog.show(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('community.kick.title'.tr),
-        content: Text(
-          'community.kick.body'.trParams({'name': m.name}),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('common.cancel'.tr),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFE65A6E),
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text('common.remove'.tr),
-          ),
-        ],
-      ),
+      title: 'community.kick.title'.tr,
+      content: 'community.kick.body'.trParams({'name': m.name}),
+      cancelText: 'common.cancel'.tr,
+      confirmText: 'common.remove'.tr,
+      isDestructive: true,
     );
     if (confirmed != true) return;
     final res = await CommunityService.removeMember(

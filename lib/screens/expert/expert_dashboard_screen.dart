@@ -21,6 +21,7 @@ import 'earnings_screen.dart';
 import 'edit_pricing_sheet.dart';
 import 'propose_community_sheet.dart';
 import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_dialog.dart';
 
 /// Expert "Studio" — your posts, your stats, the quick "+ New Post" button.
 ///
@@ -612,27 +613,13 @@ class _StudioActionMenu extends StatelessWidget {
 
   Future<void> _confirmAndDelete(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
-    final ok = await showDialog<bool>(
+    final ok = await PlatformDialog.show(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('dashboard.deletePostTitle'.tr),
-        content: Text(
-          'dashboard.deletePostBody'.tr,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('common.cancel'.tr),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFE65A6E),
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text('common.delete'.tr),
-          ),
-        ],
-      ),
+      title: 'dashboard.deletePostTitle'.tr,
+      content: 'dashboard.deletePostBody'.tr,
+      cancelText: 'common.cancel'.tr,
+      confirmText: 'common.delete'.tr,
+      isDestructive: true,
     );
     if (ok != true) return;
     final err = await ExpertPostService.delete(

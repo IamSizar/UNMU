@@ -10,6 +10,7 @@ import '../../controllers/auth_controller.dart';
 import '../../controllers/realtime_controller.dart';
 import '../../services/expert_application_service.dart';
 import 'apply_for_expert_screen.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_dialog.dart';
 
 /// Profile-screen banner that drives the "become an expert" flow.
 ///
@@ -89,24 +90,12 @@ class _BecomeExpertBannerState extends State<BecomeExpertBanner> {
   Future<void> _withdraw() async {
     final app = _app;
     if (app == null) return;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await PlatformDialog.show(
       context: context,
-      builder: (dialogCtx) => AlertDialog(
-        title: Text('becomeExpert.withdrawTitle'.tr),
-        content: Text(
-          'becomeExpert.withdrawBody'.tr,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx, false),
-            child: Text('common.cancel'.tr),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx, true),
-            child: Text('becomeExpert.withdraw'.tr),
-          ),
-        ],
-      ),
+      title: 'becomeExpert.withdrawTitle'.tr,
+      content: 'becomeExpert.withdrawBody'.tr,
+      cancelText: 'common.cancel'.tr,
+      confirmText: 'becomeExpert.withdraw'.tr,
     );
     if (confirmed != true) return;
     final res = await ExpertApplicationService.withdraw(app.id);

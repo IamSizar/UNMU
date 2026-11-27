@@ -1349,23 +1349,13 @@ class _AccountCard extends StatelessWidget {
               if (!context.mounted) return;
               final size = await CacheService.sizeBytes();
               if (!context.mounted) return;
-              final ok = await showDialog<bool>(
+              final ok = await PlatformDialog.show(
                 context: context,
-                builder: (ctx) => AlertDialog(
-                  title: Text('account.clearCache'.tr),
-                  content: Text('account.clearCacheBody'.trParams(
-                      {'size': CacheService.formatBytes(size)})),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      child: Text('common.cancel'.tr),
-                    ),
-                    FilledButton(
-                      onPressed: () => Navigator.pop(ctx, true),
-                      child: Text('account.clearCacheConfirm'.tr),
-                    ),
-                  ],
-                ),
+                title: 'account.clearCache'.tr,
+                content: 'account.clearCacheBody'.trParams(
+                    {'size': CacheService.formatBytes(size)}),
+                cancelText: 'common.cancel'.tr,
+                confirmText: 'account.clearCacheConfirm'.tr,
               );
               if (ok != true || !context.mounted) return;
               final freed = await CacheService.clear();

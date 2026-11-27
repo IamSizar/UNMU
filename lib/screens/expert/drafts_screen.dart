@@ -7,6 +7,7 @@ import '../../screens/social/social_tokens.dart';
 import '../../services/expert_post_service.dart';
 import 'create_post_screen.dart';
 import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_dialog.dart';
 
 /// Drafts + scheduled posts authored by the current expert (mig 0020,
 /// item 4.15). Reached from the Studio AppBar.
@@ -59,27 +60,15 @@ class _DraftsScreenState extends State<DraftsScreen> {
 
   Future<void> _delete(ExpertPost p) async {
     HapticFeedback.lightImpact();
-    final ok = await showDialog<bool>(
+    final ok = await PlatformDialog.show(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text('drafts.deleteTitle'.tr),
-        content: Text(
-          (p.title?.isNotEmpty ?? false)
-              ? 'drafts.deleteBodyTitled'.trParams({'title': p.title!})
-              : 'drafts.deleteBodyUntitled'.tr,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('common.cancel'.tr),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: SocialTokens.down),
-            child: Text('common.delete'.tr),
-          ),
-        ],
-      ),
+      title: 'drafts.deleteTitle'.tr,
+      content: (p.title?.isNotEmpty ?? false)
+          ? 'drafts.deleteBodyTitled'.trParams({'title': p.title!})
+          : 'drafts.deleteBodyUntitled'.tr,
+      cancelText: 'common.cancel'.tr,
+      confirmText: 'common.delete'.tr,
+      isDestructive: true,
     );
     if (ok != true) return;
     final err = await ExpertPostService.deleteDraft(p.id);

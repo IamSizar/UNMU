@@ -1627,22 +1627,12 @@ class _SubscribeCTA extends StatelessWidget {
                   );
                 } else if (sub.status == SubStatus.active) {
                   // Active — confirm cancel.
-                  final ok = await showDialog<bool>(
+                  final ok = await PlatformDialog.show(
                     context: context,
-                    builder: (ctx) => AlertDialog(
-                      title: Text('expertProfile.cancelSubTitle'.tr),
-                      content: Text('expertProfile.cancelSubBody'.tr),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx, false),
-                          child: Text('expertProfile.keep'.tr),
-                        ),
-                        FilledButton(
-                          onPressed: () => Navigator.pop(ctx, true),
-                          child: Text('common.cancel'.tr),
-                        ),
-                      ],
-                    ),
+                    title: 'expertProfile.cancelSubTitle'.tr,
+                    content: 'expertProfile.cancelSubBody'.tr,
+                    cancelText: 'expertProfile.keep'.tr,
+                    confirmText: 'common.cancel'.tr,
                   );
                   if (ok == true) {
                     await ctrl.cancel(sub.id, expertId: expertId);

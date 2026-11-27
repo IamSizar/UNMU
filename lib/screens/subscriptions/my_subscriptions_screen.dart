@@ -9,6 +9,7 @@ import '../../services/iap_service.dart';
 import '../../widgets/subscriptions/restore_purchases_button.dart';
 import 'subscribe_modal.dart';
 import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_dialog.dart';
 
 /// User-facing list of every subscription request the user has ever made.
 /// Reachable from Profile.
@@ -65,30 +66,17 @@ class _MySubscriptionsScreenState extends State<MySubscriptionsScreen> {
   }
 
   Future<void> _cancelCommunitySub(CommunitySubscriptionRow sub) async {
-    final ok = await showDialog<bool>(
+    final ok = await PlatformDialog.show(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('mySubscriptions.commCancel.title'.tr),
-        content: Text(
-          sub.isPending
-              ? 'mySubscriptions.commCancel.bodyPending'
-                  .trParams({'name': sub.communityName})
-              : 'mySubscriptions.commCancel.bodyActive'
-                  .trParams({'name': sub.communityName}),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text('mySubscriptions.cancel.keep'.tr)),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(ctx).colorScheme.error,
-            ),
-            child: Text('mySubscriptions.cancel.confirm'.tr),
-          ),
-        ],
-      ),
+      title: 'mySubscriptions.commCancel.title'.tr,
+      content: sub.isPending
+          ? 'mySubscriptions.commCancel.bodyPending'
+              .trParams({'name': sub.communityName})
+          : 'mySubscriptions.commCancel.bodyActive'
+              .trParams({'name': sub.communityName}),
+      cancelText: 'mySubscriptions.cancel.keep'.tr,
+      confirmText: 'mySubscriptions.cancel.confirm'.tr,
+      isDestructive: true,
     );
     if (ok != true || !mounted) return;
     final res = await CommunitySubscriptionService.cancel(sub.id);
