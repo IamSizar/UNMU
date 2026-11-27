@@ -5,6 +5,51 @@ context: read this before planning any work here.
 
 ---
 
+## 2026-11-27 — Release-readiness audit + Phase A release blockers fixed (branch `fix/release-blockers`, NOT pushed, NOT deployed)
+
+**Asked for:** deep audit of how close UNMU is to release, then fix the blockers ASAP. Zaid approved "Phase A" (code-only fixes, nothing deployed, production untouched). OPOS 137988 is folded in; OPOS itself was skipped on Zaid's word (`start_task` returned `PRESENCE_NOT_WORKING`).
+
+### Audit verdict (read-only, two Sonnet agents + spot checks)
+App features are mostly real; ~1554 en keys all have ar; backend ~250 routes all real, every app/dashboard call has a route; admin authZ is DB-based; SQL parameterized; no secrets in git. Blockers were release config + hardening + ops, listed below. Phase B/C (not done) at the end.
+
+### What changed (branch `fix/release-blockers`, cut from `feat/unmu-pulse`)
+App:
+- **Test-account switcher never in store builds.** `AppConfigController.showTestTools` = not-release build AND server flag; flag now defaults OFF (also on fetch failure). Login + profile use it. Dead fake-offline-session code removed from `auth_controller.dart` (`loginTest`, `registerTest`, `switchTestAccount`, `testPassword`).
+- **Restore purchases** (App Review 3.1.1): `RestorePurchasesButton` (iOS only) in My Subscriptions app bar; `IAPService.restorePurchases()` now returns whether it started; restored expert SKUs get their expert id parsed from the SKU (`expertIdFromProductId`) so the backend can re-activate them; `verifiedRestores` makes the list reload.
+- **Release config:** iOS `NSAllowsArbitraryLoads` removed (local networking still allowed); Android cleartext moved to the debug manifest only; mic purpose string now says voice messages (the `record` package IS used in community chat; old text said "not needed"); App Tracking prompt removed entirely (no tracking SDK: `tracking_service.dart`, `app_tracking_transparency` dep and `NSUserTrackingUsageDescription` gone); new `ios/Runner/PrivacyInfo.xcprivacy` (no tracking, UserDefaults CA92.1) added to the Runner target; Android release signing reads `android/key.properties` (falls back to debug key with a Gradle warning when missing).
+- **Pulse (OPOS 137988):** Retry on the error state now shows skeletons; Retry on the "couldn't refresh" notice shows a spinner (`PulseController.refreshing`); stale `loadToday` replies and replies for a previous account are dropped (`_loadSeq`, `_accountSeq`, `handleUserChanged`); a second save tap while one is in flight is ignored and a today snapshot can't undo an in-flight save (`_savingIds`).
+- Login now links to Forgot password (the screen existed but was unreachable). Indexes and Watchlist show a designed error with Retry (`LoadErrorView`) instead of an endless skeleton / a false "empty" state; new throwing `ApiService.fetchMarketIndexes` / `fetchUserPortfolio` (the old never-throwing ones still serve the decorative widgets).
+Backend:
+- New `internal/appenv`: dev behaviour ONLY when `APP_ENV` is development/dev/local/test. Before, an UNSET `APP_ENV` counted as dev, which opened `/dev/impersonate` (JWT for any user), `/dev/reset` (wipe), and echoed verification codes and **password-reset tokens** in API responses.
+- `config.Load` refuses to start outside dev without a `JWT_SECRET` of 32+ chars (no more silent `change-me-in-production`).
+- CORS: `middleware.CORS` with `CORS_ALLOWED_ORIGINS` (comma list); no `Allow-Credentials`; WebSocket origin uses the same check (native apps send no Origin, unaffected).
+- Auth endpoints rate-limited per client IP (`middleware.RateLimiter`, burst 10, then 1 per 6 s) → 429.
+- Apple receipts must match the app bundle (`APPLE_BUNDLE_ID`, default `com.easytech.stocksanalyzer`); sandbox still accepted (App Review uses sandbox).
+- Pulse: a saved item replaced in its slot stays in Saved and keeps opening (`pulseSelectSaveable`, matched on `ReplacedNotePrefix` in the change log); items an approver archived on purpose stay hidden.
+
+### Verified (2026-11-27)
+- `flutter analyze lib test` → No issues found. `flutter test` → 97 pass, 1 fail (template `test/widget_test.dart`, pre-existing).
+- `go vet ./cmd/api ./internal/...` clean. `PULSE_TEST_DSN="host=/tmp dbname=unmu_pulse_dev sslmode=disable" go test ./...` → all ok (includes the new replaced-item DB test).
+- Every new test was run failing first, then passing. A widget test caught a real bug in my first version (an `Obx` reading no observable in release → crash); fixed in `showTestTools`.
+- NOT run: an iOS or Android device/simulator build (pbxproj passes `plutil -lint` only), the dashboard against the new CORS.
+
+### Deploy requirements BEFORE this backend ships (it will refuse to start / block the dashboard otherwise)
+- Production and staging: `JWT_SECRET` must be 32+ chars (check the current value: if it is shorter, every user is logged out when it changes). `APP_ENV` must NOT be a dev value. Set `CORS_ALLOWED_ORIGINS=https://dashboard-production-7ad1.up.railway.app` (staging: its dashboard URL).
+- Local dev now needs `APP_ENV=development` for verification codes, `/dev/*` and the built-in JWT secret.
+
+### Still open
+- **Phase B (needs Zaid / touches production):** back up prod then apply migrations 0055/0056/0057; scheduled EODHD ingest (Shariah verdicts are stale without a manual run); iOS cash/FIB payments for digital content (App Review risk); Google Play verification; Android upload keystore; read-only check of prod env (`APP_ENV`, `JWT_SECRET`, `STOCK_API_PROVIDER`, S3); check whether seed accounts `*@test.com` / `test1234` (migration 0012) exist in the PRODUCTION DB — if so they are public credentials, including `admin@test.com`.
+- `PrivacyInfo.xcprivacy` has no `NSPrivacyCollectedDataTypes`: fill it from the App Privacy answers in App Store Connect; App Store Connect must also say "no tracking" now.
+- Rate limiter keys on `ClientIP()`; gin trusts all proxies by default, so `X-Forwarded-For` can be spoofed. Set trusted proxies once Railway's proxy behaviour is confirmed.
+- Phase C polish: Cupertino dialogs/spinners on iOS, dead mock social screens, fake dashboard push history, dashboard TS errors, 51 files over 500 lines, Android `namespace` still `com.example.halalstocks` (needs MainActivity package move).
+
+### Traps
+- `analysis_options.yaml` and `pubspec.lock` were already modified before this work (likely `flutter test` with a newer SDK, plus unknown); NOT committed with this work. `pubspec.lock` here only drops `app_tracking_transparency`.
+- `flutter build apk --config-only` rewrites `android/gradle.properties` (adds `builtInKotlin`/`newDsl` flags); not committed.
+- `showTestTools` must read the Rx before the bool (see above).
+
+---
+
 ## 2026-10-27 — Pulse run on the iOS simulator against staging; 2 real bugs fixed, push-tap NOT device-verified (3 commits local, NOT pushed)
 
 **Asked for:** keep building Pulse; run it on the iOS simulator against staging (OPOS 137987) and fix what breaks. OPOS office 16, tasks 137986 (push tap, Under Review), 137987 (this run), 137988 (review leftovers, still To Do), as account 6.
