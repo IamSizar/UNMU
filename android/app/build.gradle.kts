@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // START: FlutterFire Configuration
@@ -14,7 +16,7 @@ plugins {
 //   storePassword=...  keyPassword=...  keyAlias=upload  storeFile=/path/upload.jks
 // Without it, release builds fall back to the debug key (Play rejects those,
 // so a store upload cannot silently ship debug-signed).
-val keystoreProperties = java.util.Properties()
+val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
 val hasReleaseKeystore = keystorePropertiesFile.exists()
 if (hasReleaseKeystore) {
