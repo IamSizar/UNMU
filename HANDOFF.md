@@ -5,6 +5,35 @@ context: read this before planning any work here.
 
 ---
 
+## 2026-11-27 (later) — PR #5 review findings fixed (same branch, pushed to PR #5)
+
+**Asked for:** run code + security review on PR https://github.com/IamSizar/UNMU/pull/5, then "go on all five" fixes. Reviews: two Sonnet agents (code-reviewer, security-reviewer), each finding checked against the code before fixing.
+
+### What changed
+1. **Rate-limit bypass (HIGH).** gin trusted every proxy, so `ClientIP()` was the caller-written leftmost `X-Forwarded-For`. New `middleware.ConfigureClientIP`: no proxy trusted for XFF; only `TRUSTED_CLIENT_IP_HEADER` (default `X-Real-IP`, which Railway's edge sets and overwrites per https://docs.railway.com/networking/public-networking/specs-and-limits ; `none` = TCP peer only).
+2. **Limiter growth (MEDIUM).** Idle sweep at most once a minute (was every request), cap 50 000 tracked clients (new clients get 429 past the cap). `Retry-After` now matches the refill (6 s), message says "a few seconds".
+3. **Pulse bookmark stuck (MEDIUM).** `PulseController.handleUserChanged` acts only when the user ID changes (profile/email edits re-emit the same user); every account change, incl. A→B, clears `_savingIds`, `savedLoading`, etc.
+4. **Replaced items (MEDIUM/LOW).** Migration **`0058_pulse_replaced_by.sql` (+ down)**: `pulse_items.replaced_by` (FK, partial index, CHECK only-archived, backfilled from the change-log note). Publish sets it; Saved/detail use it (no more note matching) and only for users who SAVED the item; `archive` on a replaced item = takedown (clears the link); a second takedown → 409 "already taken down". Dashboard shows Archive on replaced items (`replacedBy` in `api/pulse.ts`, `pulseUi.tsx`).
+5. `ios/Podfile.lock`: removed the 6 `app_tracking_transparency` lines by hand (no `pod install`: network too slow, and it would have picked up the uncommitted iOS 15 bump).
+
+### Verified (2026-11-27)
+- `flutter analyze lib test` clean; `flutter test` 100 pass, 1 fail (template test, pre-existing).
+- `go vet` clean; `PULSE_TEST_DSN=... go test ./...` all ok (new: spoof tests, cap, sweep, Retry-After, client-IP config, archive rule, replaced-link/takedown/saver-only DB tests).
+- 0058 up/down/up on the local DB `unmu_pulse_dev`.
+- Live (local API, production mode): 12 logins with a new fake XFF each → 10×401 then 429; `Retry-After: 6`; another `X-Real-IP` gets its own bucket. Replaced item 219: admin sees `replacedBy 220`, saver 200, non-saver 404, takedown 200, then saver 404 and Saved empty, second takedown 409.
+- NOT run: dashboard `tsc` (no `node_modules`; network too slow to install), app on a simulator/device (see entry below).
+
+### Deploy additions
+- Apply **0058** by hand after 0055/0056/0057 (staging + production), same as before.
+- Optional `TRUSTED_CLIENT_IP_HEADER` (default `X-Real-IP` fits Railway). If a CDN is ever put in front, set it to the CDN's client-IP header.
+
+### Still open (pre-existing, from the security review, not fixed)
+- Apple IAP replay protection keys only on `transaction_id`; check the owner of `original_transaction_id` too.
+- Sandbox receipts unlock paid access in production (TestFlight testers).
+- Empty `productId` matches any product; raw error text returned by `handlers/iap.go`.
+
+---
+
 ## 2026-11-27 — Release-readiness audit + Phase A release blockers fixed (branch `fix/release-blockers`, NOT pushed, NOT deployed)
 
 **Asked for:** deep audit of how close UNMU is to release, then fix the blockers ASAP. Zaid approved "Phase A" (code-only fixes, nothing deployed, production untouched). OPOS 137988 is folded in; OPOS itself was skipped on Zaid's word (`start_task` returned `PRESENCE_NOT_WORKING`).
