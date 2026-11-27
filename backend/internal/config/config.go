@@ -29,6 +29,12 @@ type Config struct {
 	// apps send no Origin and are unaffected.
 	CORSAllowedOrigins []string
 
+	// TrustedClientIPHeader is the ONE header believed for the caller's IP
+	// (rate limiting). Railway's edge sets and overwrites X-Real-IP. Set
+	// TRUSTED_CLIENT_IP_HEADER to another platform's header, or to "none"
+	// to use only the TCP peer address.
+	TrustedClientIPHeader string
+
 	// Stock API (FMP, Alpha Vantage, or DataJockey)
 	StockAPIKey      string
 	StockAPIBaseURL  string
@@ -74,6 +80,8 @@ func Load() (*Config, error) {
 		JWTSecret:  getEnv("JWT_SECRET", ""),
 
 		CORSAllowedOrigins: parseOrigins(os.Getenv("CORS_ALLOWED_ORIGINS")),
+
+		TrustedClientIPHeader: parseClientIPHeader(os.Getenv("TRUSTED_CLIENT_IP_HEADER")),
 
 		// Stock API (FMP, Alpha Vantage, or DataJockey)
 		StockAPIKey:        getEnv("STOCK_API_KEY", ""),
@@ -197,4 +205,19 @@ func parseOrigins(raw string) []string {
 		}
 	}
 	return out
+}
+
+// defaultClientIPHeader is what Railway's public edge sets for the client.
+const defaultClientIPHeader = "X-Real-IP"
+
+// parseClientIPHeader: unset → Railway's header; "none" → trust no header.
+func parseClientIPHeader(raw string) string {
+	v := strings.TrimSpace(raw)
+	switch {
+	case v == "":
+		return defaultClientIPHeader
+	case strings.EqualFold(v, "none"):
+		return ""
+	}
+	return v
 }

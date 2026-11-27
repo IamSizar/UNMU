@@ -463,6 +463,11 @@ func main() {
 
 	// Setup router
 	router := gin.Default()
+	// Client IP for rate limiting: only the platform edge's header, never a
+	// caller-written X-Forwarded-For (see middleware.ConfigureClientIP).
+	if err := middleware.ConfigureClientIP(router, cfg.TrustedClientIPHeader); err != nil {
+		log.Fatalf("client IP config: %v", err)
+	}
 
 	// Error monitoring (Sentry) — no-op if SENTRY_DSN isn't set, matching
 	// the graceful-degrade pattern used for FCM/email elsewhere. Placed

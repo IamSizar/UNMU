@@ -65,3 +65,19 @@ func TestLoad_ParsesCORSOrigins(t *testing.T) {
 		t.Fatalf("origins = %v, want %v", cfg.CORSAllowedOrigins, want)
 	}
 }
+
+func TestLoad_ClientIPHeader(t *testing.T) {
+	setBase(t)
+	t.Setenv("APP_ENV", "development")
+	cases := map[string]string{"": "X-Real-IP", "none": "", "NONE": "", " CF-Connecting-IP ": "CF-Connecting-IP"}
+	for raw, want := range cases {
+		t.Setenv("TRUSTED_CLIENT_IP_HEADER", raw)
+		cfg, err := Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.TrustedClientIPHeader != want {
+			t.Errorf("TRUSTED_CLIENT_IP_HEADER=%q → %q, want %q", raw, cfg.TrustedClientIPHeader, want)
+		}
+	}
+}
