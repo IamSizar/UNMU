@@ -44,7 +44,7 @@ func bundleVerifier(url string) *AppleIAPVerifier {
 func TestVerifyReceipt_MatchingBundleAccepted(t *testing.T) {
 	srv := bundleServer(t, "com.easytech.stocksanalyzer")
 	defer srv.Close()
-	if _, err := bundleVerifier(srv.URL).VerifyReceipt(context.Background(), "r", ""); err != nil {
+	if _, err := bundleVerifier(srv.URL).VerifyReceipt(context.Background(), "r", "com.unmu.premium.monthly"); err != nil {
 		t.Fatalf("matching bundle rejected: %v", err)
 	}
 }
@@ -52,7 +52,7 @@ func TestVerifyReceipt_MatchingBundleAccepted(t *testing.T) {
 func TestVerifyReceipt_OtherAppRejected(t *testing.T) {
 	srv := bundleServer(t, "com.someone.else")
 	defer srv.Close()
-	if _, err := bundleVerifier(srv.URL).VerifyReceipt(context.Background(), "r", ""); err == nil {
+	if _, err := bundleVerifier(srv.URL).VerifyReceipt(context.Background(), "r", "com.unmu.premium.monthly"); err == nil {
 		t.Fatal("receipt from another app accepted")
 	}
 }
@@ -60,7 +60,7 @@ func TestVerifyReceipt_OtherAppRejected(t *testing.T) {
 func TestVerifyReceipt_MissingBundleRejected(t *testing.T) {
 	srv := bundleServer(t, "")
 	defer srv.Close()
-	if _, err := bundleVerifier(srv.URL).VerifyReceipt(context.Background(), "r", ""); err == nil {
+	if _, err := bundleVerifier(srv.URL).VerifyReceipt(context.Background(), "r", "com.unmu.premium.monthly"); err == nil {
 		t.Fatal("receipt without bundle_id accepted")
 	}
 }
