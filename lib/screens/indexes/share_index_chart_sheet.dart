@@ -15,6 +15,7 @@ import '../../services/expert_post_service.dart';
 import '../../services/upload_service.dart';
 import '../../utils/haptic_utils.dart';
 import '../social/social_tokens.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Expert-only "share this index chart" flow.
 ///
@@ -449,10 +450,7 @@ class _ShareSheetState extends State<_ShareSheet> {
                             ? const SizedBox(
                                 width: 18,
                                 height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.4,
-                                  color: Color(0xFF0A1628),
-                                ),
+                                child: PlatformSpinner(strokeWidth: 2.4, color: Color(0xFF0A1628)),
                               )
                             : const Icon(Icons.send_rounded, size: 18),
                         label: Text(

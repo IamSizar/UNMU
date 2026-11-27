@@ -20,6 +20,7 @@ import '../../services/upload_service.dart';
 import '../../utils/haptic_utils.dart';
 import '../../utils/responsive.dart';
 import '../../widgets/dismiss_keyboard_on_tap.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Composer for a new expert post — pick **type** first (article / video /
 /// reel), then fill in the relevant fields, then publish.
@@ -602,7 +603,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                 ? const SizedBox(
                     width: 18,
                     height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: PlatformSpinner(strokeWidth: 2),
                   )
                 : Text(widget.isEditing ? 'createPostX.save'.tr : 'createPostX.publish'.tr),
           ),
@@ -992,7 +993,7 @@ class _MediaPickerTile extends StatelessWidget {
                           strokeWidth: 2,
                           value: uploadProgress!.clamp(0.0, 1.0),
                         )
-                      : const CircularProgressIndicator(strokeWidth: 2),
+                      : const PlatformSpinner(strokeWidth: 2),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -1359,10 +1360,7 @@ class _DestinationPicker extends StatelessWidget {
                   SizedBox(
                     width: 14,
                     height: 14,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: cs.primary,
-                    ),
+                    child: PlatformSpinner(strokeWidth: 2, color: cs.primary),
                   ),
                   const SizedBox(width: 10),
                   Text(

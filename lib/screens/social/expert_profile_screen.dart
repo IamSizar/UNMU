@@ -29,6 +29,7 @@ import '../subscriptions/subscribe_modal.dart';
 import 'create_post_screen.dart';
 import 'mock_social_data.dart';
 import 'social_tokens.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Expert Profile & Trading Insights screen.
 ///
@@ -741,7 +742,7 @@ class _LivePostsTab extends StatelessWidget {
         return Center(
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 32),
-            child: CircularProgressIndicator(color: accent),
+            child: PlatformSpinner(color: accent),
           ),
         );
       }

@@ -9,6 +9,7 @@ import '../../controllers/currency_controller.dart';
 import '../../screens/social/social_tokens.dart';
 import '../../services/api_service.dart';
 import '../../utils/haptic_utils.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// =============================================================================
 /// DCA (Dollar-Cost Averaging) Calculator — modern fintech UI.
@@ -743,10 +744,7 @@ class _CalculateButton extends StatelessWidget {
                 ? const SizedBox(
                     width: 22,
                     height: 22,
-                    child: CircularProgressIndicator(
-                      color: Color(0xFF0A1628),
-                      strokeWidth: 2.4,
-                    ),
+                    child: PlatformSpinner(color: Color(0xFF0A1628), strokeWidth: 2.4),
                   )
                 : Row(
                     mainAxisSize: MainAxisSize.min,

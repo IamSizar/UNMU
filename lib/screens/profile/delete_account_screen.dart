@@ -7,6 +7,7 @@ import '../../utils/haptic_utils.dart';
 import '../../widgets/auth/auth_widgets.dart';
 import '../../widgets/dismiss_keyboard_on_tap.dart';
 import '../social/social_tokens.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Settings sub-screen — permanently delete the signed-in account.
 ///
@@ -212,10 +213,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
                       ? const SizedBox(
                           width: 18,
                           height: 18,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
+                          child: PlatformSpinner(color: Colors.white, strokeWidth: 2),
                         )
                       : const Icon(Icons.delete_forever_rounded),
                   label: Text(

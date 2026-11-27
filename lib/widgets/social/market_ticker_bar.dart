@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import '../../services/api_service.dart';
 import '../../screens/indexes/indexes_screen.dart';
 import '../../screens/social/social_tokens.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// A modern, continuously-scrolling market ticker — the social hub's "news
 /// bar". Pulls REAL index data from `GET /api/market/indexes` (S&P 500,
@@ -239,10 +240,7 @@ class _MarketTickerBarState extends State<MarketTickerBar>
           SizedBox(
             width: 14,
             height: 14,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              valueColor: const AlwaysStoppedAnimation(SocialTokens.cyan),
-            ),
+            child: PlatformSpinner(strokeWidth: 2, color: SocialTokens.cyan),
           ),
           const SizedBox(width: 10),
           Text(

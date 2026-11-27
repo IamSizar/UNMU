@@ -6,6 +6,7 @@ import '../../models/expert_post.dart';
 import '../../screens/social/social_tokens.dart';
 import '../../services/expert_post_service.dart';
 import 'create_post_screen.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Drafts + scheduled posts authored by the current expert (mig 0020,
 /// item 4.15). Reached from the Studio AppBar.
@@ -131,7 +132,7 @@ class _DraftsScreenState extends State<DraftsScreen> {
 
   Widget _body(SocialPalette palette) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: PlatformSpinner());
     }
     if (_error != null) {
       return Center(

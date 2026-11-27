@@ -10,6 +10,7 @@ import '../../services/community_service.dart';
 import '../../services/upload_service.dart';
 import '../../utils/price_format.dart';
 import 'social_tokens.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Owner / admin-only metadata editor for a single community.
 ///
@@ -292,7 +293,7 @@ class _CommunityEditSheetState extends State<CommunityEditSheet> {
             child: _loading
                 ? const SizedBox(
                     height: 200,
-                    child: Center(child: CircularProgressIndicator()))
+                    child: Center(child: PlatformSpinner()))
                 : Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -1087,10 +1088,7 @@ class _CommunityEditSheetState extends State<CommunityEditSheet> {
             ? const SizedBox(
                 width: 22,
                 height: 22,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  color: Colors.black,
-                ),
+                child: PlatformSpinner(strokeWidth: 2.5, color: Colors.black),
               )
             : Text(
                 'communityEdit.saveChanges'.tr,

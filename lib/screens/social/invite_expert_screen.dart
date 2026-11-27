@@ -5,6 +5,7 @@ import '../../services/community_owners_service.dart';
 import '../../services/community_service.dart';
 import '../../utils/haptic_utils.dart';
 import 'social_tokens.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// InviteExpertScreen — primary owner of a community picks an EXPERT
 /// to invite as a co-owner of that community.
@@ -233,7 +234,7 @@ class _InviteExpertScreenState extends State<InviteExpertScreen> {
           Expanded(
             child: _loading
                 ? const Center(
-                    child: CircularProgressIndicator(color: SocialTokens.cyan),
+                    child: PlatformSpinner(color: SocialTokens.cyan),
                   )
                 : _error != null
                     ? Center(
@@ -371,11 +372,7 @@ class _ExpertRow extends StatelessWidget {
                 ? const SizedBox(
                     width: 14,
                     height: 14,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor:
-                          AlwaysStoppedAnimation<Color>(Colors.black),
-                    ),
+                    child: PlatformSpinner(strokeWidth: 2, color: Colors.black),
                   )
                 : Text(
                     'inviteExpert.invite'.tr,

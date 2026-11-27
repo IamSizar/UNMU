@@ -11,6 +11,7 @@ import '../../utils/responsive.dart';
 import '../../widgets/platform_adaptive/platform_dialog.dart';
 import '../../widgets/stock_card.dart';
 import '../../widgets/common/load_error_view.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// =============================================================================
 /// Watchlist Screen — editorial bento redesign.
@@ -138,7 +139,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
             const SliverFillRemaining(
               hasScrollBody: false,
               child: Center(
-                child: CircularProgressIndicator(color: SocialTokens.cyan),
+                child: PlatformSpinner(color: SocialTokens.cyan),
               ),
             )
           else if (wl.watchlist.isEmpty && wl.error != null)

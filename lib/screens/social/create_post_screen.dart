@@ -7,6 +7,7 @@ import '../../services/expert_post_service.dart';
 import '../../widgets/auth/auth_widgets.dart';
 import 'mock_social_data.dart';
 import 'social_tokens.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Two flavors of post composer, both presented as a full-screen sheet:
 ///
@@ -156,10 +157,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                   ? const SizedBox(
                       width: 18,
                       height: 18,
-                      child: CircularProgressIndicator(
-                        color: SocialTokens.cyan,
-                        strokeWidth: 2,
-                      ),
+                      child: PlatformSpinner(color: SocialTokens.cyan, strokeWidth: 2),
                     )
                   : Text('createPost.post'.tr),
             ),

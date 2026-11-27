@@ -20,6 +20,7 @@ import 'drafts_screen.dart';
 import 'earnings_screen.dart';
 import 'edit_pricing_sheet.dart';
 import 'propose_community_sheet.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Expert "Studio" — your posts, your stats, the quick "+ New Post" button.
 ///
@@ -131,7 +132,7 @@ class _ExpertDashboardScreenState extends State<ExpertDashboardScreen> {
                 if (loading && posts.isEmpty)
                   const Padding(
                     padding: EdgeInsets.all(40),
-                    child: Center(child: CircularProgressIndicator()),
+                    child: Center(child: PlatformSpinner()),
                   )
                 else if (error != null && posts.isEmpty)
                   _EmptyState(

@@ -12,6 +12,7 @@ import '../../widgets/social/save_button.dart';
 import '../reels/reel_player_screen.dart';
 import '../social/expert_profile_screen.dart';
 import '../social/social_tokens.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// "Saved" screen — every post the user has bookmarked, newest first.
 ///
@@ -59,7 +60,7 @@ class SavedPostsScreen extends StatelessWidget {
             return const Center(
               child: Padding(
                 padding: EdgeInsets.all(40),
-                child: CircularProgressIndicator(color: SocialTokens.cyan),
+                child: PlatformSpinner(color: SocialTokens.cyan),
               ),
             );
           }

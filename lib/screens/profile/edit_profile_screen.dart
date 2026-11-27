@@ -14,6 +14,7 @@ import '../../services/upload_service.dart';
 import '../../utils/haptic_utils.dart';
 import '../../utils/responsive.dart';
 import '../../widgets/auth/auth_widgets.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// =============================================================================
 /// Edit Profile Screen — modern editor.
@@ -454,10 +455,7 @@ class _AvatarEditor extends StatelessWidget {
                     ? const SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(
-                          color: SocialTokens.cyan,
-                          strokeWidth: 2,
-                        ),
+                        child: PlatformSpinner(color: SocialTokens.cyan, strokeWidth: 2),
                       )
                     : const Icon(
                         Icons.photo_camera_rounded,

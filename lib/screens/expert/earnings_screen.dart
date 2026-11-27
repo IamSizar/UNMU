@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import '../../services/payout_service.dart';
 import '../../services/studio_service.dart';
 import 'request_payout_sheet.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Phase 3.3 — full-screen earnings view for the expert.
 ///
@@ -161,7 +162,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
                 borderRadius: BorderRadius.circular(16),
               ),
               child: _loading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const Center(child: PlatformSpinner())
                   : (data == null || data.history.isEmpty)
                       ? Center(
                           child: Text(
@@ -191,7 +192,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
             if (_loading)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 24),
-                child: Center(child: CircularProgressIndicator()),
+                child: Center(child: PlatformSpinner()),
               )
             else if (data == null || data.history.isEmpty)
               Padding(
@@ -334,10 +335,7 @@ class _TotalCard extends StatelessWidget {
                     child: SizedBox(
                       width: 14,
                       height: 14,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: cs.onSurfaceVariant,
-                      ),
+                      child: PlatformSpinner(strokeWidth: 2, color: cs.onSurfaceVariant),
                     ),
                   ),
                 )

@@ -8,6 +8,7 @@ import 'package:get/get.dart';
 import '../../localization/locale_format.dart';
 import '../../screens/social/social_tokens.dart';
 import '../../services/community_messages_service.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Inline chat-search panel (mig 0021, item 5.17).
 ///
@@ -153,7 +154,7 @@ class _ChatSearchOverlayState extends State<ChatSearchOverlay> {
 
   Widget _body(SocialPalette palette) {
     if (_searching) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: PlatformSpinner());
     }
     if (_error != null) {
       return Center(

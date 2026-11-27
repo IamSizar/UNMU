@@ -13,6 +13,7 @@ import '../../services/post_interaction_service.dart';
 import '../../services/realtime_service.dart';
 import '../../utils/haptic_utils.dart';
 import '../social/social_tokens.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Sarah's "who interacted with this post?" view.
 ///
@@ -305,7 +306,7 @@ class _LikesTab extends StatelessWidget {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(40),
-          child: CircularProgressIndicator(color: SocialTokens.cyan),
+          child: PlatformSpinner(color: SocialTokens.cyan),
         ),
       );
     }
@@ -513,7 +514,7 @@ class _CommentsTab extends StatelessWidget {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(40),
-          child: CircularProgressIndicator(color: SocialTokens.cyan),
+          child: PlatformSpinner(color: SocialTokens.cyan),
         ),
       );
     }

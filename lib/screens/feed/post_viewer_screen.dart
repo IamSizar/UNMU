@@ -19,6 +19,7 @@ import '../../widgets/social/save_button.dart';
 import '../reels/reel_player_screen.dart';
 import '../social/expert_profile_screen.dart';
 import '../social/social_tokens.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Single-post viewer reached via deep-link route resolution.
 ///
@@ -121,7 +122,7 @@ class _PostViewerScreenState extends State<PostViewerScreen> {
 
   Widget _buildBody(SocialPalette palette) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator(color: _accent));
+      return const Center(child: PlatformSpinner(color: _accent));
     }
     if (_notFound || _post == null) {
       return _NotFoundState(onRetry: widget.postId == null ? null : _fetch);

@@ -8,6 +8,7 @@ import '../../services/community_subscription_service.dart';
 import '../../services/iap_service.dart';
 import '../../widgets/subscriptions/restore_purchases_button.dart';
 import 'subscribe_modal.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// User-facing list of every subscription request the user has ever made.
 /// Reachable from Profile.
@@ -182,7 +183,7 @@ class _MySubscriptionsScreenState extends State<MySubscriptionsScreen> {
             final subs = controller.all;
             final commSubs = _communitySubs;
             if (loading && subs.isEmpty && commSubs.isEmpty) {
-              return const Center(child: CircularProgressIndicator());
+              return const Center(child: PlatformSpinner());
             }
             if (subs.isEmpty && commSubs.isEmpty) {
               return _EmptyState();

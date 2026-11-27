@@ -9,6 +9,7 @@ import 'package:video_player/video_player.dart';
 
 import '../../services/video_resume_service.dart';
 import '../common/app_network_image.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Shared, self-contained video player used by every "watch a single
 /// video" surface — VideoPlayerScreen (long-form), post viewer, expert
@@ -734,10 +735,7 @@ class _UnmuVideoPlayerState extends State<UnmuVideoPlayer>
             child: SizedBox(
               width: 48,
               height: 48,
-              child: CircularProgressIndicator(
-                strokeWidth: 3,
-                valueColor: AlwaysStoppedAnimation(Colors.white),
-              ),
+              child: PlatformSpinner(strokeWidth: 3, color: Colors.white),
             ),
           ),
 
@@ -746,10 +744,7 @@ class _UnmuVideoPlayerState extends State<UnmuVideoPlayer>
             child: SizedBox(
               width: 48,
               height: 48,
-              child: CircularProgressIndicator(
-                strokeWidth: 3,
-                valueColor: AlwaysStoppedAnimation(Colors.white),
-              ),
+              child: PlatformSpinner(strokeWidth: 3, color: Colors.white),
             ),
           ),
 

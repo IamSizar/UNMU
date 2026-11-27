@@ -29,6 +29,7 @@ import 'expert_profile_screen.dart';
 import 'mock_social_data.dart';
 import 'social_tokens.dart';
 import '../../widgets/profile_avatar_button.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Social & Community Hub — editorial bento layout.
 ///
@@ -312,7 +313,7 @@ class _SocialHubScreenState extends State<SocialHubScreen> {
                 const SliverToBoxAdapter(
                   child: Padding(
                     padding: EdgeInsets.symmetric(vertical: 28),
-                    child: Center(child: CircularProgressIndicator()),
+                    child: Center(child: PlatformSpinner()),
                   ),
                 )
               else if (_experts.isEmpty)
@@ -432,7 +433,7 @@ class _SocialHubScreenState extends State<SocialHubScreen> {
                       return const SliverToBoxAdapter(
                         child: Padding(
                           padding: EdgeInsets.symmetric(vertical: 28),
-                          child: Center(child: CircularProgressIndicator()),
+                          child: Center(child: PlatformSpinner()),
                         ),
                       );
                     }

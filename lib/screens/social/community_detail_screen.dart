@@ -35,6 +35,7 @@ import 'post_detail_screen.dart';
 import 'reels_player_screen.dart';
 import 'social_tokens.dart';
 import 'video_player_screen.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// =============================================================================
 /// Community Detail & Live Market Forums.
@@ -1781,7 +1782,7 @@ class _CommunityPostsTab extends StatelessWidget {
               const SizedBox(height: 100),
               Center(
                 child: loading
-                    ? const CircularProgressIndicator()
+                    ? const PlatformSpinner()
                     : Text(
                         'community.posts.empty'.tr,
                         style: TextStyle(color: palette.textMuted, fontSize: 14),
@@ -2070,7 +2071,7 @@ class _PostThread extends StatelessWidget {
                         child: const SizedBox(
                           width: 22,
                           height: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2.2),
+                          child: PlatformSpinner(strokeWidth: 2.2),
                         ),
                       ),
                 errorBuilder: (ctx, _, __) => Container(
@@ -2422,7 +2423,7 @@ class _CommunityMembersTabState extends State<_CommunityMembersTab> {
     final palette = SocialTheme.of(context);
     if (_loading && _members.isEmpty) {
       return Center(
-        child: CircularProgressIndicator(color: widget.accent),
+        child: PlatformSpinner(color: widget.accent),
       );
     }
     if (_error != null && _members.isEmpty) {
@@ -3184,9 +3185,7 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
               Expanded(
                 child: _loading
                     ? Center(
-                        child: CircularProgressIndicator(
-                          color: palette.textMuted,
-                        ),
+                        child: PlatformSpinner(color: palette.textMuted),
                       )
                     : _error != null
                         ? Center(
@@ -3429,10 +3428,7 @@ class _MembershipButton extends StatelessWidget {
                     SizedBox(
                       width: 14,
                       height: 14,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: accent,
-                      ),
+                      child: PlatformSpinner(strokeWidth: 2, color: accent),
                     )
                   else
                     Icon(

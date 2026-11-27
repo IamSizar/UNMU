@@ -6,6 +6,7 @@ import '../../services/expert_subscription_service.dart';
 import '../../utils/haptic_utils.dart';
 import '../subscriptions/subscribe_modal.dart';
 import 'social_tokens.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Dedicated full-screen paywall for an expert.
 ///
@@ -194,10 +195,7 @@ class _ExpertPaywallScreenState extends State<ExpertPaywallScreen> {
                     child: SizedBox(
                       width: 22,
                       height: 22,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: palette.textMuted,
-                      ),
+                      child: PlatformSpinner(strokeWidth: 2, color: palette.textMuted),
                     ),
                   ),
                 )
