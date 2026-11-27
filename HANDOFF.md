@@ -33,6 +33,16 @@ Backend:
 - Every new test was run failing first, then passing. A widget test caught a real bug in my first version (an `Obx` reading no observable in release → crash); fixed in `showTestTools`.
 - NOT run: an iOS or Android device/simulator build (pbxproj passes `plutil -lint` only), the dashboard against the new CORS.
 
+### Live verification (2026-11-27, local API built from this branch, local DB `unmu_pulse_dev`, port 8091, `APP_ENV=production`)
+- Start-up: no `JWT_SECRET` → refuses ("JWT_SECRET is required"); `change-me-in-production` → refuses. Strong secret → starts.
+- `/dev/users`, `/dev/impersonate` → 404. Password-reset request → `devMode:false`, no token in the body.
+- CORS: listed origin echoed with `Vary: Origin`, no credentials header; other origin gets no header; preflight 403 vs 204; no-Origin (mobile) 200.
+- Rate limit: 10 auth requests pass, the 11th → 429 with `Retry-After: 60`; `/health` unaffected.
+- WebSocket `/api/ws`: no Origin 101, listed origin 101, other origin 403.
+- Pulse through the real admin + app API: item A published and saved by a reader, B published in the same slot (A archived), C published, saved, then archived by an approver → Saved = [A], `GET /pulse/items/A` 200, `GET /pulse/items/C` 404, today = [B]. Rows left in the LOCAL dev DB only (items 219-221).
+- **App on a simulator/emulator: NOT verified.** iOS build failed fetching Swift packages (GitHub at ~3-22 KB/s, connection reset; nothing cached: no Pods, no SPM checkouts, no DerivedData). Android `signingReport` failed downloading the Kotlin compiler (read timeout) before evaluating `build.gradle.kts`. Web is not a target (Firebase has no web options) so it stops at the splash. App changes are covered by widget/unit tests only.
+- Side effect left uncommitted for Zaid: the installed Flutter SDK's migrator raised the iOS minimum 14.0 → 15.0 (`ios/Podfile`, `project.pbxproj`). Accepting it drops iOS 14 devices; any build with this SDK re-applies it.
+
 ### Deploy requirements BEFORE this backend ships (it will refuse to start / block the dashboard otherwise)
 - Production and staging: `JWT_SECRET` must be 32+ chars (check the current value: if it is shorter, every user is logged out when it changes). `APP_ENV` must NOT be a dev value. Set `CORS_ALLOWED_ORIGINS=https://dashboard-production-7ad1.up.railway.app` (staging: its dashboard URL).
 - Local dev now needs `APP_ENV=development` for verification codes, `/dev/*` and the built-in JWT secret.
