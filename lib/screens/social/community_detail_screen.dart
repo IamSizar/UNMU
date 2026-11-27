@@ -314,31 +314,13 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
 
   /// Delete with confirmation. Permanent.
   Future<void> _deletePost(CommunityPost post) async {
-    final palette = SocialTheme.of(context);
-    final confirm = await showDialog<bool>(
+    final confirm = await PlatformDialog.show(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: palette.surface,
-        title: Text(
-          'community.deletePost.title'.tr,
-          style: TextStyle(color: palette.textPrimary),
-        ),
-        content: Text(
-          'community.deletePost.body'.tr,
-          style: TextStyle(color: palette.textSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('common.cancel'.tr),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: SocialTokens.down),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text('common.delete'.tr),
-          ),
-        ],
-      ),
+      title: 'community.deletePost.title'.tr,
+      content: 'community.deletePost.body'.tr,
+      cancelText: 'common.cancel'.tr,
+      confirmText: 'common.delete'.tr,
+      isDestructive: true,
     );
     if (confirm != true) return;
     final res = await CommunityService.deletePost(
@@ -451,51 +433,13 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
   /// Owners never reach this — the membership button isn't rendered
   /// for them in the first place (see `if (!amOwner ...)` in build).
   Future<bool?> _confirmLeave() {
-    return showDialog<bool>(
+    return PlatformDialog.show(
       context: context,
-      builder: (dialogCtx) {
-        final palette = SocialTheme.of(dialogCtx);
-        return AlertDialog(
-          backgroundColor: palette.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-          title: Text(
-            'community.leave.title'.trParams({'name': widget.community.name}),
-            style: TextStyle(
-              color: palette.textPrimary,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          content: Text(
-            'community.leave.body'.tr,
-            style: TextStyle(
-              color: palette.textMuted,
-              fontSize: 13.5,
-              height: 1.4,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogCtx).pop(false),
-              child: Text(
-                'common.cancel'.tr,
-                style: TextStyle(color: palette.textMuted),
-              ),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(dialogCtx).pop(true),
-              style: TextButton.styleFrom(
-                foregroundColor: SocialTokens.down,
-              ),
-              child: Text(
-                'community.leave'.tr,
-                style: const TextStyle(fontWeight: FontWeight.w900),
-              ),
-            ),
-          ],
-        );
-      },
+      title: 'community.leave.title'.trParams({'name': widget.community.name}),
+      content: 'community.leave.body'.tr,
+      cancelText: 'common.cancel'.tr,
+      confirmText: 'community.leave'.tr,
+      isDestructive: true,
     );
   }
 
@@ -3044,7 +2988,6 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
   /// Confirmation dialog + API call for the chosen action. Returns
   /// to the picker on cancel; closes the picker on success.
   Future<void> _onPick(BuildContext ctx, CommunityMemberRow m) async {
-    final palette = SocialTheme.of(ctx);
     final isRemove = widget.mode == _PickerMode.remove;
     final memberName = m.name.isEmpty ? m.email : m.name;
     final title = isRemove
@@ -3054,42 +2997,15 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
         ? 'community.picker.confirmRemoveBody'.trParams({'name': memberName})
         : 'community.picker.confirmTransferBody'
             .trParams({'name': memberName});
-    final confirmed = await showDialog<bool>(
+    final confirmed = await PlatformDialog.show(
       context: ctx,
-      builder: (dialogCtx) => AlertDialog(
-        backgroundColor: palette.surface,
-        title: Text(
-          title,
-          style: TextStyle(
-            color: palette.textPrimary,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        content: Text(
-          body,
-          style: TextStyle(color: palette.textMuted),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx, false),
-            child: Text('common.cancel'.tr),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx, true),
-            child: Text(
-              isRemove
-                  ? 'community.picker.remove'.tr
-                  : 'community.picker.transfer'.tr,
-              style: TextStyle(
-                color: isRemove
-                    ? const Color(0xFFFF6B7A)
-                    : SocialTokens.cyan,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ],
-      ),
+      title: title,
+      content: body,
+      cancelText: 'common.cancel'.tr,
+      confirmText: isRemove
+          ? 'community.picker.remove'.tr
+          : 'community.picker.transfer'.tr,
+      isDestructive: isRemove,
     );
     if (confirmed != true) return;
     HapticFeedback.selectionClick();

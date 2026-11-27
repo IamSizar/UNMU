@@ -27,6 +27,7 @@ import '../../widgets/social/typing_pill.dart';
 import 'mock_social_data.dart';
 import 'social_tokens.dart';
 import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_dialog.dart';
 
 /// Standalone full-page community chat. Reached via the chat icon in
 /// the [CommunityDetailScreen]'s AppBar. Pure UI scaffold — no
@@ -876,38 +877,13 @@ class _CommunityChatScreenState extends State<CommunityChatScreen>
     bool isArabic,
   ) async {
     HapticFeedback.selectionClick();
-    final confirmed = await showDialog<bool>(
+    final confirmed = await PlatformDialog.show(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: SocialTheme.of(context).surface,
-        title: Text(
-          'chat.delete.title'.tr,
-          style: TextStyle(
-            color: SocialTheme.of(context).textPrimary,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        content: Text(
-          'chat.delete.body'.tr,
-          style: TextStyle(color: SocialTheme.of(context).textMuted),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('common.cancel'.tr),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(
-              'common.delete'.tr,
-              style: const TextStyle(
-                color: Color(0xFFFF6B7A),
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ],
-      ),
+      title: 'chat.delete.title'.tr,
+      content: 'chat.delete.body'.tr,
+      cancelText: 'common.cancel'.tr,
+      confirmText: 'common.delete'.tr,
+      isDestructive: true,
     );
     if (confirmed != true) return;
 

@@ -112,28 +112,15 @@ class _MySubscriptionsScreenState extends State<MySubscriptionsScreen> {
   }
 
   Future<void> _confirmCancel(ExpertSubscription sub) async {
-    final ok = await showDialog<bool>(
+    final ok = await PlatformDialog.show(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('mySubscriptions.cancel.title'.tr),
-        content: Text(
-          sub.status == SubStatus.pending
-              ? 'mySubscriptions.cancel.bodyPending'.tr
-              : 'mySubscriptions.cancel.bodyActive'.tr,
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text('mySubscriptions.cancel.keep'.tr)),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(ctx).colorScheme.error,
-            ),
-            child: Text('mySubscriptions.cancel.confirm'.tr),
-          ),
-        ],
-      ),
+      title: 'mySubscriptions.cancel.title'.tr,
+      content: sub.status == SubStatus.pending
+          ? 'mySubscriptions.cancel.bodyPending'.tr
+          : 'mySubscriptions.cancel.bodyActive'.tr,
+      cancelText: 'mySubscriptions.cancel.keep'.tr,
+      confirmText: 'mySubscriptions.cancel.confirm'.tr,
+      isDestructive: true,
     );
     if (ok != true || !mounted) return;
 
