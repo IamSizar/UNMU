@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"halalstocks/internal/appenv"
 	"database/sql"
 	"fmt"
 	"halalstocks/internal/models"
@@ -10,7 +11,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
@@ -58,12 +58,11 @@ func (h *AuthHandler) sendVerificationEmail(to, name, code string) {
 }
 
 // devMode returns true when we're running the API locally and want to
-// expose verification codes in API responses (so testers don't need a real
-// SMTP server). Controlled by APP_ENV — anything other than "production"
-// counts as dev. Default is dev.
+// expose verification codes and reset tokens in API responses (so testers
+// don't need a real SMTP server). Only an explicit dev APP_ENV enables it;
+// unset counts as a real deploy (see appenv).
 func devMode() bool {
-	env := strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV")))
-	return env == "" || env != "production"
+	return appenv.IsDev()
 }
 
 type RegisterRequest struct {
@@ -584,7 +583,7 @@ type PasswordResetConfirm struct {
 // fishing for valid accounts gets identical responses for known and
 // unknown emails.
 //
-// In dev mode (APP_ENV != production) the response includes the raw token
+// In dev mode (APP_ENV=development) the response includes the raw token
 // so testers don't need an email server. In production the token only
 // travels via SMTP.
 func (h *AuthHandler) RequestPasswordReset(c *gin.Context) {

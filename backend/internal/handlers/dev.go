@@ -1,13 +1,13 @@
 package handlers
 
 import (
+	"halalstocks/internal/appenv"
 	"database/sql"
 	"fmt"
 	"halalstocks/internal/repositories"
 	"halalstocks/pkg/jwt"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -15,8 +15,8 @@ import (
 
 // DevHandler powers the "Switch account" surface in the Flutter app.
 //
-// Every route on this handler is GATED behind APP_ENV != "production".
-// In production they return 404 so a leak of these URLs is harmless.
+// Every route on this handler is GATED behind APP_ENV=development (or dev,
+// local, test). Anywhere else they return 404 so a leak of these URLs is harmless.
 // Locally they let testers list every account in the DB and impersonate
 // any of them (issue a JWT without a password) so the team can flip
 // between accounts in one tap.
@@ -29,11 +29,10 @@ func NewDevHandler(db *sql.DB, userRepo *repositories.UserRepository) *DevHandle
 	return &DevHandler{db: db, userRepo: userRepo}
 }
 
-// isDev mirrors handlers/auth.go devMode(). Anything other than "production"
-// counts as dev (including unset).
+// isDev mirrors handlers/auth.go devMode(): only an explicit dev APP_ENV
+// opens these routes; unset counts as a real deploy (see appenv).
 func isDev() bool {
-	env := strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV")))
-	return env != "production"
+	return appenv.IsDev()
 }
 
 // guardDev sends a 404 when running in production and returns false. Caller

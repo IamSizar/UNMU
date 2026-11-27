@@ -6,6 +6,7 @@ import (
 	"halalstocks/internal/db"
 	"halalstocks/internal/handlers"
 	"halalstocks/internal/marketdata"
+	"halalstocks/internal/appenv"
 	"halalstocks/internal/middleware"
 	"halalstocks/internal/pulse"
 	"halalstocks/internal/realtime"
@@ -337,7 +338,14 @@ func main() {
 		log.Printf("[social-push] enabled — likes/comments/new posts push to recipients")
 	}
 	pgListener.Start(context.Background())
-	realtimeHandler := handlers.NewRealtimeHandler(hub, userRepo, socialRepo)
+	corsAllowAny := appenv.IsDev() && len(cfg.CORSAllowedOrigins) == 0
+	if !corsAllowAny && len(cfg.CORSAllowedOrigins) == 0 {
+		log.Printf("[cors] CORS_ALLOWED_ORIGINS is empty: browsers (the admin dashboard) cannot call this API")
+	}
+	originAllowed := func(origin string) bool {
+		return middleware.OriginAllowed(origin, cfg.CORSAllowedOrigins, corsAllowAny)
+	}
+	realtimeHandler := handlers.NewRealtimeHandler(hub, userRepo, socialRepo, originAllowed)
 	// Now that the hub exists, attach it to the social handler so
 	// community join/leave can broadcast member-count patches.
 	socialHandler.SetHub(hub)
@@ -464,20 +472,9 @@ func main() {
 	// Compression middleware (gzip responses)
 	router.Use(middleware.CompressionMiddleware())
 
-	// CORS middleware
-	router.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, PATCH, DELETE")
-
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
-			return
-		}
-
-		c.Next()
-	})
+	// CORS: only the origins in CORS_ALLOWED_ORIGINS (the dashboard); any
+	// origin only on a dev deploy with no list set.
+	router.Use(middleware.CORS(cfg.CORSAllowedOrigins, corsAllowAny))
 
 	// Static serving for user-uploaded reel videos + cover images. Files
 	// land here via POST /api/me/uploads/(video|image) and are served
@@ -516,18 +513,20 @@ func main() {
 		// disabled features (e.g. the Community tab when communities are off).
 		api.GET("/app-config", adminSettingsHandler.Get)
 
-		// Auth (no caching)
-		api.POST("/auth/register", authHandler.Register)
-		api.POST("/auth/login", authHandler.Login)
+		// Auth (no caching). Rate-limited per client: 10 attempts at once,
+		// then one every 6 s, against credential stuffing / code guessing.
+		authLimit := middleware.NewRateLimiter(10, 6*time.Second).Middleware()
+		api.POST("/auth/register", authLimit, authHandler.Register)
+		api.POST("/auth/login", authLimit, authHandler.Login)
 		// Email-first onboarding (no verification step). The mobile app
 		// uses check-email to branch login vs create-account, then signup
 		// to create an immediately-verified account + JWT. Replaces the
 		// register + verify-email pair (those stay registered, but unused).
-		api.POST("/auth/check-email", authHandler.CheckEmail)
-		api.POST("/auth/signup", authHandler.Signup)
+		api.POST("/auth/check-email", authLimit, authHandler.CheckEmail)
+		api.POST("/auth/signup", authLimit, authHandler.Signup)
 		// Email verification (migration 0026). In dev mode the codes are
 		// returned in the API response + logged to stdout — no SMTP needed.
-		api.POST("/auth/verify-email", authHandler.VerifyEmail)
+		api.POST("/auth/verify-email", authLimit, authHandler.VerifyEmail)
 
 		// Firebase OAuth (migration 0031). Mobile sends a Firebase
 		// idToken obtained via Google or Apple sign-in; backend verifies
@@ -535,23 +534,23 @@ func main() {
 		if firebaseAuthHandler != nil {
 			api.POST("/auth/oauth/firebase", firebaseAuthHandler.OAuth)
 		}
-		api.POST("/auth/resend-code", authHandler.ResendCode)
+		api.POST("/auth/resend-code", authLimit, authHandler.ResendCode)
 
 		// Forgot password (migration 0034). Request mints a one-time
 		// token, hashes it, emails the raw token to the user. Confirm
 		// consumes the token and updates the password. Both endpoints
 		// return generic 200s for unknown emails so attackers can't
 		// enumerate accounts.
-		api.POST("/auth/password-reset/request", authHandler.RequestPasswordReset)
-		api.POST("/auth/password-reset/confirm", authHandler.ConfirmPasswordReset)
+		api.POST("/auth/password-reset/request", authLimit, authHandler.RequestPasswordReset)
+		api.POST("/auth/password-reset/confirm", authLimit, authHandler.ConfirmPasswordReset)
 
-		// Dev-only switcher routes. Gated inside the handler by
-		// APP_ENV != "production" — they return 404 in real deploys.
+		// Dev-only switcher routes. Gated inside the handler: they work only
+		// with APP_ENV=development (or dev/local/test) and 404 elsewhere.
 		// Used by the Flutter "Switch account" sheet so testers can
 		// list every account in the DB and impersonate any of them
 		// in one tap.
 		api.GET("/dev/users", devHandler.ListUsers)
-		api.POST("/dev/impersonate", devHandler.Impersonate)
+		api.POST("/dev/impersonate", authLimit, devHandler.Impersonate)
 		// Wipes every user-generated row except admin (id=1000). Requires
 		// the X-Confirm: yes-wipe-everything header on top of the dev
 		// gate. Reference data (stocks, shariah, ads) is preserved.

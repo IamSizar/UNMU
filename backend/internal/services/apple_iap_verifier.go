@@ -34,8 +34,17 @@ type AppleIAPVerifier struct {
 	sharedSecret string
 	prodURL      string
 	sandboxURL   string
-	httpClient   *http.Client
+	// bundleID is the app the receipt must belong to. Apple's verifyReceipt
+	// accepts ANY app's valid receipt, so without this check a receipt from
+	// another app (with a matching product id) could unlock subscriptions.
+	// Always set by NewAppleIAPVerifier; empty only in older unit tests.
+	bundleID   string
+	httpClient *http.Client
 }
+
+// defaultAppleBundleID is the iOS app's bundle id (ios/Runner.xcodeproj).
+// Override with APPLE_BUNDLE_ID if the app is ever re-published.
+const defaultAppleBundleID = "com.easytech.stocksanalyzer"
 
 // NewAppleIAPVerifier — soft-fails to nil when the shared secret is unset.
 func NewAppleIAPVerifier() *AppleIAPVerifier {
@@ -51,11 +60,17 @@ func NewAppleIAPVerifier() *AppleIAPVerifier {
 	if sandboxURL == "" {
 		sandboxURL = "https://sandbox.itunes.apple.com/verifyReceipt"
 	}
-	log.Printf("[apple-iap] verifier configured (prod=%s sandbox=%s)", prodURL, sandboxURL)
+	bundleID := strings.TrimSpace(os.Getenv("APPLE_BUNDLE_ID"))
+	if bundleID == "" {
+		bundleID = defaultAppleBundleID
+	}
+	log.Printf("[apple-iap] verifier configured (prod=%s sandbox=%s bundle=%s)",
+		prodURL, sandboxURL, bundleID)
 	return &AppleIAPVerifier{
 		sharedSecret: secret,
 		prodURL:      prodURL,
 		sandboxURL:   sandboxURL,
+		bundleID:     bundleID,
 		httpClient:   &http.Client{Timeout: 15 * time.Second},
 	}
 }
@@ -112,6 +127,10 @@ func (v *AppleIAPVerifier) VerifyReceipt(
 			resp.Status, env,
 			"https://developer.apple.com/documentation/appstorereceipts/status")
 		return nil, fmt.Errorf("apple-iap: verification failed (status %d)", resp.Status)
+	}
+	if v.bundleID != "" && resp.Receipt.BundleID != v.bundleID {
+		log.Printf("[apple-iap] receipt bundle %q does not match %q", resp.Receipt.BundleID, v.bundleID)
+		return nil, fmt.Errorf("apple-iap: receipt belongs to another app")
 	}
 
 	txn, err := pickLatestTransaction(resp, expectedProductID)
@@ -181,7 +200,8 @@ type appleVerifyResponse struct {
 }
 
 type appleVerifyReceiptInner struct {
-	InApp []appleVerifyTransaction `json:"in_app"`
+	BundleID string                   `json:"bundle_id"`
+	InApp    []appleVerifyTransaction `json:"in_app"`
 }
 
 type appleVerifyTransaction struct {
