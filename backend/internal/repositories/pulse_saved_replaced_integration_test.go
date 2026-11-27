@@ -77,4 +77,54 @@ func TestPulseSavedSurvivesReplacement(t *testing.T) {
 	if _, err := reader.Item(ctx, readerID, takenDown); err != ErrPulseNotFound {
 		t.Errorf("taken-down item opens: err=%v", err)
 	}
+
+	// Review of PR #5 ↓
+
+	t.Run("replacement is recorded as a link, not note text", func(t *testing.T) {
+		old, err := f.repo.Get(ctx, first)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if old.ReplacedBy == nil || *old.ReplacedBy != second {
+			t.Fatalf("ReplacedBy = %v, want %d", old.ReplacedBy, second)
+		}
+	})
+
+	t.Run("a takedown note that looks like a replacement note does not count", func(t *testing.T) {
+		spoof := publish(d, "opportunity")
+		if err := reader.Save(ctx, readerID, spoof); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.apply(spoof, f.approver, pulse.DoArchive,
+			PulseApplyOptions{Note: ReplacedNotePrefix + "1"}); err != nil {
+			t.Fatal(err)
+		}
+		if savedIDs()[spoof] {
+			t.Error("item archived with a look-alike note is still in Saved")
+		}
+	})
+
+	t.Run("only users who saved a replaced item can open it", func(t *testing.T) {
+		otherID := f.reviewer.UserID // never saved it
+		if _, err := reader.Item(ctx, otherID, first); err != ErrPulseNotFound {
+			t.Errorf("non-saver opened a replaced item: err=%v", err)
+		}
+	})
+
+	t.Run("a replaced item can be taken down, once", func(t *testing.T) {
+		if _, err := f.apply(first, f.approver, pulse.DoArchive,
+			PulseApplyOptions{Note: "legal request"}); err != nil {
+			t.Fatalf("taking down a replaced item: %v", err)
+		}
+		if savedIDs()[first] {
+			t.Error("taken-down replaced item still in Saved")
+		}
+		if _, err := reader.Item(ctx, readerID, first); err != ErrPulseNotFound {
+			t.Errorf("taken-down replaced item opens: err=%v", err)
+		}
+		_, err := f.apply(first, f.approver, pulse.DoArchive, PulseApplyOptions{})
+		if ruleKind(err) != "state" {
+			t.Errorf("second takedown: %s, want state error", ruleKind(err))
+		}
+	})
 }

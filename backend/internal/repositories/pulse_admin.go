@@ -52,7 +52,7 @@ SELECT i.id, to_char(i.pulse_date, 'YYYY-MM-DD'), i.slot, i.classification,
        s.id, s.ticker, s.exchange, s.name,
        i.version, i.change_kind, i.last_changed_at, i.publish_at, i.published_at,
        i.created_by, i.reviewed_by, i.reviewed_at, i.approved_by, i.approved_at,
-       i.created_at, i.updated_at
+       i.created_at, i.updated_at, i.replaced_by
   FROM pulse_items i
   LEFT JOIN stocks s ON s.id = i.stock_id`
 
@@ -80,6 +80,7 @@ func scanPulseAdminItem(row rowScanner) (models.PulseAdminItem, error) {
 		reviewedAt, approvedAt                 sql.NullTime
 		changeKind, sTicker, sExchange, sName  sql.NullString
 		sID, createdBy, reviewedBy, approvedBy sql.NullInt64
+		replacedBy                             sql.NullInt64
 	)
 	err := row.Scan(
 		&it.ID, &it.PulseDate, &it.Slot, &it.Classification, &it.Status, &it.IsSensitive,
@@ -89,7 +90,7 @@ func scanPulseAdminItem(row rowScanner) (models.PulseAdminItem, error) {
 		&sID, &sTicker, &sExchange, &sName,
 		&it.Version, &changeKind, &changedAt, &publishAt, &pubAt,
 		&createdBy, &reviewedBy, &reviewedAt, &approvedBy, &approvedAt,
-		&it.CreatedAt, &it.UpdatedAt,
+		&it.CreatedAt, &it.UpdatedAt, &replacedBy,
 	)
 	if err != nil {
 		return it, err
@@ -98,6 +99,7 @@ func scanPulseAdminItem(row rowScanner) (models.PulseAdminItem, error) {
 	it.PublishAt, it.PublishedAt = timePtr(publishAt), timePtr(pubAt)
 	it.ReviewedAt, it.ApprovedAt = timePtr(reviewedAt), timePtr(approvedAt)
 	it.CreatedBy, it.ReviewedBy, it.ApprovedBy = int64Ptr(createdBy), int64Ptr(reviewedBy), int64Ptr(approvedBy)
+	it.ReplacedBy = int64Ptr(replacedBy)
 	if changeKind.Valid {
 		it.ChangeKind = &changeKind.String
 	}

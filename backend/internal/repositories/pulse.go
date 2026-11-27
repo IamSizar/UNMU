@@ -57,15 +57,13 @@ SELECT i.id, to_char(i.pulse_date, 'YYYY-MM-DD'), i.slot, i.classification,
  WHERE i.status = 'published'`
 
 // pulseSelectSaveable is pulseSelect widened to items REPLACED in their slot
-// by a newer item (archived by the publish step, see ReplacedNotePrefix).
-// Used only where a user reaches an item they already have: Saved and item
-// detail. Items an approver took down on purpose stay hidden.
+// by a newer item (replaced_by set by the publish step, migration 0058) —
+// and only for a user who saved that item ($1, via the sv join). Used for
+// Saved and item detail. Items taken down on purpose stay hidden.
 var pulseSelectSaveable = strings.Replace(pulseSelect,
 	`WHERE i.status = 'published'`,
-	`WHERE (i.status = 'published' OR (i.status = 'archived' AND EXISTS (
-	   SELECT 1 FROM pulse_item_events e
-	    WHERE e.item_id = i.id AND e.action = 'archived'
-	      AND e.note LIKE '`+ReplacedNotePrefix+`%')))`, 1)
+	`WHERE (i.status = 'published' OR (i.status = 'archived'
+	   AND i.replaced_by IS NOT NULL AND sv.id IS NOT NULL))`, 1)
 
 // pulseSlotOrder sorts the four slots in display order.
 const pulseSlotOrder = `array_position(ARRAY['global','gulf','sharia','opportunity'], i.slot)`

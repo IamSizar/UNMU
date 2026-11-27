@@ -198,8 +198,10 @@ var actionRules = map[string]pulseRule{
 	DoSchedule:   {[]string{models.PulseStatusApproved}, []string{models.PulseRoleApprover}, false},
 	DoUnschedule: {[]string{models.PulseStatusScheduled}, []string{models.PulseRoleApprover}, false},
 	DoPublish:    {[]string{models.PulseStatusApproved, models.PulseStatusScheduled}, []string{models.PulseRoleApprover}, false},
-	DoArchive:    {[]string{models.PulseStatusPublished}, []string{models.PulseRoleApprover}, false},
-	DoCorrect:    {[]string{models.PulseStatusPublished}, []string{models.PulseRoleApprover}, false},
+	// From archived only to take down a REPLACED item (see CheckAction).
+	DoArchive: {[]string{models.PulseStatusPublished, models.PulseStatusArchived},
+		[]string{models.PulseRoleApprover}, false},
+	DoCorrect: {[]string{models.PulseStatusPublished}, []string{models.PulseRoleApprover}, false},
 	DoProposeCorrection: {[]string{models.PulseStatusPublished},
 		[]string{models.PulseRoleEditor, models.PulseRoleApprover}, false},
 }
@@ -222,6 +224,9 @@ func CheckAction(action string, it models.PulseAdminItem, actor Actor) error {
 	}
 	if !contains(rule.from, it.Status) {
 		return ruleErr("state", "This item is %s, so \"%s\" is not possible right now", it.Status, action)
+	}
+	if action == DoArchive && it.Status == models.PulseStatusArchived && it.ReplacedBy == nil {
+		return ruleErr("state", "This item is already taken down")
 	}
 	allowed := false
 	for _, role := range rule.anyOfRoles {

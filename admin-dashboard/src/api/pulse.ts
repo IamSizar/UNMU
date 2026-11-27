@@ -68,6 +68,9 @@ export interface PulseItem extends Omit<PulseItemInput, 'stockId'> {
   reviewedAt: string | null
   approvedBy: number | null
   approvedAt: string | null
+  /** Set when a newer item replaced this one in its slot (still in savers'
+   *  Saved lists until taken down with 'archive'). */
+  replacedBy: number | null
   createdAt: string
   updatedAt: string
 }
