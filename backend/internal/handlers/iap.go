@@ -23,6 +23,9 @@ type IAPHandler struct {
 	appleTxRepo   *repositories.AppleIAPTransactionRepository
 	expertSubRepo *repositories.ExpertSubscriptionRepository
 	userRepo      *repositories.UserRepository
+	// Google Play (wired by SetGooglePlay; nil → 503).
+	googleVerifier *services.GooglePlayVerifier
+	googleRepo     *repositories.GooglePlayPurchaseRepository
 }
 
 func NewIAPHandler(
@@ -137,42 +140,8 @@ func (h *IAPHandler) VerifyApple(c *gin.Context) {
 		return
 	}
 
-	// Expert subscription: the expert comes from the verified SKU.
-	if expertID := expertIDFromProductID(verified.ProductID); expertID != "" {
-		if err := h.activateExpertSubscription(userID, expertID, verified, tx.ID); err != nil &&
-			!errors.Is(err, repositories.ErrActiveSubExists) {
-			log.Printf("[apple-iap] expert sub not activated (user %d, product %s): %v",
-				userID, verified.ProductID, err)
-		}
-	}
-	// proActivated distinguishes "not a Pro SKU" from "was a Pro SKU but
-	// activation failed" from "activated successfully", so the Flutter
-	// client can tell the difference instead of assuming success just
-	// because the HTTP call returned 200 — a verified-but-unactivated
-	// purchase should prompt a retry, not silently show as Premium only
-	// after the user happens to reload.
-	var proActivated *bool
-	if isProProductID(verified.ProductID) {
-		// The general app-wide Pro tier — see activateProSubscription's
-		// doc comment. This was the one gap that made the whole feature a
-		// no-op end to end: the Flutter purchase screen and the real IAP
-		// wiring both already existed, but nothing on this side ever
-		// called UserRepository.UpdateSubscription, so a completed
-		// purchase never actually granted Premium.
-		ok := true
-		if err := h.activateProSubscription(userID, verified); err != nil {
-			ok = false
-			// Best-effort, matching activateExpertSubscription's pattern:
-			// the payment is already verified and the transaction is
-			// already persisted above, so we don't fail the whole request
-			// over an entitlement-write error — but it IS worth knowing
-			// about, since it means a paying user doesn't get Premium.
-			services.CaptureError(err, map[string]string{
-				"handler": "iap.VerifyApple", "stage": "activate_pro",
-			})
-		}
-		proActivated = &ok
-	}
+	proActivated := h.grantEntitlements(userID, appleEntitlement(verified),
+		models.PaymentMethodAppleIAP, "apple_iap:"+intToStr(tx.ID))
 
 	response := gin.H{
 		"id":            tx.ID,
@@ -189,41 +158,34 @@ func (h *IAPHandler) VerifyApple(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// activateExpertSubscription is best-effort. The cash/FIB flow already
-// creates a "pending" expert_subscription row that admin approves; the
-// IAP flow short-circuits that — Apple verified the payment, so the sub
-// is immediately active.
-//
-// If no pending subscription exists yet, the client is expected to also
-// POST /experts/:id/subscriptions with paymentMethod=apple_iap (which
-// will reference this transaction). We don't auto-create one here to
-// keep the data model simple.
+// activateExpertSubscription activates (or, on renewal, extends) the
+// user's subscription to expertID. The cash/FIB flow creates a "pending"
+// row that an admin approves; a store purchase is already paid, so the sub
+// is immediately active. paymentRef points at the stored store record
+// ("apple_iap:<row id>" / "google_play:<row id>") for the admin dashboard.
 func (h *IAPHandler) activateExpertSubscription(
 	userID int64,
 	expertID string,
-	verified *services.AppleVerifiedTransaction,
-	appleTxRowID int64,
+	e storeEntitlement,
+	paymentMethod, paymentRef string,
 ) error {
-	// Same rule as Premium: an expired (or expiry-less) receipt must not
+	// Same rule as Premium: an expired (or expiry-less) purchase must not
 	// re-activate a subscription.
-	if err := requireCurrentSubscription(verified); err != nil {
+	if err := requireCurrentSubscription(e); err != nil {
 		return err
 	}
 	// Map product → plan. Convention: SKUs end in ".monthly" / ".yearly".
 	plan := models.PlanMonthly
-	if strings.HasSuffix(strings.ToLower(verified.ProductID), ".yearly") {
+	if strings.HasSuffix(strings.ToLower(e.ProductID), ".yearly") {
 		plan = models.PlanYearly
 	}
-	// We use payment_ref to carry the apple transaction PK so the admin
-	// dashboard can drill in. Format: "apple_iap:<row id>".
-	paymentRef := "apple_iap:" + intToStr(appleTxRowID)
 	return h.expertSubRepo.ActivateFromIAP(
 		userID, expertID,
 		string(plan),
-		models.PaymentMethodAppleIAP,
+		paymentMethod,
 		paymentRef,
-		verified.PurchaseDate,
-		verified.ExpiresDate,
+		e.PurchaseDate,
+		e.ExpiresDate,
 	)
 }
 
@@ -269,24 +231,24 @@ func isProProductID(productID string) bool {
 // endpoint again; until that exists, entitlement freshness depends on
 // the client re-verifying periodically, not on the backend knowing
 // proactively.
-func (h *IAPHandler) activateProSubscription(userID int64, verified *services.AppleVerifiedTransaction) error {
-	if err := requireCurrentSubscription(verified); err != nil {
+func (h *IAPHandler) activateProSubscription(userID int64, e storeEntitlement) error {
+	if err := requireCurrentSubscription(e); err != nil {
 		return err
 	}
-	return h.userRepo.UpdateSubscription(userID, "PREMIUM", "ACTIVE", verified.ExpiresDate)
+	return h.userRepo.UpdateSubscription(userID, "PREMIUM", "ACTIVE", e.ExpiresDate)
 }
 
 // requireCurrentSubscription refuses a receipt whose subscription has
 // expired, or whose expiry Apple did not report (every UNMU product is a
 // subscription, so a missing expiry means we cannot tell it is current).
 // Without it, an old receipt could be replayed to re-grant access forever.
-func requireCurrentSubscription(verified *services.AppleVerifiedTransaction) error {
-	if verified.ExpiresDate == nil {
-		return fmt.Errorf("apple-iap: receipt for product %s has no expiry date", verified.ProductID)
+func requireCurrentSubscription(e storeEntitlement) error {
+	if e.ExpiresDate == nil {
+		return fmt.Errorf("iap: purchase of %s has no expiry date", e.ProductID)
 	}
-	if verified.ExpiresDate.Before(timeNow()) {
-		return fmt.Errorf("apple-iap: receipt for product %s expired at %s",
-			verified.ProductID, verified.ExpiresDate.Format(time.RFC3339))
+	if e.ExpiresDate.Before(timeNow()) {
+		return fmt.Errorf("iap: purchase of %s expired at %s",
+			e.ProductID, e.ExpiresDate.Format(time.RFC3339))
 	}
 	return nil
 }

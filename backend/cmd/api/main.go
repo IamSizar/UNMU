@@ -272,6 +272,10 @@ func main() {
 	}
 	appleIAPRepo := repositories.NewAppleIAPTransactionRepository(database)
 	iapHandler := handlers.NewIAPHandler(appleIAPVerifier, appleIAPRepo, expertSubRepo, userRepo)
+	// Google Play subscriptions (mig 0061). Nil verifier when no service
+	// account is configured; /me/iap/google/verify then answers 503.
+	iapHandler.SetGooglePlay(services.NewGooglePlayVerifier(context.Background()),
+		repositories.NewGooglePlayPurchaseRepository(database))
 	// Reel videos + cover images upload here. When AWS_S3_BUCKET is set
 	// the bytes stream straight to S3 and the response URL is a pre-
 	// signed GET; otherwise the handler falls back to the original
@@ -935,6 +939,7 @@ func main() {
 		// and optionally flips the matching expert subscription to active.
 		// Returns 503 when APPLE_IAP_SHARED_SECRET isn't configured.
 		protected.POST("/me/iap/apple/verify", iapHandler.VerifyApple)
+		protected.POST("/me/iap/google/verify", iapHandler.VerifyGoogle)
 
 		// Abuse / safety reports (mig 0036). User-facing report submission
 		// + their own report history.

@@ -3,8 +3,6 @@ package handlers
 import (
 	"testing"
 	"time"
-
-	"halalstocks/internal/services"
 )
 
 // Expert SKUs are com.unmu.expert.<expertId>.<plan>; the backend must read
@@ -47,13 +45,13 @@ func TestCheckVerifyRequest(t *testing.T) {
 func TestRequireCurrentSubscription(t *testing.T) {
 	past := time.Now().Add(-time.Hour)
 	future := time.Now().Add(time.Hour)
-	if err := requireCurrentSubscription(&services.AppleVerifiedTransaction{ExpiresDate: &past}); err == nil {
+	if err := requireCurrentSubscription(storeEntitlement{ExpiresDate: &past}); err == nil {
 		t.Error("expired receipt accepted")
 	}
-	if err := requireCurrentSubscription(&services.AppleVerifiedTransaction{}); err == nil {
+	if err := requireCurrentSubscription(storeEntitlement{}); err == nil {
 		t.Error("receipt without expiry accepted")
 	}
-	if err := requireCurrentSubscription(&services.AppleVerifiedTransaction{ExpiresDate: &future}); err != nil {
+	if err := requireCurrentSubscription(storeEntitlement{ExpiresDate: &future}); err != nil {
 		t.Errorf("current receipt refused: %v", err)
 	}
 }

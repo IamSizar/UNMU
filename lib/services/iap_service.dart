@@ -277,6 +277,31 @@ class IAPService extends GetxService {
     }
   }
 
+  /// The backend verify call for this platform, or null where purchases
+  /// cannot be verified. iOS sends the App Store receipt; Android sends the
+  /// Google Play purchase token (serverVerificationData on Android).
+  @visibleForTesting
+  static ({Uri uri, Map<String, dynamic> body})? verifyRequestFor({
+    required bool isIOS,
+    required bool isAndroid,
+    required String baseUrl,
+    required String storeData,
+    required String productId,
+    String? expertId,
+  }) {
+    if (!isIOS && !isAndroid) return null;
+    return (
+      uri: Uri.parse(isIOS
+          ? '$baseUrl/me/iap/apple/verify'
+          : '$baseUrl/me/iap/google/verify'),
+      body: {
+        isIOS ? 'receiptData' : 'purchaseToken': storeData,
+        'productId': productId,
+        if (expertId != null && expertId.isNotEmpty) 'expertId': expertId,
+      },
+    );
+  }
+
   Future<IAPVerificationResult> _verifyWithBackend(
     PurchaseDetails p,
     String? expertId,
@@ -296,12 +321,15 @@ class IAPService extends GetxService {
       );
     }
 
-    // Today we only support Apple; once a Google handler exists, fork
-    // on Platform.isAndroid.
-    final endpoint = Platform.isIOS
-        ? '${ApiConfig.baseUrl}/me/iap/apple/verify'
-        : null;
-    if (endpoint == null) {
+    final request = verifyRequestFor(
+      isIOS: Platform.isIOS,
+      isAndroid: Platform.isAndroid,
+      baseUrl: ApiConfig.baseUrl,
+      storeData: receipt,
+      productId: p.productID,
+      expertId: expertId,
+    );
+    if (request == null) {
       return const IAPVerificationResult(
         ok: false,
         error: 'Verification is not yet supported on this platform.',
@@ -311,16 +339,12 @@ class IAPService extends GetxService {
     try {
       final response = await http
           .post(
-            Uri.parse(endpoint),
+            request.uri,
             headers: {
               'Content-Type': 'application/json',
               'Authorization': 'Bearer $authToken',
             },
-            body: json.encode({
-              'receiptData': receipt,
-              'productId': p.productID,
-              if (expertId != null && expertId.isNotEmpty) 'expertId': expertId,
-            }),
+            body: json.encode(request.body),
           )
           .timeout(const Duration(seconds: 20));
 
