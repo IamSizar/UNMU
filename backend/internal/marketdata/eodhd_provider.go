@@ -123,7 +123,7 @@ func (p *EODHDProvider) FetchFundamentalsBatch(tickers []string) ([]Fundamentals
 		url := fmt.Sprintf("https://eodhd.com/api/fundamentals/%s?api_token=%s", symbol, p.APIKey)
 		resp, err := p.Client.Get(url)
 		if err != nil {
-			fmt.Printf("[eodhd] fetch %s (%s) failed: %v\n", ticker, symbol, err)
+			fmt.Printf("[eodhd] fetch %s (%s) failed: %v\n", ticker, symbol, withoutURL(err))
 			continue
 		}
 		body, _ := io.ReadAll(resp.Body)
@@ -287,7 +287,7 @@ func (p *EODHDProvider) fetchIndexEOD(eodhdSym string) ([]eodhdEODPoint, error) 
 		eodhdSym, p.APIKey, from)
 	resp, err := p.Client.Get(url)
 	if err != nil {
-		return nil, err
+		return nil, withoutURL(err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {

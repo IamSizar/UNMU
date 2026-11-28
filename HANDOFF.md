@@ -5,6 +5,46 @@ context: read this before planning any work here.
 
 ---
 
+## 2026-11-28 (later) — Daily screening refresh + AI-drafted Pulse (PR #7, branch `feat/pulse-autodraft`; STAGING deployed, production NOT)
+
+**Asked for:** Pulse "automate it and make it fetch daily news", then "go ahead all approved and agreed lets buld this". The plan and test list are in `docs/pulse/AUTODRAFT.md`. The Phase 3 public API product is NOT built: it waits on the EODHD redistribution licence and a Sharia sign-off.
+
+**What changed (`00f5a11`):**
+- **Daily job runner** (`services/daily_jobs.go`, migration **0062** `job_runs`): it runs each job once per UTC day across replicas, with up to 3 attempts a day and takeover of a stale run. Admin endpoints: `GET /api/admin/jobs` and `POST /api/admin/jobs/:name/run`.
+- **Screening refresh:** the `cmd/ingest_eodhd` loop moved to `services/screening_refresh.go`. The command keeps the same behaviour and log lines.
+- **EODHD news fetcher** (`marketdata/eodhd_news.go`).
+- **Pulse auto-draft** (`services/pulse_autodraft*.go`, `pulse_claude.go`): Claude `claude-opus-5-5` with structured output and the server-side refusal fallback, effort medium, one call a day. Picks are saved as drafts with no author (`created_by` NULL) and the change-log note "auto-draft from news"; editors still verify, review and approve.
+- **New env vars, all off by default:** `DAILY_SCREENING_ENABLED`, `DAILY_SCREENING_HOUR_UTC` (2), `PULSE_AUTODRAFT_ENABLED`, `PULSE_AUTODRAFT_HOUR_UTC` (3), `PULSE_AUTODRAFT_MODEL`, `ANTHROPIC_API_KEY`.
+
+**Verified:**
+- `go vet ./...` is clean; `PULSE_TEST_DSN=... go test ./...` all passes. New tests are listed in AUTODRAFT.md.
+- **Local API** (`unmu_pulse_dev`, EODHD `demo` key):
+  - `GET /admin/jobs` lists both jobs.
+  - An unknown job returns 404.
+  - `screening_refresh` ran with 0 refreshed and 2 skipped; the local stocks are not covered by EODHD.
+  - `pulse_autodraft` failed cleanly: the demo key gets 403 on the general feed. The failure is recorded in `job_runs`.
+- **Not run for real:** the Claude call. The shell's `ANTHROPIC_API_KEY` is rejected (401). The first real run needs a valid key.
+
+**Traps:**
+- EODHD news takes ONE ticker per request (`s=A,B` returns 422). The demo key only covers a few US tickers and returns 403 on the general feed.
+- Gulf names are not in `eodhdSymbolMap`, so the gulf slot will often be empty.
+- `pulse_item_versions.reason` only allows create/edit/update/correction, so auto-drafts use `create`.
+
+**Staging (done, Zaid approved "push it and deploy"):**
+- Migration 0062 applied.
+- Set `DAILY_SCREENING_ENABLED=true`, `DAILY_SCREENING_HOUR_UTC=0` and `PULSE_AUTODRAFT_ENABLED=true`.
+- `railway up` deployment `f6dd010a` succeeded; health returns 200.
+- The job ran on start-up and `job_runs` shows `screening_refresh | succeeded | 0 refreshed, 1 skipped`. Staging has only 1 test stock, which EODHD doesn't cover.
+- Auto-draft logged "ANTHROPIC_API_KEY not set: auto-draft off", as designed.
+- `/api/admin/jobs` without auth returns 401.
+
+**To deploy (needs Zaid's go):**
+1. Apply 0062 to staging, then to production.
+2. Set `ANTHROPIC_API_KEY`, and set `DAILY_SCREENING_ENABLED=true` and `PULSE_AUTODRAFT_ENABLED=true` on the backend.
+3. Deploy, then watch `GET /api/admin/jobs` the next morning.
+
+---
+
 ## 2026-11-28 — DEPLOYED to staging and production (main `6e4afe9`)
 
 **Asked for:** "push it and update the PR", "upgrade gradle to 8.14", "draft" the privacy manifest, then "deploy all". Zaid approved each production step in chat (migrations: "You run them"; CORS + merges: "Yes, deploy").
