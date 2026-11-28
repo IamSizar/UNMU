@@ -23,6 +23,7 @@ import '../social/expert_profile_screen.dart';
 import '../social/social_tokens.dart';
 import 'reels_immersive_view.dart';
 import '../../widgets/profile_avatar_button.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Bottom-nav **Feed** tab — every post from every expert the user has an
 /// active subscription to, newest-first. Filter chips switch between All /
@@ -100,8 +101,7 @@ class FeedScreen extends StatelessWidget {
                   return const Center(
                     child: Padding(
                       padding: EdgeInsets.all(40),
-                      child: CircularProgressIndicator(
-                          color: SocialTokens.cyan),
+                      child: PlatformSpinner(color: SocialTokens.cyan),
                     ),
                   );
                 }

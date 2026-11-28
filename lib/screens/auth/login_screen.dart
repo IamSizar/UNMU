@@ -13,6 +13,7 @@ import '../../utils/responsive.dart';
 import '../../widgets/auth/auth_widgets.dart';
 import '../../widgets/dismiss_keyboard_on_tap.dart';
 import '../../widgets/social/test_account_switcher.dart';
+import 'forgot_password_screen.dart';
 
 /// =============================================================================
 /// Login Screen — one screen: email + password + Apple/Google.
@@ -71,6 +72,14 @@ class _LoginScreenState extends State<LoginScreen> {
     _email.dispose();
     _password.dispose();
     super.dispose();
+  }
+
+  void _openForgotPassword() {
+    final email = _email.text.trim();
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) =>
+          ForgotPasswordScreen(initialEmail: email.isEmpty ? null : email),
+    ));
   }
 
   // Email + password — LOGIN ONLY. checkEmail first so we can show the
@@ -174,7 +183,13 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final palette = SocialTheme.of(context);
     final auth = Get.find<AuthController>();
-    final shownError = _formError ?? auth.error;
+
+    // Obx: auth.isLoading / auth.error change while this screen is up (a
+    // failed login must stop the spinner and show the message).
+    return Obx(() {
+    final authError = auth.error;
+    final authLoading = auth.isLoading;
+    final shownError = _formError ?? authError;
 
     return Scaffold(
       backgroundColor: palette.background,
@@ -256,12 +271,19 @@ class _LoginScreenState extends State<LoginScreen> {
                           textInputAction: TextInputAction.done,
                           onSubmitted: (_) => _handleLogin(),
                         ),
-                        const SizedBox(height: 20),
+                        Align(
+                          alignment: AlignmentDirectional.centerEnd,
+                          child: TextButton(
+                            onPressed: _openForgotPassword,
+                            child: Text('auth.forgotPassword'.tr),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
                         GradientCTA(
                           label: 'auth.login.cta'.tr,
                           trailingIcon: Icons.arrow_forward_rounded,
                           enabled: _canSubmit,
-                          loading: auth.isLoading,
+                          loading: authLoading,
                           onPressed: () => _handleLogin(),
                         ),
                         const SizedBox(height: 22),
@@ -275,7 +297,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               SocialAuthButton(
                                 icon: Icons.apple_rounded,
                                 label: 'Apple',
-                                onPressed: auth.isLoading
+                                onPressed: authLoading
                                     ? null
                                     : () => _handleApple(),
                               ),
@@ -285,20 +307,19 @@ class _LoginScreenState extends State<LoginScreen> {
                               icon: Icons.g_mobiledata_rounded,
                               label: 'Google',
                               iconColor: const Color(0xFFEA4335),
-                              onPressed: auth.isLoading
+                              onPressed: authLoading
                                   ? null
                                   : () => _handleGoogle(),
                             ),
                           ],
                         ),
-                        // Test account quick-switch — visibility is
-                        // admin-controlled via the dashboard Settings toggle
+                        // Test account quick-switch — debug builds only, and
+                        // only when the dashboard Settings toggle is on
                         // (app-config `testAccountEnabled`). Hidden instantly
                         // when an admin turns it off.
                         Obx(() {
-                          final show = Get.find<AppConfigController>()
-                              .testAccountEnabled
-                              .value;
+                          final show =
+                              Get.find<AppConfigController>().showTestTools;
                           if (!show) return const SizedBox.shrink();
                           return Column(
                             children: [
@@ -309,7 +330,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     icon: Icons.science_rounded,
                                     label: 'auth.testAccount'.tr,
                                     iconColor: SocialTokens.gold,
-                                    onPressed: auth.isLoading
+                                    onPressed: authLoading
                                         ? null
                                         : _openTestPicker,
                                   ),
@@ -342,6 +363,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       ),
     );
+    });
   }
 }
 

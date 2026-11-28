@@ -176,8 +176,8 @@ class _PulseHomeScreenState extends State<PulseHomeScreen> {
     final day = _c.day.value;
     final failure = _c.failure.value;
 
-    if (day == null && failure == null) {
-      // First load in flight.
+    if (day == null && (failure == null || _c.loading.value)) {
+      // First load (or a Retry after a failed first load) in flight.
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -239,7 +239,10 @@ class _PulseHomeScreenState extends State<PulseHomeScreen> {
         _Header(title: 'pulse.today'.tr, subtitle: _dateLine(day)),
         if (_c.refreshFailed) ...[
           const SizedBox(height: PulseSpace.md),
-          _RefreshNotice(onRetry: () => _c.refreshToday()),
+          _RefreshNotice(
+            busy: _c.refreshing.value,
+            onRetry: () => _c.refreshToday(),
+          ),
         ],
         if (_showTip) ...[
           const SizedBox(height: PulseSpace.md),
@@ -316,7 +319,10 @@ class _Header extends StatelessWidget {
 class _RefreshNotice extends StatelessWidget {
   final VoidCallback onRetry;
 
-  const _RefreshNotice({required this.onRetry});
+  /// A Retry is running: show a spinner in place of the button.
+  final bool busy;
+
+  const _RefreshNotice({required this.onRetry, required this.busy});
 
   @override
   Widget build(BuildContext context) {
@@ -339,7 +345,17 @@ class _RefreshNotice extends StatelessWidget {
                 style: TextStyle(color: p.textSecondary, fontSize: 12.5),
               ),
             ),
-            TextButton(onPressed: onRetry, child: Text('pulse.error.retry'.tr)),
+            if (busy)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                child: SizedBox.square(
+                  key: ValueKey('pulse-refresh-spinner'),
+                  dimension: 16,
+                  child: CircularProgressIndicator.adaptive(strokeWidth: 2),
+                ),
+              )
+            else
+              TextButton(onPressed: onRetry, child: Text('pulse.error.retry'.tr)),
           ],
         ),
       ),

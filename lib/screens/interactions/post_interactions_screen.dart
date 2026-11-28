@@ -13,6 +13,8 @@ import '../../services/post_interaction_service.dart';
 import '../../services/realtime_service.dart';
 import '../../utils/haptic_utils.dart';
 import '../social/social_tokens.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_dialog.dart';
 
 /// Sarah's "who interacted with this post?" view.
 ///
@@ -127,25 +129,13 @@ class _PostInteractionsScreenState extends State<PostInteractionsScreen>
   }
 
   Future<void> _deleteComment(PostComment c) async {
-    final ok = await showDialog<bool>(
+    final ok = await PlatformDialog.show(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('interactions.deleteCommentTitle'.tr),
-        content: Text('interactions.deleteCommentBody'.tr),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('common.cancel'.tr),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFE65A6E),
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text('common.delete'.tr),
-          ),
-        ],
-      ),
+      title: 'interactions.deleteCommentTitle'.tr,
+      content: 'interactions.deleteCommentBody'.tr,
+      cancelText: 'common.cancel'.tr,
+      confirmText: 'common.delete'.tr,
+      isDestructive: true,
     );
     if (ok != true) return;
     final err = await PostInteractionService.deleteComment(
@@ -305,7 +295,7 @@ class _LikesTab extends StatelessWidget {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(40),
-          child: CircularProgressIndicator(color: SocialTokens.cyan),
+          child: PlatformSpinner(color: SocialTokens.cyan),
         ),
       );
     }
@@ -513,7 +503,7 @@ class _CommentsTab extends StatelessWidget {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(40),
-          child: CircularProgressIndicator(color: SocialTokens.cyan),
+          child: PlatformSpinner(color: SocialTokens.cyan),
         ),
       );
     }

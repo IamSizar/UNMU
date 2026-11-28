@@ -3,6 +3,8 @@
 // the controller and widget tests. Every call is recorded so tests can assert
 // what the app asked for; results are plain fields tests overwrite.
 // =============================================================================
+import 'dart:async';
+
 import 'package:halalstocks/models/pulse_item.dart';
 import 'package:halalstocks/services/pulse_service.dart';
 
@@ -21,9 +23,26 @@ class FakePulseApi implements PulseApi {
   final List<String> events = [];
   final List<String> calls = [];
 
+  /// When true, today() calls wait until the test completes them (in call
+  /// order) via [heldToday], so tests can interleave slow replies.
+  bool holdToday = false;
+  final List<Completer<PulseResult<PulseDay>>> heldToday = [];
+
+  /// When true, save()/unsave() wait for the test via [heldSaves].
+  bool holdSaves = false;
+  final List<Completer<bool>> heldSaves = [];
+
+  /// When set, saved() waits until the test completes it.
+  Completer<void>? savedGate;
+
   @override
   Future<PulseResult<PulseDay>> today() async {
     calls.add('today');
+    if (holdToday) {
+      final c = Completer<PulseResult<PulseDay>>();
+      heldToday.add(c);
+      return c.future;
+    }
     return todayResult;
   }
 
@@ -51,19 +70,27 @@ class FakePulseApi implements PulseApi {
   @override
   Future<PulseResult<PulsePage>> saved({int offset = 0, int limit = 30}) async {
     calls.add('saved offset=$offset');
+    await savedGate?.future;
     return savedResult;
   }
 
   @override
   Future<bool> save(int itemId) async {
     calls.add('save $itemId');
-    return saveOk;
+    return _held(saveOk);
   }
 
   @override
   Future<bool> unsave(int itemId) async {
     calls.add('unsave $itemId');
-    return unsaveOk;
+    return _held(unsaveOk);
+  }
+
+  Future<bool> _held(bool result) {
+    if (!holdSaves) return Future.value(result);
+    final c = Completer<bool>();
+    heldSaves.add(c);
+    return c.future;
   }
 
   @override

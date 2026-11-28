@@ -101,7 +101,7 @@ func TestVerifyReceipt_SandboxFallback(t *testing.T) {
 		httpClient:   &http.Client{Timeout: 5 * time.Second},
 	}
 
-	txn, err := v.VerifyReceipt(context.Background(), "base64-receipt", "")
+	txn, err := v.VerifyReceipt(context.Background(), "base64-receipt", "com.unmu.expert.x.monthly")
 	if err != nil {
 		t.Fatalf("VerifyReceipt error: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestVerifyReceipt_BadStatusErrors(t *testing.T) {
 		httpClient:   &http.Client{Timeout: 5 * time.Second},
 	}
 
-	if _, err := v.VerifyReceipt(context.Background(), "bad", ""); err == nil {
+	if _, err := v.VerifyReceipt(context.Background(), "bad", "com.unmu.premium.monthly"); err == nil {
 		t.Fatal("expected error for non-zero status, got nil")
 	}
 }
@@ -169,7 +169,7 @@ func TestVerifyReceipt_NoMatchingProduct(t *testing.T) {
 // error rather than panic.
 func TestVerifyReceipt_NilReceiver(t *testing.T) {
 	var v *AppleIAPVerifier
-	if _, err := v.VerifyReceipt(context.Background(), "r", ""); err == nil {
+	if _, err := v.VerifyReceipt(context.Background(), "r", "com.unmu.premium.monthly"); err == nil {
 		t.Fatal("expected error from nil verifier, got nil")
 	}
 }

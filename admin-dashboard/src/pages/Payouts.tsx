@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { api, ApiError } from '../api/client'
 import { useI18n } from '../i18n/I18nContext'
+import type { TranslationKey } from '../i18n/translations'
 import { fmtDate, fmtDateTime } from '../i18n/datefmt'
 
 // Wire shape mirrors backend repositories.Payout (mig 0042). Joined
@@ -60,14 +61,14 @@ const STATUS_STYLES: Record<Payout['status'], string> = {
   cancelled: 'text-slate-300 bg-slate-500/10 ring-1 ring-slate-500/30',
 }
 
-const STATUS_TKEY: Record<Payout['status'], string> = {
+const STATUS_TKEY: Record<Payout['status'], TranslationKey> = {
   pending: 'payouts.status.pending',
   paid: 'payouts.status.paid',
   rejected: 'payouts.status.rejected',
   cancelled: 'payouts.status.cancelled',
 }
 
-const METHOD_TKEY: Record<Payout['method'], string> = {
+const METHOD_TKEY: Record<Payout['method'], TranslationKey> = {
   bank: 'payouts.method.bank',
   fib: 'payouts.method.fib',
   paypal: 'payouts.method.paypal',

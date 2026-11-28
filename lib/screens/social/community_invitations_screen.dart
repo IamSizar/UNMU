@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../services/community_owners_service.dart';
 import '../../utils/haptic_utils.dart';
 import 'social_tokens.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Community Invitations — the invitee's inbox for "join my community
 /// as a co-owner" invitations sent by community primary owners.
@@ -126,7 +127,7 @@ class _CommunityInvitationsScreenState
         color: SocialTokens.cyan,
         child: _loading && _items.isEmpty
             ? const Center(
-                child: CircularProgressIndicator(color: SocialTokens.cyan),
+                child: PlatformSpinner(color: SocialTokens.cyan),
               )
             : _items.isEmpty
                 ? ListView(
@@ -376,11 +377,7 @@ class _InvitationCard extends StatelessWidget {
                       ? const SizedBox(
                           width: 14,
                           height: 14,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(Colors.black),
-                          ),
+                          child: PlatformSpinner(strokeWidth: 2, color: Colors.black),
                         )
                       : const Icon(Icons.check_rounded, size: 16),
                   label: Text('communityInvite.accept'.tr),

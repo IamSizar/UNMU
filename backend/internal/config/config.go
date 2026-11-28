@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
+
+	"halalstocks/internal/appenv"
 
 	"github.com/joho/godotenv"
 )
@@ -20,6 +23,17 @@ type Config struct {
 	// Server
 	ServerPort string
 	JWTSecret  string
+
+	// CORSAllowedOrigins are the browser origins (the admin dashboard) that
+	// may call the API, from CORS_ALLOWED_ORIGINS (comma-separated). Native
+	// apps send no Origin and are unaffected.
+	CORSAllowedOrigins []string
+
+	// TrustedClientIPHeader is the ONE header believed for the caller's IP
+	// (rate limiting). Railway's edge sets and overwrites X-Real-IP. Set
+	// TRUSTED_CLIENT_IP_HEADER to another platform's header, or to "none"
+	// to use only the TCP peer address.
+	TrustedClientIPHeader string
 
 	// Stock API (FMP, Alpha Vantage, or DataJockey)
 	StockAPIKey      string
@@ -63,7 +77,11 @@ func Load() (*Config, error) {
 
 		// Server defaults
 		ServerPort: getEnv("SERVER_PORT", "8080"),
-		JWTSecret:  getEnv("JWT_SECRET", "change-me-in-production"),
+		JWTSecret:  getEnv("JWT_SECRET", ""),
+
+		CORSAllowedOrigins: parseOrigins(os.Getenv("CORS_ALLOWED_ORIGINS")),
+
+		TrustedClientIPHeader: parseClientIPHeader(os.Getenv("TRUSTED_CLIENT_IP_HEADER")),
 
 		// Stock API (FMP, Alpha Vantage, or DataJockey)
 		StockAPIKey:        getEnv("STOCK_API_KEY", ""),
@@ -89,6 +107,10 @@ func Load() (*Config, error) {
 		AWSAccessKeyID:       getEnv("AWS_ACCESS_KEY_ID", ""),
 		AWSSecretAccessKey:   getEnv("AWS_SECRET_ACCESS_KEY", ""),
 		AWSS3PresignGetHours: getEnvInt("AWS_S3_PRESIGN_GET_TTL_HOURS", 168),
+	}
+
+	if err := cfg.checkJWTSecret(); err != nil {
+		return nil, err
 	}
 
 	// Validate API key based on provider
@@ -142,4 +164,60 @@ func getEnvInt(key string, defaultValue int) int {
 		return defaultValue
 	}
 	return n
+}
+
+// devJWTSecret is used only when APP_ENV is a dev environment and no
+// JWT_SECRET is set, so a local API starts without setup.
+const devJWTSecret = "dev-only-jwt-secret-not-for-real-deploys"
+
+// minJWTSecretLen: HS256 keys shorter than 32 bytes are brute-forceable.
+const minJWTSecretLen = 32
+
+// checkJWTSecret refuses to start a real deploy without a strong secret.
+// Before 2026-11-27 a missing JWT_SECRET silently became a public default,
+// which would let anyone mint tokens for any user.
+func (c *Config) checkJWTSecret() error {
+	if appenv.IsDev() {
+		if c.JWTSecret == "" {
+			c.JWTSecret = devJWTSecret
+		}
+		return nil
+	}
+	switch {
+	case c.JWTSecret == "":
+		return fmt.Errorf("JWT_SECRET is required (set APP_ENV=development for local runs)")
+	case c.JWTSecret == "change-me-in-production" || c.JWTSecret == devJWTSecret:
+		return fmt.Errorf("JWT_SECRET is a known default; set a random secret")
+	case len(c.JWTSecret) < minJWTSecretLen:
+		return fmt.Errorf("JWT_SECRET must be at least %d characters", minJWTSecretLen)
+	}
+	return nil
+}
+
+// parseOrigins splits a comma-separated origin list, trimming spaces and a
+// trailing slash (browsers send origins without one).
+func parseOrigins(raw string) []string {
+	var out []string
+	for _, part := range strings.Split(raw, ",") {
+		o := strings.TrimSuffix(strings.TrimSpace(part), "/")
+		if o != "" {
+			out = append(out, o)
+		}
+	}
+	return out
+}
+
+// defaultClientIPHeader is what Railway's public edge sets for the client.
+const defaultClientIPHeader = "X-Real-IP"
+
+// parseClientIPHeader: unset → Railway's header; "none" → trust no header.
+func parseClientIPHeader(raw string) string {
+	v := strings.TrimSpace(raw)
+	switch {
+	case v == "":
+		return defaultClientIPHeader
+	case strings.EqualFold(v, "none"):
+		return ""
+	}
+	return v
 }

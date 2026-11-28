@@ -10,6 +10,7 @@ import '../../screens/social/social_tokens.dart';
 import '../../services/community_subscription_service.dart';
 import '../../services/promo_service.dart';
 import '../../services/upload_service.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Bottom-sheet payment composer for paid community memberships
 /// (step-23). Mirrors the expert-subscription payment flow:
@@ -311,7 +312,7 @@ class _CommunityPaymentSheetState extends State<CommunityPaymentSheet> {
                             child: _promoChecking
                                 ? const SizedBox(
                                     width: 16, height: 16,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                    child: PlatformSpinner(strokeWidth: 2),
                                   )
                                 : Text('subscribe.promoApply'.tr),
                           ),
@@ -637,7 +638,7 @@ class _ReceiptPickerTile extends StatelessWidget {
                 const SizedBox(
                   width: 22,
                   height: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: PlatformSpinner(strokeWidth: 2),
                 )
               else if (onClear != null)
                 IconButton(

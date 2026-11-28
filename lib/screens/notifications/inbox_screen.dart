@@ -11,6 +11,7 @@ import '../../models/inbox_item.dart';
 import '../../services/inbox_service.dart';
 import '../../services/realtime_service.dart';
 import '../social/social_tokens.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Unified notification inbox.
 ///
@@ -223,7 +224,7 @@ class _InboxScreenState extends State<InboxScreen>
   Widget _buildList(SocialPalette palette, List<InboxItem> rows) {
     if (_loading && rows.isEmpty) {
       return Center(
-        child: CircularProgressIndicator(color: palette.textMuted),
+        child: PlatformSpinner(color: palette.textMuted),
       );
     }
     if (_error != null && rows.isEmpty) {

@@ -81,4 +81,13 @@ class LocaleFormat {
     }
     return DateFormat('MMM d', 'en').format(d);
   }
+
+  /// "May '26" (en) / "مايو 2026" (ar) — profile "member since".
+  static String monthYear(DateTime d) {
+    if (_ar) {
+      final month = DateFormat.MMMM('ar').format(d);
+      return '$month ${d.year}';
+    }
+    return DateFormat("MMM ''yy", 'en').format(d);
+  }
 }

@@ -12,6 +12,7 @@ import '../../services/iap_service.dart';
 import '../../services/promo_service.dart';
 import '../../services/upload_service.dart';
 import '../../widgets/dismiss_keyboard_on_tap.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Bottom sheet modal where the user picks a plan + payment method and
 /// submits a subscription request. Shown from the expert profile screen.
@@ -348,7 +349,7 @@ class _SubscribeModalState extends State<SubscribeModal> {
                     child: const SizedBox(
                       width: 22,
                       height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: PlatformSpinner(strokeWidth: 2),
                     ),
                   )
                 else ...[
@@ -482,7 +483,7 @@ class _SubscribeModalState extends State<SubscribeModal> {
                           child: _promoChecking
                               ? const SizedBox(
                                   width: 18, height: 18,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  child: PlatformSpinner(strokeWidth: 2),
                                 )
                               : Text('subscribe.promoApply'.tr),
                         ),
@@ -549,7 +550,7 @@ class _SubscribeModalState extends State<SubscribeModal> {
                   child: _submitting
                       ? const SizedBox(
                           width: 22, height: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: PlatformSpinner(strokeWidth: 2),
                         )
                       : Text('subscribe.submit'.trParams({
                           'price': pricing == null
@@ -878,7 +879,7 @@ class _ReceiptPickerTile extends StatelessWidget {
                 const SizedBox(
                   width: 22,
                   height: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: PlatformSpinner(strokeWidth: 2),
                 )
               else if (onClear != null)
                 IconButton(

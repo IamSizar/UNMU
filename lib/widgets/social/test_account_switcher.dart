@@ -7,6 +7,7 @@ import '../../controllers/auth_controller.dart';
 import '../../models/user.dart';
 import '../../screens/social/social_tokens.dart';
 import '../../services/dev_service.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Bottom-sheet picker for switching accounts.
 ///
@@ -315,10 +316,7 @@ class _TestAccountSwitcherSheetState extends State<TestAccountSwitcherSheet> {
                     ? const Center(
                         child: Padding(
                           padding: EdgeInsets.all(24),
-                          child: CircularProgressIndicator(
-                            color: SocialTokens.cyan,
-                            strokeWidth: 2.2,
-                          ),
+                          child: PlatformSpinner(color: SocialTokens.cyan, strokeWidth: 2.2),
                         ),
                       )
                     : filtered.isEmpty
@@ -574,10 +572,7 @@ class _DevAccountTile extends StatelessWidget {
                 const SizedBox(
                   width: 22,
                   height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: SocialTokens.cyan,
-                  ),
+                  child: PlatformSpinner(strokeWidth: 2, color: SocialTokens.cyan),
                 )
               else if (isActive)
                 Container(

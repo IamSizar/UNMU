@@ -5,6 +5,7 @@ import '../../services/api_service.dart';
 import '../../screens/indexes/indexes_screen.dart';
 import '../../screens/social/social_tokens.dart';
 import 'sparkline_chart.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// "Market Pulse" — a real-data block for the social hub that fills the space
 /// the old "coming soon" cards left behind. Two pieces, both live:
@@ -321,10 +322,7 @@ class _MarketPulseState extends State<MarketPulse> {
       child: SizedBox(
         width: 18,
         height: 18,
-        child: CircularProgressIndicator(
-          strokeWidth: 2,
-          valueColor: const AlwaysStoppedAnimation(SocialTokens.cyan),
-        ),
+        child: PlatformSpinner(strokeWidth: 2, color: SocialTokens.cyan),
       ),
     );
   }

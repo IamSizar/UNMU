@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import '../../controllers/expert_dashboard_controller.dart';
 import '../../services/studio_service.dart';
 import '../../utils/haptic_utils.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Phase 3.2 — sheet that lets an expert update their own subscription
 /// price tiers. Hits PATCH /me/expert/pricing.
@@ -240,10 +241,7 @@ class _EditPricingSheetState extends State<EditPricingSheet> {
                           ? const SizedBox(
                               width: 18,
                               height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
+                              child: PlatformSpinner(strokeWidth: 2, color: Colors.white),
                             )
                           : Text('pricing.save'.tr),
                     ),

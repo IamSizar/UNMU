@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import '../../services/payout_service.dart';
 import '../../services/studio_service.dart';
 import '../../utils/haptic_utils.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Phase 3.4 — sheet for an expert to request a payout. Hits
 /// POST /me/expert/payouts/request. The amount input is validated
@@ -273,10 +274,7 @@ class _RequestPayoutSheetState extends State<RequestPayoutSheet> {
                           ? const SizedBox(
                               width: 18,
                               height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
+                              child: PlatformSpinner(strokeWidth: 2, color: Colors.white),
                             )
                           : Text('payout.submit'.tr),
                     ),

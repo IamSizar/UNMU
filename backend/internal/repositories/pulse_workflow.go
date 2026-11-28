@@ -24,6 +24,11 @@ import (
 // =============================================================================
 
 // PulseApplyOptions carries the optional inputs of a transition.
+// ReplacedNotePrefix starts the change-log note written when publishing an
+// item archives the one it replaces. The note is for people; the read side
+// uses pulse_items.replaced_by (migration 0058), never the note text.
+const ReplacedNotePrefix = "Replaced by item "
+
 type PulseApplyOptions struct {
 	Note      string     // free text; required for reject
 	PublishAt *time.Time // required for schedule
@@ -46,7 +51,9 @@ var transitions = map[string]transitionSpec{
 		`approved_by = $3, approved_at = NOW()`},
 	pulse.DoUnschedule: {models.PulseActionUnscheduled, models.PulseStatusApproved,
 		`publish_at = NULL`},
-	pulse.DoArchive: {models.PulseActionArchived, models.PulseStatusArchived, ``},
+	// Archive is also the takedown of a replaced item: clearing replaced_by
+	// removes it from readers' Saved lists.
+	pulse.DoArchive: {models.PulseActionArchived, models.PulseStatusArchived, `replaced_by = NULL`},
 }
 
 // Apply performs one workflow action on an item and returns the new state.
@@ -170,7 +177,7 @@ func publishPulseTx(ctx context.Context, q pulseQuerier, it *models.PulseAdminIt
 			Message: "This item is dated for a future day, so it cannot be published yet"}
 	}
 	rows, err := q.QueryContext(ctx,
-		`UPDATE pulse_items SET status = 'archived'
+		`UPDATE pulse_items SET status = 'archived', replaced_by = $3
 		  WHERE pulse_date = $1 AND slot = $2 AND status = 'published' AND id <> $3
 		RETURNING id`, it.PulseDate, it.Slot, it.ID)
 	if err != nil {
@@ -187,7 +194,7 @@ func publishPulseTx(ctx context.Context, q pulseQuerier, it *models.PulseAdminIt
 	}
 	rows.Close()
 	for _, rid := range replaced {
-		msg := fmt.Sprintf("Replaced by item %d", it.ID)
+		msg := fmt.Sprintf("%s%d", ReplacedNotePrefix, it.ID)
 		if err := logPulseEvent(ctx, q, rid, models.PulseActionArchived, actor,
 			models.PulseStatusPublished, models.PulseStatusArchived, msg); err != nil {
 			return err

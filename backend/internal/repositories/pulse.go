@@ -15,8 +15,9 @@ import (
 // pulse.go — read side of UNMU Pulse (published items, archive, saves,
 // analytics events). The admin/CMS side lives in pulse_admin.go.
 //
-// Only rows with status = 'published' are ever returned here: drafts, items in
-// review and scheduled items must never reach a user (spec §6-7).
+// Only published rows are returned here (plus, for Saved and item detail,
+// items that were published and later replaced in their slot): drafts, items
+// in review and scheduled items must never reach a user (spec §6-7).
 // Tables: migration 0056_pulse.sql.
 // =============================================================================
 
@@ -54,6 +55,15 @@ SELECT i.id, to_char(i.pulse_date, 'YYYY-MM-DD'), i.slot, i.classification,
   LEFT JOIN user_portfolios up ON up.stock_id = i.stock_id AND up.user_id = $1
   LEFT JOIN pulse_saves sv ON sv.item_id = i.id AND sv.user_id = $1
  WHERE i.status = 'published'`
+
+// pulseSelectSaveable is pulseSelect widened to items REPLACED in their slot
+// by a newer item (replaced_by set by the publish step, migration 0058) —
+// and only for a user who saved that item ($1, via the sv join). Used for
+// Saved and item detail. Items taken down on purpose stay hidden.
+var pulseSelectSaveable = strings.Replace(pulseSelect,
+	`WHERE i.status = 'published'`,
+	`WHERE (i.status = 'published' OR (i.status = 'archived'
+	   AND i.replaced_by IS NOT NULL AND sv.id IS NOT NULL))`, 1)
 
 // pulseSlotOrder sorts the four slots in display order.
 const pulseSlotOrder = `array_position(ARRAY['global','gulf','sharia','opportunity'], i.slot)`
@@ -159,9 +169,10 @@ func (r *PulseRepository) Day(ctx context.Context, userID int64, date string) (*
 	return day, nil
 }
 
-// Item returns one published item with full details and evidence.
+// Item returns one published (or replaced, see pulseSelectSaveable) item
+// with full details and evidence.
 func (r *PulseRepository) Item(ctx context.Context, userID, itemID int64) (*models.PulseItem, error) {
-	items, err := r.queryItems(ctx, true, pulseSelect+` AND i.id = $2`, userID, itemID)
+	items, err := r.queryItems(ctx, true, pulseSelectSaveable+` AND i.id = $2`, userID, itemID)
 	if err != nil {
 		return nil, fmt.Errorf("loading pulse item %d: %w", itemID, err)
 	}
@@ -222,7 +233,7 @@ func (r *PulseRepository) Archive(
 func (r *PulseRepository) Saved(
 	ctx context.Context, userID int64, limit, offset int,
 ) (items []models.PulseItem, hasMore bool, err error) {
-	query := pulseSelect + ` AND sv.id IS NOT NULL ORDER BY sv.created_at DESC LIMIT $2 OFFSET $3`
+	query := pulseSelectSaveable + ` AND sv.id IS NOT NULL ORDER BY sv.created_at DESC LIMIT $2 OFFSET $3`
 	items, err = r.queryItems(ctx, false, query, userID, limit+1, offset)
 	if err != nil {
 		return nil, false, fmt.Errorf("loading saved pulse: %w", err)

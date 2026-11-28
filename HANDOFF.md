@@ -5,6 +5,147 @@ context: read this before planning any work here.
 
 ---
 
+## 2026-11-28 — Overnight run: Apple + Google purchases, dashboard, polish, iOS e2e (branch `fix/release-blockers`, local commits only: NOT pushed, NOT deployed)
+
+**Asked for:** "Apple purchase fixes", then "finish this app 100% … /loop … fully e2e tested and verified by 9 am". Scope I set for the loop: Apple fixes, dashboard tsc, iOS simulator build/run, polish, code-only Google Play verification. Rule kept: nothing pushed, deployed or run against production. The commits below are **local** on `fix/release-blockers` (on top of the pushed PR #5 head `fa872e1`); Zaid has not reviewed them yet.
+
+### Commits (oldest first)
+| Commit | What |
+|---|---|
+| `b17ec58` | **Apple IAP holes.** Product ID required and matched exactly; sandbox receipts refused unless `APPLE_IAP_ALLOW_SANDBOX` is true (default true; set `false` in production once TestFlight is done); one owner per `original_transaction_id` (advisory lock, earliest owner wins, others get 409 `RECEIPT_OWNED_BY_ANOTHER_USER`); expert renewals only ever extend `expires_at`; generic 500 text. Migration **0059** lets `expert_subscriptions.payment_method` be `apple_iap` / `google_iap`. |
+| `2dcd2c5` | Dashboard: `tsc -b` 35 errors → 0 (types only; deploy runs `vite build` so these never blocked deploys). |
+| `c35e7d3` | Push history: migration **0060** `push_send_log`, `GET /admin/push/history`, dashboard Notifications page shows real sends (loading / error+retry / empty), en+ar strings. |
+| `5c5b009` | Android `namespace` = `com.easytech.stocks` (matches `MainActivity`'s package). |
+| `f2f8291` | Communities looked up on the backend (`CommunityDirectory`), not sample data; removed a random-number chart from expert profile. |
+| `147923c` | Removed 15 unreachable lib files (~5 000 lines) and the failing template test. |
+| `0d2d432` | **Google Play verification** (code only): `POST /me/iap/google/verify`, `subscriptionsv2.get` + acknowledge, one owner per purchase token incl. `linkedPurchaseToken` upgrades, migration **0061** `google_play_purchases`. App: Android posts `purchaseToken` there. |
+| `b45b4c1` | Native iOS spinner (`PlatformSpinner`) at 83 sites. |
+| `b829969`, `560176c` | Native iOS confirm dialogs (`PlatformDialog`) for 15 plain confirms (leave community, delete post/message, remove/transfer member, cancel subscription, …). Dialogs with text fields left as they were. |
+| `7614a15` | **Bug found in e2e:** tapping Log in flipped the app back to the splash (`authChecked` was `!isLoading`), so the login request was never sent. Now a separate flag set once after session load. |
+| `230e364` | **Bug found in e2e:** login screen didn't rebuild on auth state, so errors never showed and the spinner never stopped. Wrapped in `Obx`. |
+| `fc1ac0c` | **Fake profile stats** ("12" watchlist, "+8.2%" network, "May '26" for everyone) → real watchlist count + real member-since (API now returns `createdAt` on login/register/Firebase/impersonate/profile). "Network" had no data, so that cell is gone — say if you want it back with a real metric. |
+| `655d2a3` | **Android never built.** `build.gradle.kts` used `java.util.Properties()` (my Phase A signing code, `16eaafa`; doesn't compile in a `.kts` script) → `import java.util.Properties`. `settings.gradle.kts`: google-services 4.3.15 → **4.4.2** (Crashlytics plugin 3.0.2 requires ≥ 4.4.1; mismatch was there since the initial commit). |
+
+### Verified (2026-11-28, all local)
+- Go: `go vet` clean; `PULSE_TEST_DSN="host=/tmp dbname=unmu_pulse_dev sslmode=disable" go test ./...` all ok.
+- Migrations 0059, 0060, 0061: up → down → up on local `unmu_pulse_dev`.
+- Flutter: `flutter analyze` clean; `flutter test` 115/115.
+- Dashboard: `tsc -b` 0 errors, `vite build` ok; push history page checked in the browser (rows + empty state).
+- Live Apple (local API in production mode + fake Apple server): no product → 400; wrong expert → 400; buy → 200 active; other account replays renewal → 409; owner renewal → 200 extended; same receipt again → 200; expired → 200 no sub.
+- Live Google (fake Play API): premium → 200 + acknowledged; other account same token → 409; other account linked-upgrade token → 409; owner upgrade → 200; on-hold / wrong product / unknown token → 400; expert purchase → 200, `payment_method = google_iap`.
+- iOS simulator (iPhone 17 Pro Max, iOS 26.1, debug build against the local API): splash → login (wrong password shows banner, spinner stops; right password lands in the app) → Pulse (empty state), Discover, Indexes, Social hub, community detail, Leave dialog (native, cancelled), Feed (empty state), Profile (real stats), Logout (native dialog) → guest profile → Sign in again. Test-account tools and the demo login prefill are debug-only (`!kReleaseMode` / `kDebugMode`).
+- Release builds: `flutter build ios --release --no-codesign` ✓ (37.1 MB); `flutter build apk --release --android-skip-build-dependency-validation` ✓ (73.3 MB, signed with the debug key because `android/key.properties` is absent; Play will reject that, by design).
+- Android emulator (Pixel 9 Pro XL image, API 36, debug APK against the local API via `10.0.2.2`): launches into `com.easytech.stocks/.MainActivity` (namespace fix confirmed), notification prompt, unknown email → error banner + spinner stops, `user@test.com` login → Pulse, Social, Profile (real stats). No crash. Two ANR dialogs happened only while I flooded `adb input` key events; with paced input there were none, idle had none.
+
+### Deploy additions (all need Zaid's go; nothing applied anywhere but local)
+- Apply migrations **0059, 0060, 0061** by hand after 0055–0058 (staging, then production).
+- New env: `APPLE_IAP_ALLOW_SANDBOX` (set `false` in production after TestFlight), `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` or `GOOGLE_PLAY_SERVICE_ACCOUNT_FILE`, optional `GOOGLE_PLAY_PACKAGE_NAME` (default `com.easytech.stocks`). `GOOGLE_PLAY_ALLOW_TEST` / `GOOGLE_PLAY_API_ENDPOINT` are for local tests only (endpoint accepted on loopback only).
+- Old app builds keep working: `createdAt` is a new optional field.
+
+### Blockers that need Zaid
+0. ~~Gradle 8.12 below Flutter's minimum~~ **Fixed 2026-11-28:** Gradle 8.14.3, AGP 8.11.1, Kotlin 2.2.20 (Flutter's minimums). `android/gradle.properties` keeps the migrator flags (`android.builtInKotlin=false`, `android.newDsl=false`) and adds `android.jetifier.ignorelist` for the Flutter engine jars: without it Jetifier runs out of heap on AGP 8.11. `flutter build apk --debug` and `--release` (73.3 MB) both pass with no bypass flag. Trap: if a build fails with "Java heap space", run `./gradlew --stop` first; stale daemons caused one false failure. Not re-run on the emulator after the bump.
+1. Push `fix/release-blockers` / update PR #5, deploy, run the 3 migrations.
+2. Play Console: service account with "View financial data" + "Manage orders", and the upload keystore. Expert SKUs are `com.unmu.expert.<expertId>.<monthly|yearly>`; expert IDs with hyphens (UUIDs) are **not valid Play product IDs**, so expert subscriptions on Android need a different SKU scheme before they can be sold through Play.
+3. iOS: expert subscriptions still offer cash / FIB on Android and iOS; Apple requires IAP for digital content on iOS. Decision is Zaid's.
+4. `ios/Runner/PrivacyInfo.xcprivacy`: fill `NSPrivacyCollectedDataTypes` (email, name, purchases, user ID) before submission.
+5. 51 files are over the 500-line limit (not touched).
+
+### Traps for the next agent
+- **Debug builds hit production** unless you pass `--dart-define=API_BASE_URL=...` (`ApiConfig.baseUrl`). For the simulator use `http://127.0.0.1:8091/api`; Android emulator `http://10.0.2.2:8091/api`.
+- Uncommitted, NOT mine to commit: `analysis_options.yaml` (excludes build/platform dirs), `ios/Podfile` iOS 14→15 bump, `Podfile.lock`, `project.pbxproj`, `Runner.xcscheme`, `pubspec.lock` bumps, `ios/**/swiftpm/`, `backend/scripts/demo_seed*.sql`. They came from local iOS builds / earlier work; review before committing.
+- `dart format` and `gofmt -w` on whole files reformat unrelated code in this repo (files were never formatted). Edit without them or format only your lines.
+- Local test login: `user@test.com` / `test1234` (seed hash from `0012_seed_community_demo.sql`; I reset it in the local DB only). Local API runs with `STOCK_API_PROVIDER=mock`, so index prices there are fake.
+- `AuthController.refreshFromBackend` rebuilds `User` from `/me` and drops `avatarUrl` (pre-existing; `createdAt` is now carried over). Not fixed.
+- Local DB lacks `community_polls` (the poll closer logs an error every minute); local only, not a code bug.
+- Social hub: the "Discover communities" section's title reads "Your communities" (copy bug, not fixed).
+
+---
+
+
+## 2026-11-27 (later) — PR #5 review findings fixed (same branch, pushed to PR #5)
+
+**Asked for:** run code + security review on PR https://github.com/IamSizar/UNMU/pull/5, then "go on all five" fixes. Reviews: two Sonnet agents (code-reviewer, security-reviewer), each finding checked against the code before fixing.
+
+### What changed
+1. **Rate-limit bypass (HIGH).** gin trusted every proxy, so `ClientIP()` was the caller-written leftmost `X-Forwarded-For`. New `middleware.ConfigureClientIP`: no proxy trusted for XFF; only `TRUSTED_CLIENT_IP_HEADER` (default `X-Real-IP`, which Railway's edge sets and overwrites per https://docs.railway.com/networking/public-networking/specs-and-limits ; `none` = TCP peer only).
+2. **Limiter growth (MEDIUM).** Idle sweep at most once a minute (was every request), cap 50 000 tracked clients (new clients get 429 past the cap). `Retry-After` now matches the refill (6 s), message says "a few seconds".
+3. **Pulse bookmark stuck (MEDIUM).** `PulseController.handleUserChanged` acts only when the user ID changes (profile/email edits re-emit the same user); every account change, incl. A→B, clears `_savingIds`, `savedLoading`, etc.
+4. **Replaced items (MEDIUM/LOW).** Migration **`0058_pulse_replaced_by.sql` (+ down)**: `pulse_items.replaced_by` (FK, partial index, CHECK only-archived, backfilled from the change-log note). Publish sets it; Saved/detail use it (no more note matching) and only for users who SAVED the item; `archive` on a replaced item = takedown (clears the link); a second takedown → 409 "already taken down". Dashboard shows Archive on replaced items (`replacedBy` in `api/pulse.ts`, `pulseUi.tsx`).
+5. `ios/Podfile.lock`: removed the 6 `app_tracking_transparency` lines by hand (no `pod install`: network too slow, and it would have picked up the uncommitted iOS 15 bump).
+
+### Verified (2026-11-27)
+- `flutter analyze lib test` clean; `flutter test` 100 pass, 1 fail (template test, pre-existing).
+- `go vet` clean; `PULSE_TEST_DSN=... go test ./...` all ok (new: spoof tests, cap, sweep, Retry-After, client-IP config, archive rule, replaced-link/takedown/saver-only DB tests).
+- 0058 up/down/up on the local DB `unmu_pulse_dev`.
+- Live (local API, production mode): 12 logins with a new fake XFF each → 10×401 then 429; `Retry-After: 6`; another `X-Real-IP` gets its own bucket. Replaced item 219: admin sees `replacedBy 220`, saver 200, non-saver 404, takedown 200, then saver 404 and Saved empty, second takedown 409.
+- NOT run: dashboard `tsc` (no `node_modules`; network too slow to install), app on a simulator/device (see entry below).
+
+### Deploy additions
+- Apply **0058** by hand after 0055/0056/0057 (staging + production), same as before.
+- Optional `TRUSTED_CLIENT_IP_HEADER` (default `X-Real-IP` fits Railway). If a CDN is ever put in front, set it to the CDN's client-IP header.
+
+### Still open (pre-existing, from the security review, not fixed)
+- Apple IAP replay protection keys only on `transaction_id`; check the owner of `original_transaction_id` too.
+- Sandbox receipts unlock paid access in production (TestFlight testers).
+- Empty `productId` matches any product; raw error text returned by `handlers/iap.go`.
+
+---
+
+## 2026-11-27 — Release-readiness audit + Phase A release blockers fixed (branch `fix/release-blockers`, NOT pushed, NOT deployed)
+
+**Asked for:** deep audit of how close UNMU is to release, then fix the blockers ASAP. Zaid approved "Phase A" (code-only fixes, nothing deployed, production untouched). OPOS 137988 is folded in; OPOS itself was skipped on Zaid's word (`start_task` returned `PRESENCE_NOT_WORKING`).
+
+### Audit verdict (read-only, two Sonnet agents + spot checks)
+App features are mostly real; ~1554 en keys all have ar; backend ~250 routes all real, every app/dashboard call has a route; admin authZ is DB-based; SQL parameterized; no secrets in git. Blockers were release config + hardening + ops, listed below. Phase B/C (not done) at the end.
+
+### What changed (branch `fix/release-blockers`, cut from `feat/unmu-pulse`)
+App:
+- **Test-account switcher never in store builds.** `AppConfigController.showTestTools` = not-release build AND server flag; flag now defaults OFF (also on fetch failure). Login + profile use it. Dead fake-offline-session code removed from `auth_controller.dart` (`loginTest`, `registerTest`, `switchTestAccount`, `testPassword`).
+- **Restore purchases** (App Review 3.1.1): `RestorePurchasesButton` (iOS only) in My Subscriptions app bar; `IAPService.restorePurchases()` now returns whether it started; restored expert SKUs get their expert id parsed from the SKU (`expertIdFromProductId`) so the backend can re-activate them; `verifiedRestores` makes the list reload.
+- **Release config:** iOS `NSAllowsArbitraryLoads` removed (local networking still allowed); Android cleartext moved to the debug manifest only; mic purpose string now says voice messages (the `record` package IS used in community chat; old text said "not needed"); App Tracking prompt removed entirely (no tracking SDK: `tracking_service.dart`, `app_tracking_transparency` dep and `NSUserTrackingUsageDescription` gone); new `ios/Runner/PrivacyInfo.xcprivacy` (no tracking, UserDefaults CA92.1) added to the Runner target; Android release signing reads `android/key.properties` (falls back to debug key with a Gradle warning when missing).
+- **Pulse (OPOS 137988):** Retry on the error state now shows skeletons; Retry on the "couldn't refresh" notice shows a spinner (`PulseController.refreshing`); stale `loadToday` replies and replies for a previous account are dropped (`_loadSeq`, `_accountSeq`, `handleUserChanged`); a second save tap while one is in flight is ignored and a today snapshot can't undo an in-flight save (`_savingIds`).
+- Login now links to Forgot password (the screen existed but was unreachable). Indexes and Watchlist show a designed error with Retry (`LoadErrorView`) instead of an endless skeleton / a false "empty" state; new throwing `ApiService.fetchMarketIndexes` / `fetchUserPortfolio` (the old never-throwing ones still serve the decorative widgets).
+Backend:
+- New `internal/appenv`: dev behaviour ONLY when `APP_ENV` is development/dev/local/test. Before, an UNSET `APP_ENV` counted as dev, which opened `/dev/impersonate` (JWT for any user), `/dev/reset` (wipe), and echoed verification codes and **password-reset tokens** in API responses.
+- `config.Load` refuses to start outside dev without a `JWT_SECRET` of 32+ chars (no more silent `change-me-in-production`).
+- CORS: `middleware.CORS` with `CORS_ALLOWED_ORIGINS` (comma list); no `Allow-Credentials`; WebSocket origin uses the same check (native apps send no Origin, unaffected).
+- Auth endpoints rate-limited per client IP (`middleware.RateLimiter`, burst 10, then 1 per 6 s) → 429.
+- Apple receipts must match the app bundle (`APPLE_BUNDLE_ID`, default `com.easytech.stocksanalyzer`); sandbox still accepted (App Review uses sandbox).
+- Pulse: a saved item replaced in its slot stays in Saved and keeps opening (`pulseSelectSaveable`, matched on `ReplacedNotePrefix` in the change log); items an approver archived on purpose stay hidden.
+
+### Verified (2026-11-27)
+- `flutter analyze lib test` → No issues found. `flutter test` → 97 pass, 1 fail (template `test/widget_test.dart`, pre-existing).
+- `go vet ./cmd/api ./internal/...` clean. `PULSE_TEST_DSN="host=/tmp dbname=unmu_pulse_dev sslmode=disable" go test ./...` → all ok (includes the new replaced-item DB test).
+- Every new test was run failing first, then passing. A widget test caught a real bug in my first version (an `Obx` reading no observable in release → crash); fixed in `showTestTools`.
+- NOT run: an iOS or Android device/simulator build (pbxproj passes `plutil -lint` only), the dashboard against the new CORS.
+
+### Live verification (2026-11-27, local API built from this branch, local DB `unmu_pulse_dev`, port 8091, `APP_ENV=production`)
+- Start-up: no `JWT_SECRET` → refuses ("JWT_SECRET is required"); `change-me-in-production` → refuses. Strong secret → starts.
+- `/dev/users`, `/dev/impersonate` → 404. Password-reset request → `devMode:false`, no token in the body.
+- CORS: listed origin echoed with `Vary: Origin`, no credentials header; other origin gets no header; preflight 403 vs 204; no-Origin (mobile) 200.
+- Rate limit: 10 auth requests pass, the 11th → 429 with `Retry-After: 60`; `/health` unaffected.
+- WebSocket `/api/ws`: no Origin 101, listed origin 101, other origin 403.
+- Pulse through the real admin + app API: item A published and saved by a reader, B published in the same slot (A archived), C published, saved, then archived by an approver → Saved = [A], `GET /pulse/items/A` 200, `GET /pulse/items/C` 404, today = [B]. Rows left in the LOCAL dev DB only (items 219-221).
+- **App on a simulator/emulator: NOT verified.** iOS build failed fetching Swift packages (GitHub at ~3-22 KB/s, connection reset; nothing cached: no Pods, no SPM checkouts, no DerivedData). Android `signingReport` failed downloading the Kotlin compiler (read timeout) before evaluating `build.gradle.kts`. Web is not a target (Firebase has no web options) so it stops at the splash. App changes are covered by widget/unit tests only.
+- Side effect left uncommitted for Zaid: the installed Flutter SDK's migrator raised the iOS minimum 14.0 → 15.0 (`ios/Podfile`, `project.pbxproj`). Accepting it drops iOS 14 devices; any build with this SDK re-applies it.
+
+### Deploy requirements BEFORE this backend ships (it will refuse to start / block the dashboard otherwise)
+- Production and staging: `JWT_SECRET` must be 32+ chars (check the current value: if it is shorter, every user is logged out when it changes). `APP_ENV` must NOT be a dev value. Set `CORS_ALLOWED_ORIGINS=https://dashboard-production-7ad1.up.railway.app` (staging: its dashboard URL).
+- Local dev now needs `APP_ENV=development` for verification codes, `/dev/*` and the built-in JWT secret.
+
+### Still open
+- **Phase B (needs Zaid / touches production):** back up prod then apply migrations 0055/0056/0057; scheduled EODHD ingest (Shariah verdicts are stale without a manual run); iOS cash/FIB payments for digital content (App Review risk); Google Play verification; Android upload keystore; read-only check of prod env (`APP_ENV`, `JWT_SECRET`, `STOCK_API_PROVIDER`, S3); check whether seed accounts `*@test.com` / `test1234` (migration 0012) exist in the PRODUCTION DB — if so they are public credentials, including `admin@test.com`.
+- `PrivacyInfo.xcprivacy` has no `NSPrivacyCollectedDataTypes`: fill it from the App Privacy answers in App Store Connect; App Store Connect must also say "no tracking" now.
+- Rate limiter keys on `ClientIP()`; gin trusts all proxies by default, so `X-Forwarded-For` can be spoofed. Set trusted proxies once Railway's proxy behaviour is confirmed.
+- Phase C polish: Cupertino dialogs/spinners on iOS, dead mock social screens, fake dashboard push history, dashboard TS errors, 51 files over 500 lines, Android `namespace` still `com.example.halalstocks` (needs MainActivity package move).
+
+### Traps
+- `analysis_options.yaml` and `pubspec.lock` were already modified before this work (likely `flutter test` with a newer SDK, plus unknown); NOT committed with this work. `pubspec.lock` here only drops `app_tracking_transparency`.
+- `flutter build apk --config-only` rewrites `android/gradle.properties` (adds `builtInKotlin`/`newDsl` flags); not committed.
+- `showTestTools` must read the Rx before the bool (see above).
+
+---
+
 ## 2026-10-27 — Pulse run on the iOS simulator against staging; 2 real bugs fixed, push-tap NOT device-verified (3 commits local, NOT pushed)
 
 **Asked for:** keep building Pulse; run it on the iOS simulator against staging (OPOS 137987) and fix what breaks. OPOS office 16, tasks 137986 (push tap, Under Review), 137987 (this run), 137988 (review leftovers, still To Do), as account 6.

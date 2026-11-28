@@ -259,3 +259,23 @@ func TestValidateNote(t *testing.T) {
 		t.Error("an over-long note must be rejected")
 	}
 }
+
+// Review of PR #5: a REPLACED item (archived, replaced_by set) stays in
+// readers' Saved lists, so an approver must still be able to take it down.
+// An item that was already taken down cannot be archived again.
+func TestCheckAction_ArchiveReplacedItem(t *testing.T) {
+	approver := Actor{UserID: 3, Roles: map[string]bool{"approver": true}}
+	replaced := completeItem("archived", 1)
+	by := int64(99)
+	replaced.ReplacedBy = &by
+	if err := CheckAction(DoArchive, replaced, approver); err != nil {
+		t.Errorf("taking down a replaced item refused: %v", err)
+	}
+	takenDown := completeItem("archived", 1)
+	if kindOf(CheckAction(DoArchive, takenDown, approver)) != "state" {
+		t.Error("an item already taken down was archived again")
+	}
+	if err := CheckAction(DoArchive, completeItem("published", 1), approver); err != nil {
+		t.Error("archiving a published item must still work")
+	}
+}

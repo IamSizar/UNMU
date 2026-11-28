@@ -8,6 +8,7 @@ import '../../screens/auth/login_screen.dart';
 import '../../screens/social/social_tokens.dart';
 import '../../services/api_service.dart';
 import '../../utils/haptic_utils.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Referral screen — a user's personal referral code (share it) plus a
 /// field to redeem someone else's code (once, per the backend's
@@ -135,7 +136,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
       body: !auth.isAuthenticated
           ? _SignInPrompt(palette: palette)
           : _loading
-              ? const Center(child: CircularProgressIndicator())
+              ? const Center(child: PlatformSpinner())
               : _loadFailed
                   ? _ErrorState(palette: palette, onRetry: _load)
                   : GestureDetector(
@@ -194,7 +195,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
                                     ? const SizedBox(
                                         width: 18,
                                         height: 18,
-                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                        child: PlatformSpinner(strokeWidth: 2),
                                       )
                                     : Text('referral.apply'.tr),
                               ),

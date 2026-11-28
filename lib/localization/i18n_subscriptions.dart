@@ -64,6 +64,11 @@ const Map<String, String> subscriptionsEn = {
 
   // ── My Subscriptions list (my_subscriptions_screen.dart) ──
   'mySubscriptions.title': 'My Subscriptions',
+  'mySubscriptions.restore': 'Restore purchases',
+  'mySubscriptions.restoreStarted':
+      'Checking your App Store purchases. Restored subscriptions appear here.',
+  'mySubscriptions.restoreUnavailable':
+      'The App Store is not available right now. Please try again later.',
   // Empty state
   'mySubscriptions.empty.title': 'No subscriptions yet',
   'mySubscriptions.empty.body':
@@ -216,6 +221,11 @@ const Map<String, String> subscriptionsAr = {
 
   // ── My Subscriptions list (my_subscriptions_screen.dart) ──
   'mySubscriptions.title': 'اشتراكاتي',
+  'mySubscriptions.restore': 'استعادة المشتريات',
+  'mySubscriptions.restoreStarted':
+      'جارٍ التحقق من مشترياتك في App Store. ستظهر الاشتراكات المستعادة هنا.',
+  'mySubscriptions.restoreUnavailable':
+      'متجر App Store غير متاح الآن. يرجى المحاولة لاحقاً.',
   // Empty state
   'mySubscriptions.empty.title': 'لا توجد اشتراكات بعد',
   'mySubscriptions.empty.body':

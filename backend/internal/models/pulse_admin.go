@@ -88,8 +88,12 @@ type PulseAdminItem struct {
 	ReviewedAt     *time.Time     `json:"reviewedAt"`
 	ApprovedBy     *int64         `json:"approvedBy"`
 	ApprovedAt     *time.Time     `json:"approvedAt"`
-	CreatedAt      time.Time      `json:"createdAt"`
-	UpdatedAt      time.Time      `json:"updatedAt"`
+	// ReplacedBy is set on an archived item that a newer item replaced in
+	// its day + slot (migration 0058). Savers keep seeing it until it is
+	// taken down, which clears this link.
+	ReplacedBy *int64    `json:"replacedBy"`
+	CreatedAt  time.Time `json:"createdAt"`
+	UpdatedAt  time.Time `json:"updatedAt"`
 }
 
 // PulseVersion is one stored snapshot of an item (spec §14).

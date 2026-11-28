@@ -10,6 +10,7 @@ import '../../models/expert_application.dart';
 import '../../services/expert_application_service.dart';
 import '../../services/upload_service.dart';
 import '../../widgets/dismiss_keyboard_on_tap.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Form screen where a regular user submits their request to become an expert.
 ///
@@ -348,7 +349,7 @@ class _ApplyForExpertScreenState extends State<ApplyForExpertScreen> {
                 child: _submitting
                     ? const SizedBox(
                         width: 22, height: 22,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: PlatformSpinner(strokeWidth: 2),
                       )
                     : Text(isReapply ? 'apply.resubmit'.tr : 'apply.submit'.tr),
               ),
@@ -580,7 +581,7 @@ class _AvatarPickerTile extends StatelessWidget {
                 const SizedBox(
                   width: 22,
                   height: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: PlatformSpinner(strokeWidth: 2),
                 )
               else if (onClear != null)
                 IconButton(
@@ -668,7 +669,7 @@ class _ResumePickerTile extends StatelessWidget {
                 const SizedBox(
                   width: 22,
                   height: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: PlatformSpinner(strokeWidth: 2),
                 )
               else if (onClear != null)
                 IconButton(

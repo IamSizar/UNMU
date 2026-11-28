@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../screens/social/social_tokens.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// =============================================================================
 /// Shared auth screen primitives — used by Login + Register.
@@ -295,10 +296,7 @@ class GradientCTA extends StatelessWidget {
                 ? const SizedBox(
                     width: 22,
                     height: 22,
-                    child: CircularProgressIndicator(
-                      color: Color(0xFF0A1628),
-                      strokeWidth: 2.4,
-                    ),
+                    child: PlatformSpinner(color: Color(0xFF0A1628), strokeWidth: 2.4),
                   )
                 : Row(
                     mainAxisSize: MainAxisSize.min,

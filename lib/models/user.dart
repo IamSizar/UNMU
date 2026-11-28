@@ -61,6 +61,10 @@ class User {
   /// falls back to a gradient + initials when missing.
   final String? avatarUrl;
 
+  /// Sign-up time from the backend (`createdAt`). Null for sessions saved
+  /// before the field existed, until the next profile refresh.
+  final DateTime? createdAt;
+
   User({
     required this.id,
     required this.email,
@@ -70,6 +74,7 @@ class User {
     this.role = UserRole.user,
     this.expertId,
     this.avatarUrl,
+    this.createdAt,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -89,6 +94,9 @@ class User {
       role: UserRoleX.fromWire(json['role'] as String?),
       expertId: (json['expertId'] ?? json['expert_id']) as String?,
       avatarUrl: (json['avatarUrl'] ?? json['avatar_url']) as String?,
+      createdAt: DateTime.tryParse(
+        (json['createdAt'] ?? json['created_at']) as String? ?? '',
+      ),
     );
   }
 
@@ -102,6 +110,7 @@ class User {
       'role': role.wireValue,
       'expert_id': expertId,
       'avatar_url': avatarUrl,
+      'created_at': createdAt?.toIso8601String(),
     };
   }
 
@@ -114,6 +123,7 @@ class User {
     UserRole? role,
     String? expertId,
     String? avatarUrl,
+    DateTime? createdAt,
   }) {
     return User(
       id: id ?? this.id,
@@ -124,6 +134,7 @@ class User {
       role: role ?? this.role,
       expertId: expertId ?? this.expertId,
       avatarUrl: avatarUrl ?? this.avatarUrl,
+      createdAt: createdAt ?? this.createdAt,
     );
   }
 

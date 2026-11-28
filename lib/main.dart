@@ -37,7 +37,6 @@ import 'screens/splash/splash_screen.dart';
 import 'services/deep_link_service.dart';
 import 'services/iap_service.dart';
 import 'services/push_token_service.dart';
-import 'services/tracking_service.dart';
 import 'theme/halal_fintech_theme.dart';
 import 'widgets/social/community_message_banner.dart';
 import 'widgets/upload_status_pill.dart';
@@ -217,11 +216,6 @@ class _AppEntryState extends State<_AppEntry> {
     super.initState();
     Future.delayed(_splashMin, () {
       if (mounted) setState(() => _splashReady = true);
-      // App Tracking Transparency. iOS surfaces a system modal here;
-      // calling it post-splash means the brand impression lands first.
-      // Fire-and-forget — never block the handoff to the main tab
-      // scaffold on the user dismissing the prompt.
-      unawaited(TrackingService.instance.requestIfNeeded());
     });
     // Wire up deep-link routing once the first frame is on screen — at
     // that point the navigator is mounted, so a cold-start `unmu.app/p/:id`

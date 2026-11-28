@@ -10,6 +10,7 @@ import '../../utils/price_format.dart';
 import '../../utils/responsive.dart';
 import 'community_preview_screen.dart';
 import 'social_tokens.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Search-and-browse for communities (item 2.15).
 ///
@@ -271,7 +272,7 @@ class _CommunityDiscoveryScreenState extends State<CommunityDiscoveryScreen> {
 
   Widget _resultsList(SocialPalette palette) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: PlatformSpinner());
     }
     if (_error != null) {
       return Center(

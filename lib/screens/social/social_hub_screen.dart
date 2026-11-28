@@ -22,12 +22,14 @@ import '../../widgets/social/market_ticker_bar.dart';
 import '../../widgets/platform_adaptive/platform_dialog.dart';
 import 'all_experts_screen.dart';
 import 'community_detail_screen.dart';
+import 'community_directory.dart';
 import 'community_discovery_screen.dart';
 import 'community_preview_screen.dart';
 import 'expert_profile_screen.dart';
 import 'mock_social_data.dart';
 import 'social_tokens.dart';
 import '../../widgets/profile_avatar_button.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Social & Community Hub — editorial bento layout.
 ///
@@ -224,22 +226,7 @@ class _SocialHubScreenState extends State<SocialHubScreen> {
   ///
   /// Sprint-C step 8 — passes `ownerId` through so the hub can flag
   /// owned communities with the gold-crown card variant.
-  static Community _adaptCommunity(CommunityMeta m) => Community(
-        id: m.id,
-        name: m.name,
-        tagline: m.tagline,
-        regionCode: m.regionCode,
-        memberCount: m.memberCount,
-        activeNow: 0,
-        liveTickers: const [],
-        chatMessages: const [],
-        posts: const [],
-        reels: const [],
-        videos: const [],
-        ownerId: m.ownerId,
-        coverUrl: m.coverUrl,
-        avatarUrl: m.avatarUrl,
-      );
+  static Community _adaptCommunity(CommunityMeta m) => communityFromMeta(m);
 
   @override
   Widget build(BuildContext context) {
@@ -326,7 +313,7 @@ class _SocialHubScreenState extends State<SocialHubScreen> {
                 const SliverToBoxAdapter(
                   child: Padding(
                     padding: EdgeInsets.symmetric(vertical: 28),
-                    child: Center(child: CircularProgressIndicator()),
+                    child: Center(child: PlatformSpinner()),
                   ),
                 )
               else if (_experts.isEmpty)
@@ -446,7 +433,7 @@ class _SocialHubScreenState extends State<SocialHubScreen> {
                       return const SliverToBoxAdapter(
                         child: Padding(
                           padding: EdgeInsets.symmetric(vertical: 28),
-                          child: Center(child: CircularProgressIndicator()),
+                          child: Center(child: PlatformSpinner()),
                         ),
                       );
                     }

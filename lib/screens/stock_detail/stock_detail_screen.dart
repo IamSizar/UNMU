@@ -12,6 +12,7 @@ import '../../utils/platform_utils.dart';
 import '../../utils/explanation_translator.dart';
 import '../../controllers/language_controller.dart';
 import 'certificate_screen.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 class StockDetailScreen extends StatefulWidget {
   final String ticker;
@@ -141,9 +142,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
             : HalalFintechTheme.backgroundLight,
         appBar: _buildAppBar(context, theme, isDark),
         body: Center(
-          child: CircularProgressIndicator(
-            color: HalalFintechTheme.accentGreen,
-          ),
+          child: PlatformSpinner(color: HalalFintechTheme.accentGreen),
         ),
       );
     }

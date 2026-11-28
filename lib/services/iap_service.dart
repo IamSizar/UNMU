@@ -85,6 +85,10 @@ class IAPService extends GetxService {
   /// True while a buy() is awaiting a result on the stream.
   final RxBool isPurchasing = false.obs;
 
+  /// Bumped each time a restored purchase is verified by the backend, so
+  /// screens listing subscriptions can reload.
+  final RxInt verifiedRestores = 0.obs;
+
   /// Per-purchase-token Completer so the UI can `await buy(...)` and
   /// receive a typed outcome. Keyed on productID + nanoid so two
   /// concurrent buys (rare but possible) don't collide.
@@ -200,9 +204,30 @@ class IAPService extends GetxService {
   /// Restore previously-bought subscriptions. The store re-delivers
   /// PurchaseDetails for every active SKU; each one is sent to the
   /// backend for verification just like a fresh buy.
-  Future<void> restorePurchases() async {
-    if (!isAvailable.value) return;
+  ///
+  /// Returns false when the store is unavailable (nothing was started).
+  Future<bool> restorePurchases() async {
+    if (!isAvailable.value) return false;
     await _store.restorePurchases();
+    return true;
+  }
+
+  static const String _expertSkuPrefix = 'com.unmu.expert.';
+  static const List<String> _planSuffixes = ['.monthly', '.yearly'];
+
+  /// The expert id inside an expert SKU (`com.unmu.expert.{id}.{plan}`), or
+  /// null for any other SKU. Restored purchases have no pending buy, so this
+  /// is the only way to know which expert they belong to.
+  static String? expertIdFromProductId(String productId) {
+    if (!productId.startsWith(_expertSkuPrefix)) return null;
+    final rest = productId.substring(_expertSkuPrefix.length);
+    for (final suffix in _planSuffixes) {
+      if (rest.endsWith(suffix)) {
+        final id = rest.substring(0, rest.length - suffix.length);
+        return id.isEmpty ? null : id;
+      }
+    }
+    return null;
   }
 
   void _onPurchaseUpdates(List<PurchaseDetails> updates) {
@@ -240,11 +265,41 @@ class IAPService extends GetxService {
       case PurchaseStatus.restored:
         // Verify with backend; complete locally only if backend accepts.
         final pending = _firstPendingFor(p.productID);
-        final result = await _verifyWithBackend(p, pending?.expertId);
+        final expertId =
+            pending?.expertId ?? expertIdFromProductId(p.productID);
+        final result = await _verifyWithBackend(p, expertId);
         if (p.pendingCompletePurchase) await _store.completePurchase(p);
+        if (p.status == PurchaseStatus.restored && result.ok) {
+          verifiedRestores.value++;
+        }
         _completeMatching(p.productID, result);
         return;
     }
+  }
+
+  /// The backend verify call for this platform, or null where purchases
+  /// cannot be verified. iOS sends the App Store receipt; Android sends the
+  /// Google Play purchase token (serverVerificationData on Android).
+  @visibleForTesting
+  static ({Uri uri, Map<String, dynamic> body})? verifyRequestFor({
+    required bool isIOS,
+    required bool isAndroid,
+    required String baseUrl,
+    required String storeData,
+    required String productId,
+    String? expertId,
+  }) {
+    if (!isIOS && !isAndroid) return null;
+    return (
+      uri: Uri.parse(isIOS
+          ? '$baseUrl/me/iap/apple/verify'
+          : '$baseUrl/me/iap/google/verify'),
+      body: {
+        isIOS ? 'receiptData' : 'purchaseToken': storeData,
+        'productId': productId,
+        if (expertId != null && expertId.isNotEmpty) 'expertId': expertId,
+      },
+    );
   }
 
   Future<IAPVerificationResult> _verifyWithBackend(
@@ -266,12 +321,15 @@ class IAPService extends GetxService {
       );
     }
 
-    // Today we only support Apple; once a Google handler exists, fork
-    // on Platform.isAndroid.
-    final endpoint = Platform.isIOS
-        ? '${ApiConfig.baseUrl}/me/iap/apple/verify'
-        : null;
-    if (endpoint == null) {
+    final request = verifyRequestFor(
+      isIOS: Platform.isIOS,
+      isAndroid: Platform.isAndroid,
+      baseUrl: ApiConfig.baseUrl,
+      storeData: receipt,
+      productId: p.productID,
+      expertId: expertId,
+    );
+    if (request == null) {
       return const IAPVerificationResult(
         ok: false,
         error: 'Verification is not yet supported on this platform.',
@@ -281,16 +339,12 @@ class IAPService extends GetxService {
     try {
       final response = await http
           .post(
-            Uri.parse(endpoint),
+            request.uri,
             headers: {
               'Content-Type': 'application/json',
               'Authorization': 'Bearer $authToken',
             },
-            body: json.encode({
-              'receiptData': receipt,
-              'productId': p.productID,
-              if (expertId != null && expertId.isNotEmpty) 'expertId': expertId,
-            }),
+            body: json.encode(request.body),
           )
           .timeout(const Duration(seconds: 20));
 

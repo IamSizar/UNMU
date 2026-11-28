@@ -13,6 +13,7 @@ import 'package:halalstocks/localization/app_translations.dart';
 import 'package:halalstocks/models/pulse_item.dart';
 import 'package:halalstocks/screens/pulse/pulse_home_screen.dart';
 import 'package:halalstocks/services/pulse_service.dart';
+import 'package:halalstocks/widgets/pulse/pulse_cards.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:visibility_detector/visibility_detector.dart';
@@ -121,6 +122,42 @@ void main() {
     await t.tap(find.text('pulse.error.retry'.tr));
     await t.pump(const Duration(milliseconds: 200));
     expect(find.text('Title 1'), findsOneWidget);
+  });
+
+  // OPOS 137988: Retry used to give no feedback while the request ran.
+  testWidgets('Retry on the error state shows skeletons while loading', (
+    t,
+  ) async {
+    api.todayResult = const PulseResult.fail(PulseFailure.offline);
+    await pump(t);
+    api.holdToday = true;
+    await t.tap(find.text('pulse.error.retry'.tr));
+    await t.pump();
+    expect(find.text('pulse.error.offline.title'.tr), findsNothing);
+    expect(find.byType(PulseCardsSkeleton), findsOneWidget);
+    api.heldToday.single.complete(PulseResult.ok(fullDay));
+    await t.pump(const Duration(milliseconds: 200));
+    expect(find.text('Title 1'), findsOneWidget);
+  });
+
+  testWidgets('Retry on the refresh notice shows a spinner while loading', (
+    t,
+  ) async {
+    api.todayResult = PulseResult.ok(fullDay);
+    await pump(t);
+    api.todayResult = const PulseResult.fail(PulseFailure.server);
+    await Get.find<PulseController>().refreshToday();
+    await t.pump();
+    expect(find.text('pulse.refreshFailed'.tr), findsOneWidget);
+
+    api.holdToday = true;
+    await t.tap(find.text('pulse.error.retry'.tr));
+    await t.pump();
+    expect(find.text('pulse.error.retry'.tr), findsNothing);
+    expect(find.byKey(const ValueKey('pulse-refresh-spinner')), findsOneWidget);
+    api.heldToday.single.complete(PulseResult.ok(fullDay));
+    await t.pump(const Duration(milliseconds: 200));
+    expect(find.text('pulse.refreshFailed'.tr), findsNothing);
   });
 
   testWidgets('a server failure uses the server wording', (t) async {

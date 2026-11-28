@@ -726,9 +726,11 @@ func (r *ExpertSubscriptionRepository) ExpireDue() ([]ExpiredSubSummary, error) 
 // comes from the store's renewal date (so when Apple says "expires Jan
 // 5", that's exactly what we store).
 //
-// Returns ErrActiveSubExists when the user already has an overlapping
-// active sub for this expert — the caller should treat that as success
-// (the receipt was a renewal that we already counted).
+// A renewal (the user already has an active sub for this expert) extends
+// that row's expires_at instead of inserting: the one-active-per-pair index
+// used to reject it, so store-paid subs expired after the first period.
+// An older receipt never shortens the expiry. ErrActiveSubExists is now only
+// returned when two first purchases race.
 func (r *ExpertSubscriptionRepository) ActivateFromIAP(
 	userID int64,
 	expertID string,
@@ -738,13 +740,17 @@ func (r *ExpertSubscriptionRepository) ActivateFromIAP(
 	purchasedAt time.Time,
 	expiresAt *time.Time,
 ) error {
+	extended, err := r.extendActiveFromIAP(userID, expertID, paymentMethod, paymentRef, expiresAt)
+	if err != nil || extended {
+		return err
+	}
 	priceCents := models.PriceForPlan(plan)
 	now := purchasedAt
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
 
-	_, err := r.db.Exec(`
+	_, err = r.db.Exec(`
 		INSERT INTO expert_subscriptions
 		    (user_id, expert_id, plan, status, price_cents, currency,
 		     payment_method, payment_ref, created_at, accepted_at, expires_at)
@@ -758,4 +764,34 @@ func (r *ExpertSubscriptionRepository) ActivateFromIAP(
 		return err
 	}
 	return nil
+}
+
+// extendActiveFromIAP pushes an existing active sub's expiry to the store's
+// new renewal date. The payment reference only moves to the new receipt
+// when the active sub was itself paid through the same store. Reports
+// whether an active sub was found.
+func (r *ExpertSubscriptionRepository) extendActiveFromIAP(
+	userID int64, expertID, paymentMethod, paymentRef string, expiresAt *time.Time,
+) (bool, error) {
+	res, err := r.db.Exec(`
+		UPDATE expert_subscriptions
+		SET expires_at  = CASE
+		                    WHEN $3::timestamptz IS NULL THEN expires_at
+		                    WHEN expires_at IS NULL OR $3::timestamptz > expires_at THEN $3::timestamptz
+		                    ELSE expires_at
+		                  END,
+		    payment_ref = CASE
+		                    WHEN payment_method = $4 AND ($3::timestamptz > expires_at OR expires_at IS NULL)
+		                    THEN $5 ELSE payment_ref
+		                  END
+		WHERE user_id = $1 AND expert_id = $2 AND status = 'active'`,
+		userID, expertID, expiresAt, paymentMethod, paymentRef)
+	if err != nil {
+		return false, fmt.Errorf("extend active expert sub: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("extend active expert sub: %w", err)
+	}
+	return n > 0, nil
 }

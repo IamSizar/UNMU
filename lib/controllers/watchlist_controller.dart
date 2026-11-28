@@ -24,7 +24,7 @@ class WatchlistController extends GetxController {
     _isLoading.value = true;
     _error.value = null;
     try {
-      final list = await ApiService.getUserPortfolio(token);
+      final list = await ApiService.fetchUserPortfolio(token);
       _watchlist.assignAll(list);
     } catch (e) {
       _error.value = e.toString();

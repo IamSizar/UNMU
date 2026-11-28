@@ -111,6 +111,10 @@ export function availableActions(item: PulseItem, me: PulseMe): ItemActionKey[] 
       return approver ? ['unschedule', 'publish'] : []
     case 'published':
       return approver ? ['correct', 'archive'] : []
+    case 'archived':
+      // A replaced item is still in readers' Saved lists; archiving it again
+      // takes it down (backend clears replacedBy).
+      return approver && item.replacedBy != null ? ['archive'] : []
     default:
       return []
   }

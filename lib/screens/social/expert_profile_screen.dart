@@ -11,6 +11,7 @@ import '../../models/expert_post.dart' as live_post;
 import '../../models/expert_subscription.dart';
 import '../../services/community_service.dart';
 import 'community_detail_screen.dart';
+import 'community_directory.dart';
 import 'expert_paywall_screen.dart';
 import '../../widgets/platform_adaptive/platform_dialog.dart';
 import '../../widgets/common/app_network_image.dart';
@@ -22,13 +23,13 @@ import '../../widgets/social/price_indicator.dart';
 import '../../widgets/social/reel_grid_tile.dart';
 import '../../widgets/social/report_sheet.dart';
 import '../../widgets/social/sparkline_chart.dart';
-import '../../widgets/social/trading_chart.dart';
 import '../../widgets/social/verified_badge.dart';
 import '../../widgets/social/video_card.dart';
 import '../subscriptions/subscribe_modal.dart';
 import 'create_post_screen.dart';
 import 'mock_social_data.dart';
 import 'social_tokens.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Expert Profile & Trading Insights screen.
 ///
@@ -179,20 +180,7 @@ class _ExpertProfileScreenState extends State<ExpertProfileScreen>
       );
       return;
     }
-    final c = Community(
-      id: meta.id,
-      name: meta.name,
-      tagline: meta.tagline,
-      regionCode: meta.regionCode,
-      memberCount: meta.memberCount,
-      activeNow: 0,
-      liveTickers: const [],
-      chatMessages: const [],
-      posts: const [],
-      reels: const [],
-      videos: const [],
-      ownerId: meta.ownerId,
-    );
+    final c = communityFromMeta(meta);
     HapticFeedback.lightImpact();
     if (!context.mounted) return;
     Navigator.of(context).push(
@@ -332,22 +320,8 @@ class _ExpertProfileScreenState extends State<ExpertProfileScreen>
                 onTap: (id) => _openCommunityById(context, id),
               ),
             ),
-          // TradingChart is mock-data-only (no real intraday feed yet).
-          // Hide when the adapted expert has no ticker / price data so
-          // we don't render a blank chart with default zero values.
-          if (e.currentTicker.isNotEmpty)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-                child: TradingChart(
-                  ticker: e.currentTicker,
-                  price: e.currentPrice,
-                  changePct: e.currentChangePct,
-                  shariahGrade: e.shariahGrade,
-                  data: MockSocialData.intradayChart(),
-                ),
-              ),
-            ),
+          // No price chart here: there is no real intraday feed, and the
+          // old chart drew random numbers next to a real ticker.
           SliverPersistentHeader(
             pinned: true,
             delegate: _TabBarDelegate(
@@ -768,7 +742,7 @@ class _LivePostsTab extends StatelessWidget {
         return Center(
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 32),
-            child: CircularProgressIndicator(color: accent),
+            child: PlatformSpinner(color: accent),
           ),
         );
       }
@@ -1653,22 +1627,12 @@ class _SubscribeCTA extends StatelessWidget {
                   );
                 } else if (sub.status == SubStatus.active) {
                   // Active — confirm cancel.
-                  final ok = await showDialog<bool>(
+                  final ok = await PlatformDialog.show(
                     context: context,
-                    builder: (ctx) => AlertDialog(
-                      title: Text('expertProfile.cancelSubTitle'.tr),
-                      content: Text('expertProfile.cancelSubBody'.tr),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx, false),
-                          child: Text('expertProfile.keep'.tr),
-                        ),
-                        FilledButton(
-                          onPressed: () => Navigator.pop(ctx, true),
-                          child: Text('common.cancel'.tr),
-                        ),
-                      ],
-                    ),
+                    title: 'expertProfile.cancelSubTitle'.tr,
+                    content: 'expertProfile.cancelSubBody'.tr,
+                    cancelText: 'expertProfile.keep'.tr,
+                    confirmText: 'common.cancel'.tr,
                   );
                   if (ok == true) {
                     await ctrl.cancel(sub.id, expertId: expertId);

@@ -8,6 +8,7 @@ import 'dart:convert';
 import '../../config/api_config.dart';
 import '../../screens/social/social_tokens.dart';
 import 'shariah_grade_chip.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Cashtag parser + tiny inline card for chat bubbles (mig 0021,
 /// item 5.16).
@@ -197,7 +198,7 @@ class _TickerCardState extends State<TickerCard> {
               const SizedBox(
                 width: 12,
                 height: 12,
-                child: CircularProgressIndicator(strokeWidth: 1.5),
+                child: PlatformSpinner(strokeWidth: 1.5),
               )
             else if (_match != null) ...[
               SizedBox(

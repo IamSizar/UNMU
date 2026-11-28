@@ -7,6 +7,7 @@ import '../../controllers/currency_controller.dart';
 import '../../screens/social/social_tokens.dart';
 import '../../services/api_service.dart';
 import '../../utils/haptic_utils.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// =============================================================================
 /// Zakat Calculator — modern fintech form.
@@ -266,7 +267,7 @@ class _ZakatCalculatorScreenState extends State<ZakatCalculatorScreen>
     // (see the OutlinedButton below).
     if (_loadingPortfolio && _portfolio == null) {
       return const Center(
-        child: CircularProgressIndicator(color: SocialTokens.cyan),
+        child: PlatformSpinner(color: SocialTokens.cyan),
       );
     }
 
@@ -360,7 +361,7 @@ class _ZakatCalculatorScreenState extends State<ZakatCalculatorScreen>
                 ? const SizedBox(
                     width: 18,
                     height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: PlatformSpinner(strokeWidth: 2),
                   )
                 : Text('zakat.recalculate'.tr),
           ),
@@ -889,10 +890,7 @@ class _CalculateButton extends StatelessWidget {
                 ? const SizedBox(
                     width: 22,
                     height: 22,
-                    child: CircularProgressIndicator(
-                      color: Color(0xFF0A1628),
-                      strokeWidth: 2.4,
-                    ),
+                    child: PlatformSpinner(color: Color(0xFF0A1628), strokeWidth: 2.4),
                   )
                 : Row(
                     mainAxisSize: MainAxisSize.min,

@@ -26,6 +26,8 @@ import '../../widgets/social/ticker_card.dart';
 import '../../widgets/social/typing_pill.dart';
 import 'mock_social_data.dart';
 import 'social_tokens.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_dialog.dart';
 
 /// Standalone full-page community chat. Reached via the chat icon in
 /// the [CommunityDetailScreen]'s AppBar. Pure UI scaffold — no
@@ -875,38 +877,13 @@ class _CommunityChatScreenState extends State<CommunityChatScreen>
     bool isArabic,
   ) async {
     HapticFeedback.selectionClick();
-    final confirmed = await showDialog<bool>(
+    final confirmed = await PlatformDialog.show(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: SocialTheme.of(context).surface,
-        title: Text(
-          'chat.delete.title'.tr,
-          style: TextStyle(
-            color: SocialTheme.of(context).textPrimary,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        content: Text(
-          'chat.delete.body'.tr,
-          style: TextStyle(color: SocialTheme.of(context).textMuted),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('common.cancel'.tr),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(
-              'common.delete'.tr,
-              style: const TextStyle(
-                color: Color(0xFFFF6B7A),
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ],
-      ),
+      title: 'chat.delete.title'.tr,
+      content: 'chat.delete.body'.tr,
+      cancelText: 'common.cancel'.tr,
+      confirmText: 'common.delete'.tr,
+      isDestructive: true,
     );
     if (confirmed != true) return;
 
@@ -1406,7 +1383,7 @@ class _CommunityChatScreenState extends State<CommunityChatScreen>
   ) {
     if (_loading) {
       return Center(
-        child: CircularProgressIndicator(color: accent),
+        child: PlatformSpinner(color: accent),
       );
     }
     if (_loadError != null && _messages.isEmpty) {
@@ -1853,8 +1830,7 @@ class _ChatBubbleState extends State<_ChatBubble> {
                                               child: const SizedBox(
                                                 width: 22,
                                                 height: 22,
-                                                child: CircularProgressIndicator(
-                                                    strokeWidth: 2.2),
+                                                child: PlatformSpinner(strokeWidth: 2.2),
                                               ),
                                             ),
                                   errorBuilder: (ctx, _, __) => Container(
@@ -2185,10 +2161,7 @@ class _ChatComposerState extends State<_ChatComposer> {
                         ? const SizedBox(
                             width: 14,
                             height: 14,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Color(0xFF0A1628),
-                            ),
+                            child: PlatformSpinner(strokeWidth: 2, color: Color(0xFF0A1628)),
                           )
                         : Icon(
                             _hasText
@@ -3071,7 +3044,7 @@ class _ReactorsSheetState extends State<_ReactorsSheet>
   Widget _buildBody(SocialPalette palette) {
     if (_loading) {
       return Center(
-        child: CircularProgressIndicator(color: palette.textMuted),
+        child: PlatformSpinner(color: palette.textMuted),
       );
     }
     if (_error != null) {
@@ -3330,10 +3303,7 @@ class _RecordingStripState extends State<_RecordingStrip>
                       ? const SizedBox(
                           width: 14,
                           height: 14,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Color(0xFF0A1628),
-                          ),
+                          child: PlatformSpinner(strokeWidth: 2, color: Color(0xFF0A1628)),
                         )
                       : const Icon(
                           Icons.arrow_upward_rounded,

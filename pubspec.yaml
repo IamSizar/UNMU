@@ -142,14 +142,6 @@ dependencies:
   # identity token that we feed into firebase_auth.
   sign_in_with_apple: ^6.1.2
 
-  # App Tracking Transparency — wraps Apple's ATTrackingManager so we
-  # can request the system prompt before any IDFA-using SDK starts.
-  # No-op on Android. Required by App Store guideline 5.1.2 whenever
-  # the binary links the AppTrackingTransparency framework, even if we
-  # don't actively track today — pre-wiring this means we won't need a
-  # new submission when we later add an analytics SDK.
-  app_tracking_transparency: ^2.0.4+1
-
 dev_dependencies:
   flutter_test:
     sdk: flutter

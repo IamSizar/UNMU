@@ -9,6 +9,7 @@ import '../../widgets/common/app_network_image.dart';
 import '../../widgets/social/community_payment_sheet.dart';
 import '../../widgets/social/community_pricing_card.dart';
 import 'social_tokens.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Pre-join "About this community" screen (step-23).
 ///
@@ -161,7 +162,7 @@ class _CommunityPreviewScreenState extends State<CommunityPreviewScreen> {
 
   Widget _body(SocialPalette palette) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: PlatformSpinner());
     }
     if (_error != null || _community == null) {
       return Center(

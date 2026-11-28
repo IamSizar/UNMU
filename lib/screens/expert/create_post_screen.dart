@@ -11,6 +11,7 @@ import '../../controllers/app_config_controller.dart';
 import '../../controllers/auth_controller.dart';
 import '../../controllers/upload_controller.dart';
 import '../../models/expert_post.dart';
+import '../../screens/social/community_directory.dart';
 import '../../screens/social/mock_social_data.dart' as mock;
 import '../../screens/social/social_tokens.dart';
 import '../../services/community_service.dart';
@@ -19,6 +20,7 @@ import '../../services/upload_service.dart';
 import '../../utils/haptic_utils.dart';
 import '../../utils/responsive.dart';
 import '../../widgets/dismiss_keyboard_on_tap.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Composer for a new expert post — pick **type** first (article / video /
 /// reel), then fill in the relevant fields, then publish.
@@ -152,10 +154,11 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     }
   }
 
-  /// Pull the list of communities the expert has joined and
-  /// cross-reference the mock community catalog for display
-  /// metadata. Failure leaves the destination list empty — the
-  /// picker degrades to "Profile only" gracefully.
+  /// Pull the communities the expert has joined, with their real
+  /// metadata from GET /api/communities. (This used to look them up in
+  /// the hard-coded sample list, so any community missing from it could
+  /// never be posted to.) Failure leaves the destination list empty —
+  /// the picker degrades to "Profile only" gracefully.
   Future<void> _loadDestinations() async {
     // Community kill-switch — when communities are disabled, don't offer
     // any community destinations; the composer degrades to "Profile only".
@@ -163,13 +166,20 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       if (mounted) setState(() => _destinationsLoaded = true);
       return;
     }
-    final res = await CommunityService.myCommunityIds();
+    final results = await Future.wait([
+      CommunityService.myCommunityIds(),
+      CommunityService.listAllCommunities(),
+    ]);
     if (!mounted) return;
-    final ids = res.ids ?? const <String>{};
-    final list = <mock.Community>[];
-    for (final entry in mock.MockSocialData.communities) {
-      if (ids.contains(entry.id)) list.add(entry);
-    }
+    final ids = (results[0] as ({Set<String>? ids, String? error})).ids ??
+        const <String>{};
+    final all = (results[1]
+            as ({List<CommunityMeta>? communities, String? error}))
+        .communities;
+    final list = (all ?? const <CommunityMeta>[])
+        .where((m) => ids.contains(m.id))
+        .map(communityFromMeta)
+        .toList();
     setState(() {
       _destinations = list;
       _destinationsLoaded = true;
@@ -593,7 +603,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                 ? const SizedBox(
                     width: 18,
                     height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: PlatformSpinner(strokeWidth: 2),
                   )
                 : Text(widget.isEditing ? 'createPostX.save'.tr : 'createPostX.publish'.tr),
           ),
@@ -983,7 +993,7 @@ class _MediaPickerTile extends StatelessWidget {
                           strokeWidth: 2,
                           value: uploadProgress!.clamp(0.0, 1.0),
                         )
-                      : const CircularProgressIndicator(strokeWidth: 2),
+                      : const PlatformSpinner(strokeWidth: 2),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -1350,10 +1360,7 @@ class _DestinationPicker extends StatelessWidget {
                   SizedBox(
                     width: 14,
                     height: 14,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: cs.primary,
-                    ),
+                    child: PlatformSpinner(strokeWidth: 2, color: cs.primary),
                   ),
                   const SizedBox(width: 10),
                   Text(

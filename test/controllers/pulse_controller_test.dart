@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:halalstocks/controllers/pulse_controller.dart';
 import 'package:halalstocks/models/pulse_item.dart';
+import 'package:halalstocks/models/user.dart';
 import 'package:halalstocks/services/pulse_service.dart';
 import '../support/fake_pulse_api.dart';
 
@@ -184,4 +187,135 @@ void main() {
       expect(api.events, ['view_day:-', 'view_day:-']);
     });
   });
+
+  // OPOS 137988 — slow replies, fast taps and account switches must never
+  // leave the screen showing stale or another account's state.
+  group('races', () {
+    PulseDay dayWith(int id) => fakePulseDay([fakePulseItem(id, PulseSlot.global)]);
+
+    test('refreshing is raised while a pull-to-refresh / Retry runs', () async {
+      await c.loadToday();
+      api.holdToday = true;
+      final f = c.refreshToday();
+      expect(c.refreshing.value, isTrue);
+      api.heldToday.single.complete(PulseResult.ok(dayWith(2)));
+      await f;
+      expect(c.refreshing.value, isFalse);
+    });
+
+    test('an older loadToday reply cannot overwrite a newer one', () async {
+      api.holdToday = true;
+      final older = c.loadToday();
+      final newer = c.loadToday();
+      api.heldToday[1].complete(PulseResult.ok(dayWith(2)));
+      await newer;
+      api.heldToday[0].complete(PulseResult.ok(dayWith(1)));
+      await older;
+      expect(c.day.value?.items.single.id, 2);
+      expect(c.loading.value, isFalse);
+    });
+
+    test('a reply for the previous account is dropped after sign-out', () async {
+      await signIn(c, 7);
+      api.holdToday = true;
+      final f = c.loadToday();
+      c.handleUserChanged(null); // sign-out while the request is in flight
+      api.heldToday.single.complete(PulseResult.ok(dayWith(1)));
+      await f;
+      expect(c.day.value, isNull);
+      expect(c.loading.value, isFalse);
+    });
+
+    test('a second tap while a save is in flight is ignored', () async {
+      final item = fakePulseItem(1, PulseSlot.global);
+      api.holdSaves = true;
+      final first = c.toggleSave(item);
+      final second = await c.toggleSave(item);
+      expect(second, isTrue); // still the optimistic "saved"
+      api.heldSaves.single.complete(true);
+      expect(await first, isTrue);
+      expect(api.calls.where((x) => x.startsWith('save') || x.startsWith('unsave')),
+          ['save 1']);
+      expect(c.isSaved(1), isTrue);
+    });
+
+    test('a today reply does not undo a save still in flight', () async {
+      final item = fakePulseItem(1, PulseSlot.global);
+      api.holdSaves = true;
+      final f = c.toggleSave(item);
+      // Server snapshot taken before the save landed: says "not saved".
+      api.todayResult = PulseResult.ok(dayWith(1));
+      await c.loadToday();
+      expect(c.isSaved(1), isTrue);
+      api.heldSaves.single.complete(true);
+      await f;
+      expect(c.isSaved(1), isTrue);
+    });
+
+    test('a save reply after sign-out changes nothing', () async {
+      await signIn(c, 7);
+      final item = fakePulseItem(1, PulseSlot.global);
+      api.holdSaves = true;
+      api.saveOk = false;
+      final f = c.toggleSave(item);
+      c.handleUserChanged(null);
+      api.heldSaves.single.complete(false); // would normally revert + no-op
+      await f;
+      expect(c.isSaved(1), isFalse);
+      expect(api.events, isEmpty);
+    });
+  });
+
+  // Review of PR #5: profile/email edits re-emit the SAME user (User has no
+  // ==). That must not count as an account change, and an account change
+  // during a save must not leave the item stuck or Saved spinning forever.
+  group('account changes', () {
+
+    test('a profile update for the same user is not an account change',
+        () async {
+      await signIn(c, 7);
+      final item = fakePulseItem(1, PulseSlot.global);
+      api.holdSaves = true;
+      final f = c.toggleSave(item);
+      c.handleUserChanged(_user(7)); // same id: e.g. PATCH /me
+      api.heldSaves.single.complete(true);
+      expect(await f, isTrue);
+      expect(c.isSaved(1), isTrue);
+      expect(api.events, contains('save:1'));
+    });
+
+    test('switching A → B mid-save does not leave the item stuck', () async {
+      await signIn(c, 7);
+      final item = fakePulseItem(1, PulseSlot.global);
+      api.holdSaves = true;
+      final f = c.toggleSave(item);
+      c.handleUserChanged(_user(8)); // another account, no sign-out between
+      api.heldSaves.single.complete(true);
+      await f;
+      api.holdSaves = false;
+      // B taps the same item: it must work, not be ignored.
+      expect(await c.toggleSave(item), isTrue);
+      expect(api.calls.where((x) => x == 'save 1').length, 2);
+    });
+
+    test('an account change during loadSaved resets the spinner', () async {
+      await signIn(c, 7);
+      final saved = Completer<void>();
+      api.savedGate = saved;
+      final f = c.loadSaved();
+      expect(c.savedLoading.value, isTrue);
+      c.handleUserChanged(null);
+      saved.complete();
+      await f;
+      expect(c.savedLoading.value, isFalse);
+    });
+  });
+}
+
+User _user(int id) => User(id: id, email: 'u$id@example.test');
+
+/// Signs [c] in as user [id] and lets the sign-in loadToday finish.
+Future<void> signIn(PulseController c, int id) async {
+  c.handleUserChanged(_user(id));
+  await Future<void>.delayed(Duration.zero);
 }
