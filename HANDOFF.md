@@ -5,6 +5,46 @@ context: read this before planning any work here.
 
 ---
 
+## 2026-11-28 — DEPLOYED to staging and production (main `6e4afe9`)
+
+**Asked for:** "push it and update the PR", "upgrade gradle to 8.14", "draft" the privacy manifest, then "deploy all". Zaid approved each production step in chat (migrations: "You run them"; CORS + merges: "Yes, deploy").
+
+**Code added after the overnight entry below:** `b75042c` Gradle 8.14.3 / AGP 8.11.1 / Kotlin 2.2.20 plus a Jetifier ignore list for Flutter engine jars; `29caa5b` iOS privacy manifest `NSPrivacyCollectedDataTypes` (9 types, drafted from the code).
+
+**Merges:** PR #5 squash-merged into `feat/unmu-pulse`, then PR #4 squash-merged into `main` → `6e4afe9`. Railway production auto-deploys from `main`: backend and dashboard `6e4afe9`, both SUCCESS.
+
+**Staging** (`railway up` from the repo root, branch `fix/release-blockers` at `29caa5b`):
+- Migrations 0058–0061 applied by hand (0055–0057 were already there).
+- `CORS_ALLOWED_ORIGINS=https://dashboard-staging-98ea.up.railway.app` set on the backend.
+
+**Production:**
+- **Backup first:** `pg_dump` 18, custom format, 55 tables, about 280 KB. Saved only to Claude's session scratchpad as `prod_backup_2026-11-28_pre0055.dump`. Move it somewhere durable; it contains user data.
+- **Migrations:** 0055–0061 applied by hand with `psql -v ON_ERROR_STOP=1`. All 30 users intact; the `expert_subscriptions` payment-method check now allows `apple_iap` and `google_iap`. No `@test.com` seed accounts exist in production.
+- **CORS:** `CORS_ALLOWED_ORIGINS=https://dashboard-production-7ad1.up.railway.app` set before the merge.
+- **Unchanged settings:** `JWT_SECRET` was already 64 characters, so nobody was logged out. `APP_ENV` is unset, which now means production behaviour.
+
+**Smoke checks (staging and production):**
+- `/api/health` returns 200 and `POST /api/dev/impersonate` returns 404.
+- Without auth, `/me/iap/google/verify`, `/admin/push/history` and `/pulse/today` return 401.
+- CORS preflight is allowed for the dashboard origin and gets no allow header for another origin.
+- The dashboard returns 200, and `check-email` answers.
+- The production backend logs show no errors.
+- Not done: logging in to the app against production, or making a real purchase.
+
+**Still open (Zaid):**
+- Google Play: set `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` (Android purchase verification fails until it is set) and create the upload keystore (`key.properties`).
+- Set `APPLE_IAP_ALLOW_SANDBOX=false` after TestFlight; it defaults to true.
+- Check App Store Connect privacy answers against the manifest.
+- Decide whether cash/FIB stays for expert subscriptions on iOS.
+
+**Traps:**
+- Use `/opt/homebrew/opt/postgresql@18/bin/pg_dump`; the default pg_dump 14 refuses the Postgres 18 server.
+- The migration files have their own BEGIN/COMMIT, so `psql -1` prints harmless "transaction in progress" warnings.
+- zsh has no `PIPESTATUS`.
+- Left uncommitted locally (Flutter tooling side effects): iOS 15 Podfile bump, `Podfile.lock`, `project.pbxproj`, scheme, `pubspec.lock`, `analysis_options.yaml`, swiftpm folders, `backend/scripts/demo_seed*.sql`.
+
+---
+
 ## 2026-11-28 — Overnight run: Apple + Google purchases, dashboard, polish, iOS e2e (branch `fix/release-blockers`, local commits only: NOT pushed, NOT deployed)
 
 **Asked for:** "Apple purchase fixes", then "finish this app 100% … /loop … fully e2e tested and verified by 9 am". Scope I set for the loop: Apple fixes, dashboard tsc, iOS simulator build/run, polish, code-only Google Play verification. Rule kept: nothing pushed, deployed or run against production. The commits below are **local** on `fix/release-blockers` (on top of the pushed PR #5 head `fa872e1`); Zaid has not reviewed them yet.
