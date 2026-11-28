@@ -1,7 +1,7 @@
 // pulse_autodraft.go — the daily Pulse auto-draft job (docs/pulse/AUTODRAFT.md).
 //
 // It gathers fresh EODHD news plus recent Sharia verdict changes, asks a
-// PulseDraftWriter (Claude) to pick one story per free slot, checks every
+// PulseDraftWriter (Gemini) to pick one story per free slot, checks every
 // pick against the rules below, and saves the good ones as DRAFTS. People
 // still verify, review and approve each item in the dashboard.
 package services

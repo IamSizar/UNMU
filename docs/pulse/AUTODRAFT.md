@@ -12,7 +12,7 @@ Approved by Zaid on 2026-11-28 ("go ahead all approved and agreed lets build thi
    - reads the last 36 hours of EODHD news for our covered stocks plus the
      general market feed;
    - reads the Sharia verdict changes of the last 7 days;
-   - asks Claude (`claude-opus-5-5`) to pick one story per empty slot
+   - asks Gemini (`gemini-3.8-flash` by default, via the official Go SDK `google.golang.org/genai`) to pick one story per empty slot
      (global, gulf, sharia, opportunity) and write it in Arabic and English.
 
    Each pick is saved as a **draft** with no author. Editors still verify,
@@ -40,9 +40,9 @@ Approved by Zaid on 2026-11-28 ("go ahead all approved and agreed lets build thi
 |---|---|---|
 | `DAILY_SCREENING_ENABLED` | off | `true` turns the daily refresh on (needs `EODHD_API_KEY`) |
 | `DAILY_SCREENING_HOUR_UTC` | 2 | earliest UTC hour to run |
-| `PULSE_AUTODRAFT_ENABLED` | off | `true` turns daily drafts on (needs `EODHD_API_KEY` and `ANTHROPIC_API_KEY`) |
+| `PULSE_AUTODRAFT_ENABLED` | off | `true` turns daily drafts on (needs `EODHD_API_KEY` and `GEMINI_API_KEY`) |
 | `PULSE_AUTODRAFT_HOUR_UTC` | 3 | earliest UTC hour to run (06:00 Baghdad) |
-| `PULSE_AUTODRAFT_MODEL` | `claude-opus-5-5` | Claude model id |
+| `PULSE_AUTODRAFT_MODEL` | `gemini-3.8-flash` | Gemini model id |
 
 ## Admin API
 
@@ -68,8 +68,10 @@ Approved by Zaid on 2026-11-28 ("go ahead all approved and agreed lets build thi
 | `CreateAutoDraft` (no author, change-log note), `TakenSlots`, `RecentShariahChanges` (Postgres) | same file |
 | EODHD news: one request per ticker, parsing, HTTP error | `marketdata/eodhd_news_test.go` |
 | drafter: taken slots, duplicate slot, bad article index, empty fields, source from the article, Sharia from screening data, nothing open | `services/pulse_autodraft_test.go` |
-| Claude reply parsing, refusal | same file |
+| Gemini reply parsing: stop, max tokens, blocked prompt | same file |
 
-Not yet run for real: the Claude call itself. The local `ANTHROPIC_API_KEY` was
-rejected (401), so the first real run happens once a valid key is set on
-Railway.
+Not yet run for real: the Gemini call itself. There is no Gemini key on this
+machine, so the first real run happens once `GEMINI_API_KEY` is set on Railway.
+
+The model was switched from Claude to Gemini on 2026-11-28 at Zaid's request
+("we will use gemini not anthropic").

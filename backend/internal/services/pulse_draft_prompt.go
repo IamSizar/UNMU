@@ -1,28 +1,7 @@
-// pulse_claude.go — PulseDraftWriter backed by the Claude API
-// (docs/pulse/AUTODRAFT.md). One Messages call per day; the reply is
-// constrained to a JSON schema (structured outputs) and then re-checked
-// by draftToInput before anything is saved.
+// pulse_draft_prompt.go — the editor brief and output schema shared by the
+// Pulse draft writer (docs/pulse/AUTODRAFT.md). Provider-neutral: the
+// writer sends them to the model, and draftToInput re-checks every pick.
 package services
-
-import (
-	"context"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"strings"
-	"time"
-
-	"github.com/anthropics/anthropic-sdk-go/v2"
-	"github.com/anthropics/anthropic-sdk-go/v2/option"
-)
-
-// DefaultPulseDraftModel is used when PULSE_AUTODRAFT_MODEL is unset.
-const DefaultPulseDraftModel = "claude-opus-5-5"
-
-const (
-	pulseDraftMaxTokens = 16000
-	pulseDraftTimeout   = 5 * time.Minute
-)
 
 // pulseDraftSystem is the editor brief. Kept stable (no dates) so it can
 // be cached; the day's data goes in the user message.
@@ -67,76 +46,8 @@ var pulseDraftSchema = map[string]any{
 				},
 				"required": []string{"slot", "article_index", "classification", "title_ar", "title_en",
 					"summary_ar", "summary_en", "details_ar", "details_en", "evidence_ar", "evidence_en", "stock_ticker"},
-				"additionalProperties": false,
 			},
 		},
 	},
-	"required":             []string{"items"},
-	"additionalProperties": false,
-}
-
-// ClaudePulseWriter calls the Claude API.
-type ClaudePulseWriter struct {
-	client anthropic.Client
-	model  string
-}
-
-// NewClaudePulseWriter builds a writer. An empty model uses the default.
-func NewClaudePulseWriter(apiKey, model string) *ClaudePulseWriter {
-	if strings.TrimSpace(model) == "" {
-		model = DefaultPulseDraftModel
-	}
-	return &ClaudePulseWriter{
-		client: anthropic.NewClient(option.WithAPIKey(apiKey), option.WithRequestTimeout(pulseDraftTimeout)),
-		model:  model,
-	}
-}
-
-// WriteDrafts asks Claude for today's picks.
-func (w *ClaudePulseWriter) WriteDrafts(ctx context.Context, req PulseDraftRequest) ([]PulseDraft, error) {
-	payload, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("encoding draft request: %w", err)
-	}
-	msg, err := w.client.Beta.Messages.New(ctx, anthropic.BetaMessageNewParams{
-		Model:     anthropic.Model(w.model),
-		MaxTokens: pulseDraftMaxTokens,
-		System:    []anthropic.BetaTextBlockParam{{Text: pulseDraftSystem}},
-		Messages:  []anthropic.BetaMessageParam{anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock(string(payload)))},
-		OutputConfig: anthropic.BetaOutputConfigParam{
-			Effort: anthropic.BetaOutputConfigEffortMedium,
-			Format: anthropic.BetaJSONOutputFormatParam{Schema: pulseDraftSchema},
-		},
-		// Server-side fallback: a policy decline is re-served by another
-		// model inside the same call instead of failing the day.
-		Fallbacks: anthropic.BetaFallbacksParamOfDefault(),
-		Betas:     []anthropic.AnthropicBeta{anthropic.AnthropicBetaServerSideFallback2026_07_01},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("claude request: %w", err)
-	}
-	return parsePulseDraftReply(msg)
-}
-
-// parsePulseDraftReply checks the stop reason and decodes the JSON reply.
-func parsePulseDraftReply(msg *anthropic.BetaMessage) ([]PulseDraft, error) {
-	switch msg.StopReason {
-	case anthropic.BetaStopReasonRefusal:
-		return nil, errors.New("claude declined the request")
-	case anthropic.BetaStopReasonMaxTokens:
-		return nil, errors.New("claude reply was cut off (max_tokens)")
-	}
-	var text strings.Builder
-	for _, block := range msg.Content {
-		if tb, ok := block.AsAny().(anthropic.BetaTextBlock); ok {
-			text.WriteString(tb.Text)
-		}
-	}
-	var out struct {
-		Items []PulseDraft `json:"items"`
-	}
-	if err := json.Unmarshal([]byte(text.String()), &out); err != nil {
-		return nil, fmt.Errorf("decoding claude reply: %w", err)
-	}
-	return out.Items, nil
+	"required": []string{"items"},
 }

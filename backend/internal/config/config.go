@@ -53,7 +53,7 @@ type Config struct {
 	PulseAutodraftEnabled bool
 	PulseAutodraftHourUTC int
 	PulseAutodraftModel   string
-	AnthropicAPIKey       string
+	GeminiAPIKey          string
 
 	// Rate Limiting
 	RateLimitRequests int
@@ -108,7 +108,7 @@ func Load() (*Config, error) {
 		PulseAutodraftEnabled: getEnv("PULSE_AUTODRAFT_ENABLED", "") == "true",
 		PulseAutodraftHourUTC: getEnvInt("PULSE_AUTODRAFT_HOUR_UTC", 3),
 		PulseAutodraftModel:   getEnv("PULSE_AUTODRAFT_MODEL", ""),
-		AnthropicAPIKey:       getEnv("ANTHROPIC_API_KEY", ""),
+		GeminiAPIKey:          getEnv("GEMINI_API_KEY", ""),
 
 		// Rate Limiting
 		RateLimitRequests: 100,
