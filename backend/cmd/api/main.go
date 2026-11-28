@@ -498,6 +498,17 @@ func main() {
 	toolsHandler.SetZakatConfig(appSettingsRepo)
 	adminSettingsHandler := handlers.NewAdminSettingsHandler(appSettingsRepo, auditRepo)
 
+	// Daily jobs: screening refresh + Pulse auto-draft (docs/pulse/AUTODRAFT.md).
+	// Off unless DAILY_SCREENING_ENABLED / PULSE_AUTODRAFT_ENABLED are "true".
+	jobRunRepo := repositories.NewJobRunRepository(database)
+	dailyJobs := buildDailyJobs(dailyJobDeps{
+		cfg: cfg, jobRuns: jobRunRepo, stocks: stockRepo, funds: fundamentalRepo,
+		statuses: shariahRepo, settings: appSettingsRepo, pulseAdmin: pulseAdminRepo,
+		drift: services.NewDriftDetector(notificationRepo, portfolioRepo, notifier),
+	})
+	dailyJobs.Start(context.Background())
+	adminJobsHandler := handlers.NewAdminJobsHandler(jobRunRepo, dailyJobs)
+
 	// Load any admin-configured Shariah screening thresholds so the screener
 	// (internal/shariah) uses them instead of its compiled-in defaults.
 	shariah.SetThresholds(shariah.Thresholds{
@@ -1122,6 +1133,9 @@ func main() {
 	{
 		// Feature flags — community kill-switch (master + chat + posts).
 		admin.GET("/settings", adminSettingsHandler.Get)
+		// Daily jobs: recent runs + run now (docs/pulse/AUTODRAFT.md).
+		admin.GET("/jobs", adminJobsHandler.List)
+		admin.POST("/jobs/:name/run", adminJobsHandler.RunNow)
 		admin.PATCH("/settings", adminSettingsHandler.Update)
 		admin.GET("/screening-thresholds", adminSettingsHandler.GetScreeningThresholds)
 		admin.PUT("/screening-thresholds", adminSettingsHandler.UpdateScreeningThresholds)

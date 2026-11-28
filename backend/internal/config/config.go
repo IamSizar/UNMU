@@ -47,6 +47,14 @@ type Config struct {
 	AIServiceURL string
 	AIServiceKey string
 
+	// Daily jobs (docs/pulse/AUTODRAFT.md). Both are off unless set to "true".
+	DailyScreeningEnabled bool
+	DailyScreeningHourUTC int
+	PulseAutodraftEnabled bool
+	PulseAutodraftHourUTC int
+	PulseAutodraftModel   string
+	AnthropicAPIKey       string
+
 	// Rate Limiting
 	RateLimitRequests int
 	RateLimitWindow   int
@@ -94,6 +102,13 @@ func Load() (*Config, error) {
 		// AI Service
 		AIServiceURL: getEnv("AI_SERVICE_URL", "http://localhost:8000"),
 		AIServiceKey: getEnv("AI_SERVICE_KEY", ""),
+
+		DailyScreeningEnabled: getEnv("DAILY_SCREENING_ENABLED", "") == "true",
+		DailyScreeningHourUTC: getEnvInt("DAILY_SCREENING_HOUR_UTC", 2),
+		PulseAutodraftEnabled: getEnv("PULSE_AUTODRAFT_ENABLED", "") == "true",
+		PulseAutodraftHourUTC: getEnvInt("PULSE_AUTODRAFT_HOUR_UTC", 3),
+		PulseAutodraftModel:   getEnv("PULSE_AUTODRAFT_MODEL", ""),
+		AnthropicAPIKey:       getEnv("ANTHROPIC_API_KEY", ""),
 
 		// Rate Limiting
 		RateLimitRequests: 100,
