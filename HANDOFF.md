@@ -43,7 +43,7 @@ context: read this before planning any work here.
 - Old app builds keep working: `createdAt` is a new optional field.
 
 ### Blockers that need Zaid
-0. **Gradle 8.12 is below the installed Flutter's minimum (8.14).** I built with `flutter build apk --android-skip-build-dependency-validation`. Upgrade `android/gradle/wrapper/gradle-wrapper.properties` (and check AGP 8.9.1 / Kotlin 2.1.0) before a store build. Flutter's migrator also added `android.builtInKotlin=false` and `android.newDsl=false` to `android/gradle.properties` (uncommitted; keep them if you stay on this Flutter).
+0. ~~Gradle 8.12 below Flutter's minimum~~ **Fixed 2026-11-28:** Gradle 8.14.3, AGP 8.11.1, Kotlin 2.2.20 (Flutter's minimums). `android/gradle.properties` keeps the migrator flags (`android.builtInKotlin=false`, `android.newDsl=false`) and adds `android.jetifier.ignorelist` for the Flutter engine jars: without it Jetifier runs out of heap on AGP 8.11. `flutter build apk --debug` and `--release` (73.3 MB) both pass with no bypass flag. Trap: if a build fails with "Java heap space", run `./gradlew --stop` first; stale daemons caused one false failure. Not re-run on the emulator after the bump.
 1. Push `fix/release-blockers` / update PR #5, deploy, run the 3 migrations.
 2. Play Console: service account with "View financial data" + "Manage orders", and the upload keystore. Expert SKUs are `com.unmu.expert.<expertId>.<monthly|yearly>`; expert IDs with hyphens (UUIDs) are **not valid Play product IDs**, so expert subscriptions on Android need a different SKU scheme before they can be sold through Play.
 3. iOS: expert subscriptions still offer cash / FIB on Android and iOS; Apple requires IAP for digital content on iOS. Decision is Zaid's.
