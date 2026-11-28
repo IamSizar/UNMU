@@ -46,6 +46,15 @@ func NewJobRunRepository(db *sql.DB) *JobRunRepository {
 	return &JobRunRepository{db: db}
 }
 
+// JobRunKey identifies one attempt: Finish only updates the row while it
+// still belongs to this attempt, so a stale run that finishes late cannot
+// overwrite the run that took over from it.
+type JobRunKey struct {
+	Job     string
+	Day     time.Time
+	Attempt int
+}
+
 // claimSQL inserts the day's row, or retakes it when the WHERE allows.
 // RETURNING yields no row when the existing row may not be retaken.
 const claimSQL = `
@@ -56,47 +65,48 @@ const claimSQL = `
 	       detail = '', started_at = NOW(), finished_at = NULL
 	 WHERE `
 
-// Claim takes the (job, day) slot for a scheduled run. True means run now:
+// Claim takes the (job, day) slot for a scheduled run. ok means run now:
 // no row yet, the last attempt failed under the retry limit, or a
 // 'running' row went stale. One atomic statement, so two replicas can
 // never both win.
-func (r *JobRunRepository) Claim(ctx context.Context, job string, day time.Time) (bool, error) {
+func (r *JobRunRepository) Claim(ctx context.Context, job string, day time.Time) (JobRunKey, bool, error) {
 	return r.claim(ctx, claimSQL+`
 	       (job_runs.status = 'failed' AND job_runs.attempts < $3)
 	    OR (job_runs.status = 'running' AND job_runs.started_at < NOW() - $4::interval)
-	RETURNING id`, job, day, maxJobAttempts, staleJobAfter)
+	RETURNING attempts`, []any{job, day.Format("2006-01-02"), maxJobAttempts, staleJobAfter})
 }
 
 // ForceStart claims the day for a manual "run now" from the dashboard. It
 // wins unless a run is in progress (and not stale).
-func (r *JobRunRepository) ForceStart(ctx context.Context, job string, day time.Time) (bool, error) {
+func (r *JobRunRepository) ForceStart(ctx context.Context, job string, day time.Time) (JobRunKey, bool, error) {
 	return r.claim(ctx, claimSQL+`
 	       job_runs.status <> 'running'
 	    OR job_runs.started_at < NOW() - $3::interval
-	RETURNING id`, job, day, staleJobAfter)
+	RETURNING attempts`, []any{job, day.Format("2006-01-02"), staleJobAfter})
 }
 
-func (r *JobRunRepository) claim(ctx context.Context, query, job string, day time.Time, extra ...any) (bool, error) {
-	args := append([]any{job, day.Format("2006-01-02")}, extra...)
-	var id int64
-	err := r.db.QueryRowContext(ctx, query, args...).Scan(&id)
+// claim runs a claim statement; args[0] is the job name, args[1] the day.
+func (r *JobRunRepository) claim(ctx context.Context, query string, args []any) (JobRunKey, bool, error) {
+	key := JobRunKey{Job: args[0].(string)}
+	key.Day, _ = time.Parse("2006-01-02", args[1].(string))
+	err := r.db.QueryRowContext(ctx, query, args...).Scan(&key.Attempt)
 	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
+		return key, false, nil
 	}
 	if err != nil {
-		return false, fmt.Errorf("claiming job %s for %s: %w", job, day.Format("2006-01-02"), err)
+		return key, false, fmt.Errorf("claiming job %s for %s: %w", key.Job, args[1], err)
 	}
-	return true, nil
+	return key, true, nil
 }
 
-// Finish records the outcome of a claimed run.
-func (r *JobRunRepository) Finish(ctx context.Context, job string, day time.Time, status, detail string) error {
+// Finish records the outcome of a claimed attempt.
+func (r *JobRunRepository) Finish(ctx context.Context, key JobRunKey, status, detail string) error {
 	_, err := r.db.ExecContext(ctx, `
 		UPDATE job_runs SET status = $3, detail = $4, finished_at = NOW()
-		 WHERE job_name = $1 AND run_date = $2`,
-		job, day.Format("2006-01-02"), status, detail)
+		 WHERE job_name = $1 AND run_date = $2 AND attempts = $5 AND status = 'running'`,
+		key.Job, key.Day.Format("2006-01-02"), status, detail, key.Attempt)
 	if err != nil {
-		return fmt.Errorf("finishing job %s: %w", job, err)
+		return fmt.Errorf("finishing job %s: %w", key.Job, err)
 	}
 	return nil
 }

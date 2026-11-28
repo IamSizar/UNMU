@@ -78,3 +78,16 @@ func TestEODHDSymbolsDropsUncovered(t *testing.T) {
 		t.Errorf("got %v", got)
 	}
 }
+
+func TestFetchNewsErrorHidesAPIKey(t *testing.T) {
+	old := eodhdNewsURL
+	eodhdNewsURL = "http://127.0.0.1:1/api/news" // nothing listens: network error
+	defer func() { eodhdNewsURL = old }()
+	_, err := NewEODHDProvider("SECRET-KEY-123").FetchNews(context.Background(), NewsQuery{Symbols: []string{"AAPL.US"}})
+	if err == nil {
+		t.Fatal("want a network error")
+	}
+	if strings.Contains(err.Error(), "SECRET-KEY-123") || strings.Contains(err.Error(), "api_token") {
+		t.Fatalf("error leaks the API key: %v", err)
+	}
+}

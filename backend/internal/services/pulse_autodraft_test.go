@@ -155,3 +155,15 @@ func TestParsePulseDraftReply(t *testing.T) {
 		t.Error("refusal must be an error")
 	}
 }
+
+func TestDraftRejectsNonHTTPSourceLink(t *testing.T) {
+	req := PulseDraftRequest{Date: "2026-11-28", OpenSlots: []string{"global"},
+		Articles: []DraftArticle{{Index: 0, Source: "evil", Link: "javascript:alert(1)"}}}
+	if _, err := draftToInput(fullDraft("global", 0), req, map[string]int{}, map[string]bool{}); err == nil {
+		t.Fatal("a javascript: link must be rejected")
+	}
+	req.Articles[0].Link = "https://reuters.com/x"
+	if _, err := draftToInput(fullDraft("global", 0), req, map[string]int{}, map[string]bool{}); err != nil {
+		t.Fatalf("an https link must pass: %v", err)
+	}
+}

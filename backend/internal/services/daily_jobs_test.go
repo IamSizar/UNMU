@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"halalstocks/internal/repositories"
 )
 
 type fakeJobStore struct {
@@ -17,21 +19,22 @@ func newFakeJobStore() *fakeJobStore {
 	return &fakeJobStore{claimed: map[string]bool{}, finished: map[string]string{}}
 }
 
-func (f *fakeJobStore) Claim(_ context.Context, job string, day time.Time) (bool, error) {
-	key := job + day.Format("2006-01-02")
-	if f.claimed[key] {
-		return false, nil
+func (f *fakeJobStore) Claim(_ context.Context, job string, day time.Time) (repositories.JobRunKey, bool, error) {
+	k := job + day.Format("2006-01-02")
+	key := repositories.JobRunKey{Job: job, Day: day, Attempt: 1}
+	if f.claimed[k] {
+		return key, false, nil
 	}
-	f.claimed[key] = true
-	return true, nil
+	f.claimed[k] = true
+	return key, true, nil
 }
 
-func (f *fakeJobStore) ForceStart(_ context.Context, job string, _ time.Time) (bool, error) {
-	return !f.running, nil
+func (f *fakeJobStore) ForceStart(_ context.Context, job string, day time.Time) (repositories.JobRunKey, bool, error) {
+	return repositories.JobRunKey{Job: job, Day: day, Attempt: 1}, !f.running, nil
 }
 
-func (f *fakeJobStore) Finish(_ context.Context, job string, _ time.Time, status, _ string) error {
-	f.finished[job] = status
+func (f *fakeJobStore) Finish(_ context.Context, key repositories.JobRunKey, status, _ string) error {
+	f.finished[key.Job] = status
 	return nil
 }
 

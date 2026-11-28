@@ -59,7 +59,9 @@ func (h *AdminJobsHandler) RunNow(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Job failed: " + err.Error()})
+		// The reason is stored in job_runs.detail (GET /admin/jobs); the
+		// response stays generic so no upstream error text leaks here.
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Job failed; see the job runs list for the reason"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"job": name, "detail": detail})

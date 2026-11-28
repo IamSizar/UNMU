@@ -20,34 +20,46 @@ func TestJobRunClaim(t *testing.T) {
 	day := time.Date(2026, 11, 28, 0, 0, 0, 0, time.UTC)
 	t.Cleanup(func() { db.Exec(`DELETE FROM job_runs WHERE job_name = $1`, job) })
 
-	mustClaim := func(want bool, why string) {
+	mustClaim := func(want bool, why string) JobRunKey {
 		t.Helper()
-		got, err := repo.Claim(ctx, job, day)
+		key, got, err := repo.Claim(ctx, job, day)
 		if err != nil || got != want {
 			t.Fatalf("%s: claim=%v err=%v, want %v", why, got, err, want)
 		}
+		return key
 	}
-	mustClaim(true, "first claim of the day")
+	k := mustClaim(true, "first claim of the day")
 	mustClaim(false, "second replica while running")
-	if err := repo.Finish(ctx, job, day, JobRunFailed, "x"); err != nil {
+	if err := repo.Finish(ctx, k, JobRunFailed, "x"); err != nil {
 		t.Fatal(err)
 	}
-	mustClaim(true, "retry after failure (attempt 2)")
-	repo.Finish(ctx, job, day, JobRunFailed, "x")
-	mustClaim(true, "retry after failure (attempt 3)")
-	repo.Finish(ctx, job, day, JobRunFailed, "x")
+	k = mustClaim(true, "retry after failure (attempt 2)")
+	repo.Finish(ctx, k, JobRunFailed, "x")
+	k = mustClaim(true, "retry after failure (attempt 3)")
+	if k.Attempt != 3 {
+		t.Fatalf("want attempt 3, got %d", k.Attempt)
+	}
+	repo.Finish(ctx, k, JobRunFailed, "x")
 	mustClaim(false, "no 4th attempt")
 
-	// A stale 'running' row is taken over.
+	// A stale 'running' row is taken over, and the stale attempt's late
+	// Finish must not overwrite the new attempt.
 	db.Exec(`UPDATE job_runs SET status='running', started_at = NOW() - interval '3 hours' WHERE job_name=$1`, job)
-	mustClaim(true, "stale running row")
-	repo.Finish(ctx, job, day, JobRunSucceeded, "ok")
+	stale := k
+	k = mustClaim(true, "stale running row")
+	repo.Finish(ctx, stale, JobRunFailed, "late")
+	var status string
+	db.QueryRow(`SELECT status FROM job_runs WHERE job_name=$1`, job).Scan(&status)
+	if status != JobRunRunning {
+		t.Fatalf("late finish of a stale attempt overwrote the new one: %s", status)
+	}
+	repo.Finish(ctx, k, JobRunSucceeded, "ok")
 	mustClaim(false, "done for the day")
 
-	if ok, err := repo.ForceStart(ctx, job, day); err != nil || !ok {
+	if _, ok, err := repo.ForceStart(ctx, job, day); err != nil || !ok {
 		t.Fatalf("manual run after success: %v %v", ok, err)
 	}
-	if ok, _ := repo.ForceStart(ctx, job, day); ok {
+	if _, ok, _ := repo.ForceStart(ctx, job, day); ok {
 		t.Fatal("manual run while running must be refused")
 	}
 	runs, err := repo.Recent(ctx, 50)

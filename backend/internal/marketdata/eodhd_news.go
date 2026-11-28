@@ -9,6 +9,7 @@ package marketdata
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -106,7 +107,7 @@ func (p *EODHDProvider) fetchNewsOnce(ctx context.Context, q NewsQuery, symbol s
 	}
 	resp, err := p.Client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("EODHD news request: %w", err)
+		return nil, fmt.Errorf("EODHD news %s: request failed: %v", symbol, withoutURL(err))
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 20<<20))
@@ -117,6 +118,17 @@ func (p *EODHDProvider) fetchNewsOnce(ctx context.Context, q NewsQuery, symbol s
 		return nil, fmt.Errorf("EODHD news %s: HTTP %d", symbol, resp.StatusCode)
 	}
 	return parseEODHDNews(body)
+}
+
+// withoutURL strips the request URL from an HTTP client error. A
+// *url.Error prints the full URL, which carries api_token, so only its cause
+// may reach logs, Sentry or job_runs.
+func withoutURL(err error) error {
+	var uerr *url.Error
+	if errors.As(err, &uerr) {
+		return uerr.Err
+	}
+	return err
 }
 
 func newsURL(apiKey string, q NewsQuery, symbol string) string {

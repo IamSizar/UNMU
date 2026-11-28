@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"halalstocks/internal/models"
+	"halalstocks/internal/pulse"
 )
 
 // draftToInput checks one pick and turns it into a draft input. The source
@@ -41,6 +43,11 @@ func draftToInput(
 	}
 	if id, ok := stockIDs[strings.ToUpper(strings.TrimSpace(dr.StockTicker))]; ok {
 		in.StockID = &id
+	}
+	// Same field rules as an editor's input: lengths and http(s)-only links,
+	// so a hostile feed link (javascript:, file:) never becomes a source.
+	if errs := pulse.ValidateInput(in, time.Now()); len(errs) > 0 {
+		return in, fmt.Errorf("invalid fields: %v", errs)
 	}
 	return in, nil
 }

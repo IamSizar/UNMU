@@ -46,9 +46,9 @@ type DailyJob struct {
 
 // jobRunStore is the slice of JobRunRepository the runner needs.
 type jobRunStore interface {
-	Claim(ctx context.Context, job string, day time.Time) (bool, error)
-	ForceStart(ctx context.Context, job string, day time.Time) (bool, error)
-	Finish(ctx context.Context, job string, day time.Time, status, detail string) error
+	Claim(ctx context.Context, job string, day time.Time) (repositories.JobRunKey, bool, error)
+	ForceStart(ctx context.Context, job string, day time.Time) (repositories.JobRunKey, bool, error)
+	Finish(ctx context.Context, key repositories.JobRunKey, status, detail string) error
 }
 
 // DailyJobRunner ticks and starts due jobs.
@@ -113,13 +113,13 @@ func (r *DailyJobRunner) tick(ctx context.Context) {
 		if !ok || !isDailyJobDue(now, j.HourUTC) {
 			continue
 		}
-		won, err := r.store.Claim(ctx, j.Name, utcDay(now))
+		key, won, err := r.store.Claim(ctx, j.Name, utcDay(now))
 		if err != nil {
 			log.Printf("[daily-jobs] WARN %v", err)
 			continue
 		}
 		if won {
-			r.execute(ctx, j, utcDay(now))
+			r.execute(ctx, j, key)
 		}
 	}
 }
@@ -131,22 +131,21 @@ func (r *DailyJobRunner) RunNow(ctx context.Context, name string) (string, error
 	if !ok {
 		return "", fmt.Errorf("unknown job %q", name)
 	}
-	day := utcDay(r.now())
-	won, err := r.store.ForceStart(ctx, name, day)
+	key, won, err := r.store.ForceStart(ctx, name, utcDay(r.now()))
 	if err != nil {
 		return "", err
 	}
 	if !won {
 		return "", ErrJobAlreadyRunning
 	}
-	return r.execute(ctx, j, day)
+	return r.execute(ctx, j, key)
 }
 
 // execute runs a claimed job and records the outcome.
-func (r *DailyJobRunner) execute(ctx context.Context, j DailyJob, day time.Time) (string, error) {
+func (r *DailyJobRunner) execute(ctx context.Context, j DailyJob, key repositories.JobRunKey) (string, error) {
 	runCtx, cancel := context.WithTimeout(ctx, dailyJobTimeout)
 	defer cancel()
-	log.Printf("[daily-jobs] %s started for %s", j.Name, day.Format("2006-01-02"))
+	log.Printf("[daily-jobs] %s started for %s (attempt %d)", j.Name, key.Day.Format("2006-01-02"), key.Attempt)
 	detail, err := j.Run(runCtx)
 	status := repositories.JobRunSucceeded
 	if err != nil {
@@ -154,7 +153,7 @@ func (r *DailyJobRunner) execute(ctx context.Context, j DailyJob, day time.Time)
 		detail = err.Error()
 		CaptureError(err, map[string]string{"job": j.Name})
 	}
-	if ferr := r.store.Finish(context.Background(), j.Name, day, status, detail); ferr != nil {
+	if ferr := r.store.Finish(context.Background(), key, status, detail); ferr != nil {
 		log.Printf("[daily-jobs] WARN %v", ferr)
 	}
 	log.Printf("[daily-jobs] %s %s: %s", j.Name, status, detail)
