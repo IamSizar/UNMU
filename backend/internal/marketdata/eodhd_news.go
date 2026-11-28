@@ -114,6 +114,9 @@ func (p *EODHDProvider) fetchNewsOnce(ctx context.Context, q NewsQuery, symbol s
 	if err != nil {
 		return nil, fmt.Errorf("reading EODHD news: %w", err)
 	}
+	if isEODHDAuthStatus(resp.StatusCode) {
+		return nil, fmt.Errorf("%w: HTTP %d on news", ErrEODHDAuth, resp.StatusCode)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("EODHD news %s: HTTP %d", symbol, resp.StatusCode)
 	}

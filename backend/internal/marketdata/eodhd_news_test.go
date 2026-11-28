@@ -2,6 +2,7 @@ package marketdata
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -89,5 +90,23 @@ func TestFetchNewsErrorHidesAPIKey(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "SECRET-KEY-123") || strings.Contains(err.Error(), "api_token") {
 		t.Fatalf("error leaks the API key: %v", err)
+	}
+}
+
+func TestEODHDRejectedKeyIsAuthError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+	oldNews, oldFund := eodhdNewsURL, eodhdFundamentalsURL
+	eodhdNewsURL, eodhdFundamentalsURL = srv.URL, srv.URL+"/"
+	defer func() { eodhdNewsURL, eodhdFundamentalsURL = oldNews, oldFund }()
+
+	p := NewEODHDProvider("bad")
+	if _, err := p.FetchFundamentalsBatch([]string{"AAPL", "MSFT"}); !errors.Is(err, ErrEODHDAuth) {
+		t.Fatalf("fundamentals 401 must be ErrEODHDAuth, got %v", err)
+	}
+	if _, err := p.FetchNews(context.Background(), NewsQuery{Symbols: []string{"AAPL.US"}}); !errors.Is(err, ErrEODHDAuth) {
+		t.Fatalf("news 401 must be ErrEODHDAuth, got %v", err)
 	}
 }

@@ -1,6 +1,7 @@
 package marketdata
 
 import (
+	"errors"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -107,9 +108,24 @@ type eodhdFundamentals struct {
 	} `json:"Financials"`
 }
 
+// ErrEODHDAuth means EODHD rejected the API key (HTTP 401/403): the key is
+// wrong or the subscription no longer includes the endpoint. Every later
+// request would fail the same way, so callers stop and report it.
+var ErrEODHDAuth = errors.New("EODHD rejected the API key (check the subscription)")
+
+// eodhdFundamentalsURL is the fundamentals endpoint; a var so tests can
+// point it at an httptest server.
+var eodhdFundamentalsURL = "https://eodhd.com/api/fundamentals/"
+
+// isEODHDAuthStatus reports whether an HTTP status means a rejected key.
+func isEODHDAuthStatus(code int) bool {
+	return code == http.StatusUnauthorized || code == http.StatusForbidden
+}
+
 // FetchFundamentalsBatch fetches real fundamentals for every covered ticker.
 // Uncovered tickers are silently skipped (omitted from the result) so the
-// caller can leave their existing rows alone.
+// caller can leave their existing rows alone. A rejected key (401/403)
+// stops the batch and returns ErrEODHDAuth with what was fetched so far.
 func (p *EODHDProvider) FetchFundamentalsBatch(tickers []string) ([]FundamentalsFromAPI, error) {
 	var results []FundamentalsFromAPI
 
@@ -120,7 +136,7 @@ func (p *EODHDProvider) FetchFundamentalsBatch(tickers []string) ([]Fundamentals
 			continue
 		}
 
-		url := fmt.Sprintf("https://eodhd.com/api/fundamentals/%s?api_token=%s", symbol, p.APIKey)
+		url := fmt.Sprintf("%s%s?api_token=%s", eodhdFundamentalsURL, symbol, p.APIKey)
 		resp, err := p.Client.Get(url)
 		if err != nil {
 			fmt.Printf("[eodhd] fetch %s (%s) failed: %v\n", ticker, symbol, withoutURL(err))
@@ -128,6 +144,9 @@ func (p *EODHDProvider) FetchFundamentalsBatch(tickers []string) ([]Fundamentals
 		}
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
+		if isEODHDAuthStatus(resp.StatusCode) {
+			return results, fmt.Errorf("%w: HTTP %d on fundamentals", ErrEODHDAuth, resp.StatusCode)
+		}
 		if resp.StatusCode != http.StatusOK {
 			fmt.Printf("[eodhd] fetch %s (%s) status %d: %s\n", ticker, symbol, resp.StatusCode, truncate(string(body), 120))
 			continue
