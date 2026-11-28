@@ -24,6 +24,9 @@ type dailyJobDeps struct {
 	settings   *repositories.AppSettingsRepository
 	pulseAdmin *repositories.PulseAdminRepository
 	drift      *services.DriftDetector
+	// Store refunds (docs/payments/REFUNDS_PLAN.md).
+	googlePlay  *services.GooglePlayVerifier
+	storeGrants *repositories.StoreAccessGrantRepository
 }
 
 // buildDailyJobs registers each enabled job. A job whose keys are missing
@@ -31,6 +34,7 @@ type dailyJobDeps struct {
 func buildDailyJobs(d dailyJobDeps) *services.DailyJobRunner {
 	runner := services.NewDailyJobRunner(d.jobRuns)
 	cfg := d.cfg
+	registerStoreRefunds(runner, d)
 	if cfg.EODHDAPIKey == "" {
 		log.Printf("[daily-jobs] EODHD_API_KEY not set: no daily jobs")
 		return runner
@@ -72,5 +76,21 @@ func registerAutodraft(runner *services.DailyJobRunner, d dailyJobDeps, eodhd *m
 	}
 	runner.Register(services.DailyJob{
 		Name: services.JobPulseAutodraft, HourUTC: d.cfg.PulseAutodraftHourUTC, Run: drafter.Run,
+	})
+}
+
+// registerStoreRefunds adds the Google Play refund job when it is on and
+// the Play service account is configured.
+func registerStoreRefunds(runner *services.DailyJobRunner, d dailyJobDeps) {
+	if !d.cfg.StoreRefundsEnabled {
+		return
+	}
+	if d.googlePlay == nil {
+		log.Printf("[daily-jobs] STORE_REFUNDS_ENABLED but Google Play is not configured: refund job off")
+		return
+	}
+	sync := &services.GoogleRefundSync{Play: d.googlePlay, Revoker: d.storeGrants}
+	runner.Register(services.DailyJob{
+		Name: services.JobStoreRefunds, HourUTC: d.cfg.StoreRefundsHourUTC, Run: sync.Run,
 	})
 }

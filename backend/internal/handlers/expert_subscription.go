@@ -6,7 +6,6 @@ import (
 	"halalstocks/internal/realtime"
 	"halalstocks/internal/repositories"
 	"halalstocks/internal/services"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -24,8 +23,6 @@ import (
 //
 //   admin side:
 //     GET    /api/admin/subscriptions          — list (filter by status)
-//     POST   /api/admin/subscriptions/:id/accept
-//     POST   /api/admin/subscriptions/:id/reject
 type ExpertSubscriptionHandler struct {
 	subs    *repositories.ExpertSubscriptionRepository
 	users   *repositories.UserRepository
@@ -43,21 +40,6 @@ type ExpertSubscriptionHandler struct {
 	// notifier sends localized device pushes for lifecycle events.
 	// Wired post-construction via SetNotifier. May be nil.
 	notifier *services.Notifier
-	// promos + promoAudits power server-authoritative promo discounts at
-	// checkout. Wired post-construction via SetPromo. Both nil = promo codes
-	// are ignored (subscription proceeds at full price).
-	promos      *repositories.PromoCodeRepository
-	promoAudits *repositories.AuditRepository
-}
-
-// SetPromo wires the promo-code repo (+ audit repo for the admin alert) so
-// the Subscribe endpoint can apply a discount and record the redemption.
-func (h *ExpertSubscriptionHandler) SetPromo(
-	promos *repositories.PromoCodeRepository,
-	audits *repositories.AuditRepository,
-) {
-	h.promos = promos
-	h.promoAudits = audits
 }
 
 func NewExpertSubscriptionHandler(
@@ -96,143 +78,17 @@ func (h *ExpertSubscriptionHandler) SetNotifier(n *services.Notifier) {
 // USER ENDPOINTS
 // =============================================================================
 
-type subscribeRequest struct {
-	Plan          string `json:"plan" binding:"required"`
-	PaymentMethod string `json:"paymentMethod" binding:"required"`
-	PaymentRef    string `json:"paymentRef"`
-	ReceiptURL    string `json:"receiptUrl"`
-	UserNote      string `json:"userNote"`
-	// PromoCode — optional. When supplied (and valid for an expert sub) the
-	// server applies its discount to the stored price and records the
-	// redemption. Ignored for Apple/Google IAP (fixed store pricing).
-	PromoCode string `json:"promoCode"`
-}
-
-// Subscribe — POST /api/experts/:id/subscribe
+// Subscribe — POST /api/experts/:id/subscriptions
+//
+// Cash and FIB were cut off (docs/payments/IAP_ONLY_PLAN.md): access is
+// bought only through the App Store or Google Play, via
+// POST /api/me/iap/access/apple|google. Old app versions get 410 with a
+// message they can show.
 func (h *ExpertSubscriptionHandler) Subscribe(c *gin.Context) {
-	userID, ok := authedUserID(c)
-	if !ok {
-		return
-	}
-	expertID := c.Param("id")
-	if expertID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "missing expert id"})
-		return
-	}
-
-	// Confirm the expert exists. Friendlier error than a FK violation.
-	expert, err := h.experts.GetExpert(expertID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	if expert == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "expert not found"})
-		return
-	}
-
-	var req subscribeRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	plan := strings.ToLower(strings.TrimSpace(req.Plan))
-	method := strings.ToLower(strings.TrimSpace(req.PaymentMethod))
-
-	switch plan {
-	case models.SubPlanMonthly, models.SubPlanYearly:
-	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "plan must be monthly|yearly"})
-		return
-	}
-	switch method {
-	case models.PaymentMethodCash, models.PaymentMethodFIB,
-		models.PaymentMethodAppleIAP, models.PaymentMethodGoogleIAP:
-	default:
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "paymentMethod must be cash|fib|apple_iap|google_iap",
-		})
-		return
-	}
-
-	// Block users from subscribing to themselves.
-	user, err := h.users.GetByID(userID)
-	if err == nil && user != nil && user.ExpertID.Valid && user.ExpertID.String == expertID {
-		c.JSON(http.StatusConflict, gin.H{"error": "you can't subscribe to your own profile"})
-		return
-	}
-
-	// Per-expert pricing (B2). Read from the experts row, not a
-	// hardcoded constant. Defaults from mig 0024 ensure unset experts
-	// fall back to the historical $10/$96 USD pricing.
-	priceCents := 0
-	currency := expert.PriceCurrency
-	switch plan {
-	case models.SubPlanMonthly:
-		priceCents = expert.MonthlyPriceCents
-	case models.SubPlanYearly:
-		priceCents = expert.YearlyPriceCents
-	}
-	if priceCents <= 0 {
-		// Allow 0 only if the expert hasn't set a price yet — shouldn't
-		// happen with the migration's defaults, but guard against admins
-		// explicitly setting 0 then leaving the plan as "subscribe at any
-		// price" (which is not what we want for paid experts).
-		priceCents = models.PriceForPlan(plan)
-	}
-	if currency == "" {
-		currency = "usd"
-	}
-
-	// Promo code (optional). Applied server-side so the stored price is the
-	// real discounted amount and the redemption is recorded + admin-alerted.
-	// An invalid code is a hard 400 so the user is never silently charged
-	// full price after expecting a discount.
-	userNote := req.UserNote
-	if pc, note, msg, derr := applyPromoAtCheckout(
-		h.promos, h.promoAudits, req.PromoCode, "expert", userID, method, priceCents, userNote,
-	); derr != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to apply promo code"})
-		return
-	} else if msg != "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": msg, "code": "PROMO_INVALID"})
-		return
-	} else {
-		priceCents = pc
-		userNote = note
-	}
-
-	sub, err := h.subs.Create(repositories.CreateExpertSubParams{
-		UserID:        userID,
-		ExpertID:      expertID,
-		Plan:          plan,
-		PaymentMethod: method,
-		PriceCents:    priceCents,
-		Currency:      currency,
-		PaymentRef:    req.PaymentRef,
-		ReceiptURL:    req.ReceiptURL,
-		UserNote:      userNote,
+	c.JSON(http.StatusGone, gin.H{
+		"error": "Please update the app to subscribe through the App Store or Google Play.",
+		"code":  "STORE_PURCHASE_REQUIRED",
 	})
-	if err != nil {
-		switch {
-		case errors.Is(err, repositories.ErrPendingSubExists):
-			c.JSON(http.StatusConflict, gin.H{
-				"error": "you already have a pending subscription for this expert",
-				"code":  "PENDING_EXISTS",
-			})
-			return
-		case errors.Is(err, repositories.ErrActiveSubExists):
-			c.JSON(http.StatusConflict, gin.H{
-				"error": "you already have an active subscription to this expert",
-				"code":  "ACTIVE_EXISTS",
-			})
-			return
-		}
-		log.Printf("subscribe: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create subscription"})
-		return
-	}
-	c.JSON(http.StatusCreated, sub)
 }
 
 // MySubscriptions — GET /api/me/subscriptions
@@ -441,109 +297,6 @@ func (h *ExpertSubscriptionHandler) AdminPendingCount(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"count": n})
 }
 
-// AdminAccept — POST /api/admin/subscriptions/:id/accept
-func (h *ExpertSubscriptionHandler) AdminAccept(c *gin.Context) {
-	id, ok := pathID(c)
-	if !ok {
-		return
-	}
-	adminID, ok := authedUserID(c)
-	if !ok {
-		return
-	}
-	sub, err := h.subs.Accept(id, adminID)
-	if err != nil {
-		switch {
-		case errors.Is(err, repositories.ErrSubNotFound):
-			c.JSON(http.StatusNotFound, gin.H{"error": "subscription not found"})
-			return
-		case errors.Is(err, repositories.ErrSubNotPending):
-			c.JSON(http.StatusConflict, gin.H{
-				"error": "subscription is not pending",
-				"code":  "NOT_PENDING",
-			})
-			return
-		case errors.Is(err, repositories.ErrActiveSubExists):
-			c.JSON(http.StatusConflict, gin.H{
-				"error": "this user already has an active subscription to this expert — cancel it before accepting another",
-				"code":  "USER_HAS_ACTIVE_SUB",
-			})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	// Push a private realtime event to the subscriber's user channel
-	// so the mobile app can show an in-app "your subscription is
-	// active" notification without polling. Best-effort — a missing
-	// hub or a disconnected client just means the user finds out on
-	// next refresh, which is fine.
-	if h.hub != nil {
-		// Lookup the expert's display name for the toast body. If
-		// the lookup fails we still publish the event with an empty
-		// name so the client at least knows status changed.
-		var expertName string
-		if e, lookupErr := h.experts.GetExpert(sub.ExpertID); lookupErr == nil && e != nil {
-			expertName = e.Name
-		}
-		h.hub.PublishJSON(
-			realtime.ChannelUser(sub.UserID),
-			"subscription_active",
-			gin.H{
-				"subscriptionId": sub.ID,
-				"expertId":       sub.ExpertID,
-				"expertName":     expertName,
-				"plan":           sub.Plan,
-				"expiresAt":      sub.ExpiresAt,
-			},
-		)
-	}
-	// Persist to the unified inbox so the user finds this in
-	// notification history even after the realtime snackbar
-	// disappears. Best-effort — failure here doesn't affect the
-	// API response.
-	if h.userNotifs != nil {
-		var expertName string
-		if e, lookupErr := h.experts.GetExpert(sub.ExpertID); lookupErr == nil &&
-			e != nil {
-			expertName = e.Name
-		}
-		_ = h.userNotifs.Insert(
-			sub.UserID,
-			"subscription_active",
-			nil,
-			expertName,
-			"", // body localized on-device by kind
-			nil,
-		)
-	}
-	if h.notifier != nil {
-		h.notifier.PushToUser(
-			c.Request.Context(),
-			sub.UserID,
-			"subscription_active",
-			nil,
-		)
-	}
-	// Tell the expert they have a new subscriber. Best-effort.
-	if owner, oerr := h.users.GetByExpertID(sub.ExpertID); oerr == nil &&
-		owner != nil && owner.ID != sub.UserID {
-		subscriber := subscriberDisplayName(h.users, sub.UserID)
-		if h.userNotifs != nil {
-			_ = h.userNotifs.Insert(
-				owner.ID, "expert_new_subscriber", &sub.UserID, subscriber, "", nil,
-			)
-		}
-		if h.notifier != nil {
-			h.notifier.PushToUser(
-				c.Request.Context(), owner.ID, "expert_new_subscriber",
-				map[string]string{"subscriber": subscriber},
-			)
-		}
-	}
-	c.JSON(http.StatusOK, sub)
-}
-
 // subscriberDisplayName resolves a user's display name (name, falling
 // back to email) for use in another user's notification.
 func subscriberDisplayName(users *repositories.UserRepository, userID int64) string {
@@ -555,87 +308,6 @@ func subscriberDisplayName(users *repositories.UserRepository, userID int64) str
 		return strings.TrimSpace(u.Name.String)
 	}
 	return u.Email
-}
-
-type rejectSubRequest struct {
-	Reason string `json:"reason"`
-}
-
-// AdminReject — POST /api/admin/subscriptions/:id/reject
-func (h *ExpertSubscriptionHandler) AdminReject(c *gin.Context) {
-	id, ok := pathID(c)
-	if !ok {
-		return
-	}
-	adminID, ok := authedUserID(c)
-	if !ok {
-		return
-	}
-	var body rejectSubRequest
-	_ = c.ShouldBindJSON(&body) // body optional
-
-	sub, err := h.subs.Reject(id, adminID, body.Reason)
-	if err != nil {
-		switch {
-		case errors.Is(err, repositories.ErrSubNotFound):
-			c.JSON(http.StatusNotFound, gin.H{"error": "subscription not found"})
-			return
-		case errors.Is(err, repositories.ErrSubNotPending):
-			c.JSON(http.StatusConflict, gin.H{
-				"error": "subscription is not pending",
-				"code":  "NOT_PENDING",
-			})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	// Symmetric notification on rejection — the user should know
-	// their request was declined (and ideally why) without having
-	// to dig through the My Subscriptions screen.
-	if h.hub != nil {
-		var expertName string
-		if e, lookupErr := h.experts.GetExpert(sub.ExpertID); lookupErr == nil && e != nil {
-			expertName = e.Name
-		}
-		h.hub.PublishJSON(
-			realtime.ChannelUser(sub.UserID),
-			"subscription_rejected",
-			gin.H{
-				"subscriptionId": sub.ID,
-				"expertId":       sub.ExpertID,
-				"expertName":     expertName,
-				"reason":         body.Reason,
-			},
-		)
-	}
-	// Persist to inbox history (same rationale as accept).
-	if h.userNotifs != nil {
-		var expertName string
-		if e, lookupErr := h.experts.GetExpert(sub.ExpertID); lookupErr == nil &&
-			e != nil {
-			expertName = e.Name
-		}
-		// Empty snippet → app renders a localized default body; a custom
-		// admin reason (data) is shown as-is when provided.
-		_ = h.userNotifs.Insert(
-			sub.UserID,
-			"subscription_rejected",
-			nil,
-			expertName,
-			body.Reason,
-			nil,
-		)
-	}
-	if h.notifier != nil {
-		h.notifier.PushToUser(
-			c.Request.Context(),
-			sub.UserID,
-			"subscription_rejected",
-			nil,
-		)
-	}
-	c.JSON(http.StatusOK, sub)
 }
 
 // =============================================================================

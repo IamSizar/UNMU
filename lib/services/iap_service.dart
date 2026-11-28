@@ -9,46 +9,10 @@ import 'package:in_app_purchase/in_app_purchase.dart';
 
 import '../config/api_config.dart';
 import 'auth_service.dart';
+import 'iap_access.dart';
+import 'iap_models.dart';
 
-/// One purchasable SKU. Wraps the plugin's [ProductDetails] so screens
-/// don't have to depend on the package directly.
-class IAPProduct {
-  final String id;
-  final String title;
-  final String description;
-  final String price; // localized price string, e.g. "$9.99"
-  final String rawPrice; // raw numeric as a string ("9.99")
-  final String currency; // ISO 4217 ("USD")
-  final ProductDetails native;
-
-  const IAPProduct({
-    required this.id,
-    required this.title,
-    required this.description,
-    required this.price,
-    required this.rawPrice,
-    required this.currency,
-    required this.native,
-  });
-
-  factory IAPProduct.fromDetails(ProductDetails d) => IAPProduct(
-        id: d.id,
-        title: d.title,
-        description: d.description,
-        price: d.price,
-        rawPrice: d.rawPrice.toString(),
-        currency: d.currencyCode,
-        native: d,
-      );
-}
-
-/// Outcome of a server-side verification call.
-class IAPVerificationResult {
-  final bool ok;
-  final String? error;
-  final Map<String, dynamic>? payload;
-  const IAPVerificationResult({required this.ok, this.error, this.payload});
-}
+export 'iap_models.dart';
 
 /// Per-app singleton that owns the StoreKit / Play Billing connection.
 ///
@@ -157,9 +121,14 @@ class IAPService extends GetxService {
   /// `expertId` is forwarded to the backend so we can immediately
   /// activate the matching expert_subscription row when verification
   /// succeeds.
+  ///
+  /// `target` is set for tier products (com.unmu.access.*): the expert or
+  /// community the purchase pays for. It is also saved on the device so a
+  /// purchase the store delivers after a restart can still be applied.
   Future<IAPVerificationResult> buy(
     IAPProduct product, {
     String? expertId,
+    AccessTarget? target,
   }) async {
     if (!isAvailable.value) {
       return const IAPVerificationResult(
@@ -168,12 +137,17 @@ class IAPService extends GetxService {
       );
     }
 
+    if (target != null) {
+      final blocked = await _reserveAccessTarget(product.id, target);
+      if (blocked != null) return blocked;
+    }
     isPurchasing.value = true;
     final completer = Completer<IAPVerificationResult>();
     final pendingKey = '${product.id}#${DateTime.now().microsecondsSinceEpoch}';
     _pending[pendingKey] = _PendingBuy(
       productId: product.id,
       expertId: expertId,
+      target: target,
       completer: completer,
     );
 
@@ -181,10 +155,16 @@ class IAPService extends GetxService {
     final isSub = _looksLikeSubscription(product.id);
 
     try {
+      // Tier products are consumed by the backend after it grants access,
+      // never by the plugin on Android (iOS requires autoConsume: true).
       final ok = isSub
           ? await _store.buyNonConsumable(purchaseParam: param)
-          : await _store.buyConsumable(purchaseParam: param);
+          : await _store.buyConsumable(
+              purchaseParam: param,
+              autoConsume: Platform.isIOS || target == null,
+            );
       if (!ok) {
+        if (target != null) await AccessTargetStore.clear(product.id);
         _pending.remove(pendingKey);
         isPurchasing.value = false;
         return const IAPVerificationResult(
@@ -237,14 +217,19 @@ class IAPService extends GetxService {
   }
 
   Future<void> _handleSingleUpdate(PurchaseDetails p) async {
-    debugPrint('[iap] purchase update: ${p.productID} status=${p.status} '
-        'pending=${p.pendingCompletePurchase}');
+    debugPrint(
+      '[iap] purchase update: ${p.productID} status=${p.status} '
+      'pending=${p.pendingCompletePurchase}',
+    );
 
     switch (p.status) {
       case PurchaseStatus.pending:
         // Still in-flight — UI shows a loading spinner.
         return;
       case PurchaseStatus.canceled:
+        if (AccessTiers.isAccessProduct(p.productID)) {
+          await AccessTargetStore.clear(p.productID);
+        }
         _completeMatching(
           p.productID,
           const IAPVerificationResult(ok: false, error: 'Purchase canceled.'),
@@ -252,6 +237,9 @@ class IAPService extends GetxService {
         if (p.pendingCompletePurchase) await _store.completePurchase(p);
         return;
       case PurchaseStatus.error:
+        if (AccessTiers.isAccessProduct(p.productID)) {
+          await AccessTargetStore.clear(p.productID);
+        }
         _completeMatching(
           p.productID,
           IAPVerificationResult(
@@ -263,6 +251,10 @@ class IAPService extends GetxService {
         return;
       case PurchaseStatus.purchased:
       case PurchaseStatus.restored:
+        if (AccessTiers.isAccessProduct(p.productID)) {
+          await _handleAccessPurchase(p);
+          return;
+        }
         // Verify with backend; complete locally only if backend accepts.
         final pending = _firstPendingFor(p.productID);
         final expertId =
@@ -277,6 +269,64 @@ class IAPService extends GetxService {
     }
   }
 
+  /// A tier purchase is finished with the store only once the backend has
+  /// granted it. Otherwise it stays open: the store delivers it again on
+  /// the next launch (and Google refunds it if it is never acknowledged),
+  /// so a paid purchase is never silently lost.
+  Future<void> _handleAccessPurchase(PurchaseDetails p) async {
+    final user = await AuthService.getUser();
+    final target =
+        _firstPendingFor(p.productID)?.target ??
+        (user == null
+            ? null
+            : await AccessTargetStore.load(p.productID, user.id));
+    if (target == null) {
+      debugPrint('[iap] ${p.productID}: no target known, left open');
+      _completeMatching(
+        p.productID,
+        const IAPVerificationResult(
+          ok: false,
+          error: 'Purchase could not be matched. Please try again.',
+        ),
+      );
+      return;
+    }
+    final result = await _verifyWithBackend(p, null, target: target);
+    if (result.ok) {
+      if (p.pendingCompletePurchase) await _store.completePurchase(p);
+      await AccessTargetStore.clear(p.productID);
+    }
+    _completeMatching(p.productID, result);
+  }
+
+  /// Saves [target] as the open purchase of [productId] for the signed-in
+  /// user. Returns an error result when another target or account still
+  /// has an open purchase of the same product.
+  Future<IAPVerificationResult?> _reserveAccessTarget(
+    String productId,
+    AccessTarget target,
+  ) async {
+    final user = await AuthService.getUser();
+    if (user == null) {
+      return const IAPVerificationResult(
+        ok: false,
+        error: 'Please sign in first.',
+      );
+    }
+    final open = await AccessTargetStore.open(productId);
+    final sameBuy =
+        open == null ||
+        (open.userId == user.id && open.target.encode() == target.encode());
+    if (!sameBuy) {
+      return IAPVerificationResult(
+        ok: false,
+        error: 'subscribe.error.previousOpen'.tr,
+      );
+    }
+    await AccessTargetStore.save(productId, user.id, target);
+    return null;
+  }
+
   /// The backend verify call for this platform, or null where purchases
   /// cannot be verified. iOS sends the App Store receipt; Android sends the
   /// Google Play purchase token (serverVerificationData on Android).
@@ -288,12 +338,28 @@ class IAPService extends GetxService {
     required String storeData,
     required String productId,
     String? expertId,
+    AccessTarget? target,
+    String? transactionId,
   }) {
     if (!isIOS && !isAndroid) return null;
+    if (target != null) {
+      return (
+        uri: Uri.parse('$baseUrl/me/iap/access/${isIOS ? 'apple' : 'google'}'),
+        body: {
+          isIOS ? 'receiptData' : 'purchaseToken': storeData,
+          'productId': productId,
+          if (isIOS) 'transactionId': transactionId ?? '',
+          'targetType': target.type,
+          'targetId': target.id,
+        },
+      );
+    }
     return (
-      uri: Uri.parse(isIOS
-          ? '$baseUrl/me/iap/apple/verify'
-          : '$baseUrl/me/iap/google/verify'),
+      uri: Uri.parse(
+        isIOS
+            ? '$baseUrl/me/iap/apple/verify'
+            : '$baseUrl/me/iap/google/verify',
+      ),
       body: {
         isIOS ? 'receiptData' : 'purchaseToken': storeData,
         'productId': productId,
@@ -304,8 +370,9 @@ class IAPService extends GetxService {
 
   Future<IAPVerificationResult> _verifyWithBackend(
     PurchaseDetails p,
-    String? expertId,
-  ) async {
+    String? expertId, {
+    AccessTarget? target,
+  }) async {
     final receipt = p.verificationData.serverVerificationData;
     if (receipt.isEmpty) {
       return const IAPVerificationResult(
@@ -328,6 +395,8 @@ class IAPService extends GetxService {
       storeData: receipt,
       productId: p.productID,
       expertId: expertId,
+      target: target,
+      transactionId: p.purchaseID,
     );
     if (request == null) {
       return const IAPVerificationResult(
@@ -417,11 +486,13 @@ class IAPService extends GetxService {
 class _PendingBuy {
   final String productId;
   final String? expertId;
+  final AccessTarget? target;
   final Completer<IAPVerificationResult> completer;
   String key = '';
   _PendingBuy({
     required this.productId,
     required this.expertId,
     required this.completer,
+    this.target,
   });
 }

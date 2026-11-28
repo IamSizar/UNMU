@@ -117,10 +117,20 @@ func (h *AdminCommunitiesHandler) Update(c *gin.Context) {
 		JoinPriceMonthlyCents *int    `json:"joinPriceMonthlyCents"`
 		JoinPriceYearlyCents  *int    `json:"joinPriceYearlyCents"`
 		PriceCurrency         *string `json:"priceCurrency"`
+		PriceTier             *string `json:"priceTier"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
 		return
+	}
+	pricing, msg := communityTierPricing(body.PriceTier, body.JoinPriceMonthlyCents, body.JoinPriceYearlyCents)
+	if msg != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+		return
+	}
+	body.JoinPriceMonthlyCents, body.JoinPriceYearlyCents = pricing.Monthly, pricing.Yearly
+	if pricing.Currency != nil {
+		body.PriceCurrency = pricing.Currency
 	}
 	upd := repositories.AdminCommunityUpdate{}
 	if body.Name != nil {
@@ -171,6 +181,7 @@ func (h *AdminCommunitiesHandler) Update(c *gin.Context) {
 		s := strings.ToLower(strings.TrimSpace(*body.PriceCurrency))
 		upd.PriceCurrency = &s
 	}
+	upd.PriceTier = pricing.Tier
 	if err := h.social.AdminUpdateCommunity(id, upd); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "community not found"})

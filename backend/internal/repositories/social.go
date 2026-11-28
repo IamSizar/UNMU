@@ -141,7 +141,7 @@ func (r *SocialRepository) resolveCommunityURLs(list []*models.Community) {
 // function can stay private to this file.
 const expertCols = `
 	id, name, expertise, bio, tier, subscriber_count,
-	monthly_price_cents, yearly_price_cents, price_currency,
+	monthly_price_cents, yearly_price_cents, price_currency, price_tier,
 	created_at, updated_at
 `
 
@@ -149,7 +149,7 @@ const expertCols = `
 func scanExpert(s interface{ Scan(...any) error }, e *models.Expert) error {
 	return s.Scan(
 		&e.ID, &e.Name, &e.Expertise, &e.Bio, &e.Tier, &e.SubscriberCount,
-		&e.MonthlyPriceCents, &e.YearlyPriceCents, &e.PriceCurrency,
+		&e.MonthlyPriceCents, &e.YearlyPriceCents, &e.PriceCurrency, &e.PriceTier,
 		&e.CreatedAt, &e.UpdatedAt,
 	)
 }
@@ -213,34 +213,27 @@ func (r *SocialRepository) GetExpert(id string) (*models.Expert, error) {
 	return &e, nil
 }
 
-// SetExpertPricing — admin-only update. Used by the admin Subscriptions
-// page to set per-expert prices. priceCurrency is normalised to lower
-// case (DB convention, mirrors mig 0024 default).
-func (r *SocialRepository) SetExpertPricing(
-	expertID string,
-	monthlyCents, yearlyCents int,
-	currency string,
-) error {
-	if monthlyCents < 0 || yearlyCents < 0 {
-		return fmt.Errorf("prices must be non-negative")
-	}
-	currency = strings.ToLower(strings.TrimSpace(currency))
-	if currency == "" {
-		currency = "usd"
+// SetExpertPriceTier sets an expert's price tier (mig 0063) and the
+// tier's USD prices, which payouts and the app read. sql.ErrNoRows when
+// the expert does not exist.
+func (r *SocialRepository) SetExpertPriceTier(expertID, tier string) error {
+	if !models.IsPriceTier(tier) {
+		return fmt.Errorf("unknown price tier %q", tier)
 	}
 	res, err := r.db.Exec(`
 		UPDATE experts
-		   SET monthly_price_cents = $1,
-		       yearly_price_cents  = $2,
-		       price_currency      = $3,
+		   SET price_tier          = $1,
+		       monthly_price_cents = $2,
+		       yearly_price_cents  = $3,
+		       price_currency      = 'usd',
 		       updated_at          = NOW()
 		 WHERE id = $4
-	`, monthlyCents, yearlyCents, currency, expertID)
+	`, tier, models.TierPriceCents(tier, models.SubPlanMonthly),
+		models.TierPriceCents(tier, models.SubPlanYearly), expertID)
 	if err != nil {
 		return err
 	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
+	if n, _ := res.RowsAffected(); n == 0 {
 		return sql.ErrNoRows
 	}
 	return nil
@@ -272,7 +265,7 @@ const communityCols = `
 	(SELECT COUNT(*) FROM community_members m WHERE m.community_id = c.id),
 	c.active_now, c.created_at, c.updated_at,
 	c.join_price_monthly_cents, c.join_price_yearly_cents, c.price_currency,
-	c.owner_id
+	COALESCE(c.price_tier, ''), c.owner_id
 `
 
 // scanCommunityRow consumes a single row in `communityCols` order, plus
@@ -290,7 +283,7 @@ func scanCommunityRow(s interface{ Scan(...any) error }) (*models.Community, err
 		&coverURL, &avatarURL, &c.IsPublic, &category,
 		&c.MemberCount, &c.ActiveNow, &c.CreatedAt, &c.UpdatedAt,
 		&c.JoinPriceMonthlyCents, &c.JoinPriceYearlyCents, &c.PriceCurrency,
-		&ownerID,
+		&c.PriceTier, &ownerID,
 	); err != nil {
 		return nil, err
 	}
@@ -433,6 +426,8 @@ type CommunityMetadataUpdate struct {
 	JoinPriceMonthlyCents *int
 	JoinPriceYearlyCents  *int
 	PriceCurrency         *string
+	// PriceTier (mig 0063): nil = unchanged, "" = free, t1..t4.
+	PriceTier *string
 }
 
 // UpdateCommunityMetadata applies a partial patch to a community row.
@@ -525,6 +520,13 @@ func (r *SocialRepository) UpdateCommunityMetadata(
 	}
 	if in.PriceCurrency != nil {
 		add("price_currency", *in.PriceCurrency)
+	}
+	if in.PriceTier != nil {
+		if *in.PriceTier == "" {
+			add("price_tier", nil)
+		} else {
+			add("price_tier", *in.PriceTier)
+		}
 	}
 	if len(sets) == 0 {
 		return nil
@@ -2266,6 +2268,8 @@ type AdminCommunityUpdate struct {
 	JoinPriceMonthlyCents *int
 	JoinPriceYearlyCents  *int
 	PriceCurrency         *string
+	// PriceTier (mig 0063): nil = unchanged, "" = free, t1..t4.
+	PriceTier *string
 }
 
 // AdminUpdateCommunity — partial-update via AdminCommunityUpdate.
@@ -2353,6 +2357,13 @@ func (r *SocialRepository) AdminUpdateCommunity(
 	}
 	if in.PriceCurrency != nil {
 		add("price_currency", *in.PriceCurrency)
+	}
+	if in.PriceTier != nil {
+		if *in.PriceTier == "" {
+			add("price_tier", nil)
+		} else {
+			add("price_tier", *in.PriceTier)
+		}
 	}
 	if len(sets) == 0 {
 		return nil

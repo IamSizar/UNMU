@@ -21,6 +21,7 @@ import {
   Check,
 } from 'lucide-react'
 import { api, getToken } from '../api/client'
+import { PRICE_TIERS, formatTierLabel, isPriceTier } from '../api/priceTiers'
 import { useI18n } from '../i18n/I18nContext'
 import { fmtDate } from '../i18n/datefmt'
 import type { Locale } from '../i18n/translations'
@@ -531,25 +532,9 @@ function MetadataEditor({
   const [category, setCategory] = useState(community.category ?? '')
   const [tags, setTags] = useState<string[]>(community.tags ?? [])
   const [tagInput, setTagInput] = useState('')
-  // Step-23 — paid community pricing.
-  const c = community as AdminCommunity & {
-    joinPriceMonthlyCents?: number
-    joinPriceYearlyCents?: number
-    priceCurrency?: string
-  }
-  const [monthlyDollars, setMonthlyDollars] = useState(
-    centsToDollarStr(c.joinPriceMonthlyCents),
-  )
-  const [yearlyDollars, setYearlyDollars] = useState(
-    centsToDollarStr(c.joinPriceYearlyCents),
-  )
-  const [priceCurrency, setPriceCurrency] = useState(
-    c.priceCurrency || 'usd',
-  )
-  const [paidMode, setPaidMode] = useState(
-    (c.joinPriceMonthlyCents ?? 0) > 0 ||
-      (c.joinPriceYearlyCents ?? 0) > 0,
-  )
+  // Paid community pricing: '' = free, else one of the fixed store
+  // tiers (t1..t4). The backend sets the cents for the tier.
+  const [priceTier, setPriceTier] = useState(currentPriceTier(community))
 
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -568,18 +553,7 @@ function MetadataEditor({
     setCategory(community.category ?? '')
     setTags(community.tags ?? [])
     setTagInput('')
-    const cp = community as AdminCommunity & {
-      joinPriceMonthlyCents?: number
-      joinPriceYearlyCents?: number
-      priceCurrency?: string
-    }
-    setMonthlyDollars(centsToDollarStr(cp.joinPriceMonthlyCents))
-    setYearlyDollars(centsToDollarStr(cp.joinPriceYearlyCents))
-    setPriceCurrency(cp.priceCurrency || 'usd')
-    setPaidMode(
-      (cp.joinPriceMonthlyCents ?? 0) > 0 ||
-        (cp.joinPriceYearlyCents ?? 0) > 0,
-    )
+    setPriceTier(currentPriceTier(community))
   }, [community])
 
   function addTag() {
@@ -681,17 +655,8 @@ function MetadataEditor({
     // The backend kicks every member except the owner in the same
     // transaction so the price gate actually kicks in for the
     // existing user base. Make the consequence explicit.
-    const cp = community as AdminCommunity & {
-      joinPriceMonthlyCents?: number
-      joinPriceYearlyCents?: number
-    }
-    const wasFree =
-      (cp.joinPriceMonthlyCents ?? 0) <= 0 &&
-      (cp.joinPriceYearlyCents ?? 0) <= 0
-    const willBePaid =
-      paidMode &&
-      (dollarsToCents(monthlyDollars) > 0 ||
-        dollarsToCents(yearlyDollars) > 0)
+    const wasFree = currentPriceTier(community) === ''
+    const willBePaid = priceTier !== ''
     if (wasFree && willBePaid) {
       const yes = confirm(
         community.memberCount === 1
@@ -709,10 +674,6 @@ function MetadataEditor({
     setBusy(true)
     setErr(null)
     try {
-      // Pricing payload. Free mode forces both prices to 0;
-      // paid mode honours whatever the user typed.
-      const monthlyCents = paidMode ? dollarsToCents(monthlyDollars) : 0
-      const yearlyCents = paidMode ? dollarsToCents(yearlyDollars) : 0
       await api.patch(`/admin/communities/${community.id}`, {
         name: name.trim(),
         tagline: tagline.trim(),
@@ -723,9 +684,8 @@ function MetadataEditor({
         isPublic,
         category,
         tags,
-        joinPriceMonthlyCents: monthlyCents,
-        joinPriceYearlyCents: yearlyCents,
-        priceCurrency: priceCurrency,
+        // '' = free; t1..t4 = paid. The server sets the prices.
+        priceTier,
       })
       setSavedAt(Date.now())
       onSaved()
@@ -1002,93 +962,31 @@ function MetadataEditor({
           <p className="text-[11px] text-slate-400 mb-2 font-medium flex items-center gap-1">
             {t('communityDetail.pricing')}
           </p>
-          <div className="rounded-lg ring-1 ring-white/10 bg-white/5 p-3 space-y-3">
-            <button
-              type="button"
-              onClick={() => setPaidMode(!paidMode)}
-              className={`w-full text-start flex items-center gap-3 px-3 py-2 rounded-md ring-1 ${
-                paidMode
-                  ? 'bg-gold-500/10 ring-gold-500/30'
-                  : 'bg-emerald-500/10 ring-emerald-500/30'
-              }`}
-            >
-              <span className="text-sm font-bold text-white">
-                {paidMode ? t('communityDetail.paidCommunity') : t('communityDetail.freeCommunity')}
-              </span>
-              <span className="text-[10px] uppercase tracking-wider text-slate-400 ms-auto">
-                {t('communityDetail.toggle')}
-              </span>
-            </button>
-            {paidMode && (
-              <>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
-                      {t('communityDetail.monthly')}
-                    </p>
-                    <input
-                      value={monthlyDollars}
-                      onChange={(e) => setMonthlyDollars(e.target.value)}
-                      placeholder="0"
-                      inputMode="decimal"
-                      className="w-full px-3 py-2 rounded-md bg-white/5 ring-1 ring-white/10 text-sm text-slate-200 font-mono"
-                    />
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
-                      {t('communityDetail.yearly')}
-                    </p>
-                    <input
-                      value={yearlyDollars}
-                      onChange={(e) => setYearlyDollars(e.target.value)}
-                      placeholder="0"
-                      inputMode="decimal"
-                      className="w-full px-3 py-2 rounded-md bg-white/5 ring-1 ring-white/10 text-sm text-slate-200 font-mono"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
-                    {t('communityDetail.currency')}
-                  </p>
-                  <select
-                    value={priceCurrency}
-                    onChange={(e) => setPriceCurrency(e.target.value)}
-                    className="w-full px-3 py-2 rounded-md bg-white/5 ring-1 ring-white/10 text-sm text-slate-200"
+          <div className="rounded-lg ring-1 ring-white/10 bg-white/5 p-3 space-y-2">
+            {[{ id: '', label: t('communityDetail.freeCommunity') }]
+              .concat(
+                PRICE_TIERS.map((tier) => ({ id: tier.id, label: formatTierLabel(tier) })),
+              )
+              .map((option) => {
+                const selected = option.id === priceTier
+                return (
+                  <button
+                    key={option.id || 'free'}
+                    type="button"
+                    onClick={() => setPriceTier(option.id)}
+                    className={`w-full text-start flex items-center gap-3 px-3 py-2 rounded-md ring-1 text-sm ${
+                      selected
+                        ? 'bg-cyan-500/15 ring-cyan-500/40 text-white font-bold'
+                        : 'ring-white/10 text-slate-300 hover:bg-white/[0.04]'
+                    } ${option.id ? 'font-mono tabular-nums' : ''}`}
                   >
-                    {['usd', 'iqd', 'sar', 'aed', 'eur', 'gbp'].map((cur) => (
-                      <option key={cur} value={cur}>
-                        {cur.toUpperCase()}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {/* Live "save X%" preview — computed from the typed
-                    values so the admin sees the discount they're
-                    offering. Mirrors the same formula in the Flutter
-                    edit sheet (lib/utils/price_format.dart). Hidden
-                    when only one plan is set or yearly ≥ monthly×12. */}
-                {(() => {
-                  const m = dollarsToCents(monthlyDollars)
-                  const y = dollarsToCents(yearlyDollars)
-                  if (m <= 0 || y <= 0) return null
-                  const annualViaMonthly = m * 12
-                  if (y >= annualViaMonthly) return null
-                  const pct = Math.round(
-                    ((annualViaMonthly - y) / annualViaMonthly) * 100,
-                  )
-                  return (
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/15 ring-1 ring-emerald-500/40 text-emerald-300 text-[11px] font-bold">
-                      <span>💰</span>
-                      <span>{t('communityDetail.saveYearlyHint', { pct })}</span>
-                    </div>
-                  )
-                })()}
-                <p className="text-[11px] text-slate-500">
-                  {t('communityDetail.pricingNote')}
-                </p>
-              </>
-            )}
+                    {option.label}
+                  </button>
+                )
+              })}
+            <p className="text-[11px] text-slate-500">
+              {t('communityDetail.pricingNote')}
+            </p>
           </div>
         </div>
 
@@ -1134,19 +1032,11 @@ function relativeTime(iso: string, locale: Locale): string {
   return fmtDate(d, locale)
 }
 
-// Step-23 — pricing helpers (dollars ↔ cents) for the metadata
-// editor's pricing section. Empty / NaN inputs become 0 cents,
-// which the backend treats as "free for that plan".
-function dollarsToCents(raw: string): number {
-  const v = parseFloat((raw || '').trim())
-  if (!isFinite(v) || v <= 0) return 0
-  return Math.round(v * 100)
-}
-
-function centsToDollarStr(cents?: number): string {
-  if (!cents || cents <= 0) return ''
-  const v = cents / 100
-  return v === Math.floor(v) ? v.toFixed(0) : v.toFixed(2)
+// Current price tier of a community: '' (free) or t1..t4. Unknown
+// values fall back to '' so the picker never shows a phantom option.
+function currentPriceTier(community: AdminCommunity): string {
+  const tier = (community as AdminCommunity & { priceTier?: string }).priceTier
+  return isPriceTier(tier) ? tier : ''
 }
 
 // ────────────────────────────────────────────────────────────────────

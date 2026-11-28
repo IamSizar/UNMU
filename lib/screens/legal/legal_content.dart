@@ -9,7 +9,7 @@
 /// provides a contact email for data-subject requests.
 library;
 
-const String kLegalLastUpdated = '2026-05-19';
+const String kLegalLastUpdated = '2026-11-28';
 const String kLegalContactEmail = 'support@unmu.app';
 
 const String kPrivacyPolicyEn = '''
@@ -44,8 +44,9 @@ app version (sent as a User-Agent), and the Firebase Cloud Messaging
 push token if you grant notification permission.
 
 **Purchase information.** When you buy a subscription we receive the
-purchase receipt from Apple. We do not see your payment card details —
-Apple processes the payment and only tells us whether it succeeded.
+purchase receipt from Apple or Google Play. We do not see your payment
+card details — the store processes the payment and only tells us
+whether it succeeded.
 
 ## 2. How we use information
 
@@ -148,9 +149,9 @@ Google نستلم منهما بريدك ورمز الهوية الصادر عن�
 ورقم إصدار التطبيق، ورمز إشعارات Firebase Cloud Messaging إذا
 سمحت بالإشعارات.
 
-**بيانات الشراء.** عند شراء اشتراك نستلم إيصال الشراء من Apple. لا
-نرى بيانات بطاقتك المالية — تتولى Apple معالجة الدفع وتُخبرنا فقط
-بنجاحه.
+**بيانات الشراء.** عند شراء اشتراك نستلم إيصال الشراء من Apple أو
+Google Play. لا نرى بيانات بطاقتك المالية — يتولى المتجر معالجة الدفع
+ويُخبرنا فقط بنجاحه.
 
 ## 2. كيف نستخدم البيانات
 
@@ -271,12 +272,18 @@ content and that it does not violate any law or third-party right.
 
 ## 5. Subscriptions & in-app purchases
 
-Some features require a paid subscription billed through the Apple
-App Store. Apple's terms apply to the payment itself; we receive
-only confirmation that a purchase succeeded. Subscriptions renew
-automatically through your App Store account unless you cancel at
-least 24 hours before the renewal. Manage or cancel from your
-Apple ID → Subscriptions. Refund requests are handled by Apple.
+Some features require a paid purchase billed through the Apple App
+Store or Google Play. The store's terms apply to the payment itself;
+we receive only confirmation that a purchase succeeded. Refund
+requests are handled by the store.
+
+Premium subscriptions renew automatically through your store account
+unless you cancel at least 24 hours before the renewal. Manage or
+cancel them from your Apple ID or Google Play subscriptions.
+
+Access to an expert or a paid community is a one-time purchase of
+30 or 365 days. It does not renew by itself; buying again adds the
+new time to any time you have left.
 
 ## 6. Expert programme
 
@@ -397,11 +404,15 @@ const String kTermsOfServiceAr = '''
 
 ## 5. الاشتراكات والمشتريات داخل التطبيق
 
-تتطلب بعض الميزات اشتراكًا مدفوعًا يُحصَّل عبر App Store. تنطبق شروط
-Apple على الدفع نفسه؛ ونحن نستلم فقط تأكيد نجاح الشراء. تتجدد
-الاشتراكات تلقائيًا عبر حساب App Store ما لم تُلغِها قبل التجديد
-بـ 24 ساعة. للإدارة أو الإلغاء: Apple ID ← الاشتراكات. تتولى Apple
-طلبات استرداد المبالغ.
+تتطلب بعض الميزات عملية شراء مدفوعة تُحصَّل عبر App Store أو Google
+Play. تنطبق شروط المتجر على الدفع نفسه؛ ونحن نستلم فقط تأكيد نجاح
+الشراء. يتولى المتجر طلبات استرداد المبالغ.
+
+تتجدد اشتراكات Premium تلقائيًا عبر حسابك في المتجر ما لم تُلغِها قبل
+التجديد بـ 24 ساعة. للإدارة أو الإلغاء: اشتراكات Apple ID أو Google Play.
+
+الوصول إلى خبير أو مجتمع مدفوع هو شراء لمرة واحدة لمدة 30 أو 365 يومًا،
+ولا يتجدد تلقائيًا؛ ويضيف الشراء مجددًا المدة الجديدة إلى ما تبقّى لك.
 
 ## 6. برنامج الخبراء
 

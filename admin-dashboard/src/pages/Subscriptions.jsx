@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Check, X, AlertCircle, Loader2, Inbox, Crown,
+  Check, AlertCircle, Loader2, Inbox, Crown,
   Banknote, Building2, MessageSquare, RefreshCw, Hash,
   Search, Image as ImageIcon, TrendingUp,
 } from 'lucide-react'
@@ -55,12 +55,8 @@ export default function Subscriptions() {
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [acting, setActing] = useState(null) // id currently being accepted/rejected
   const [pendingCount, setPendingCount] = useState(null)
   const [totals, setTotals] = useState(null)
-  // Inline reject form: id of the row whose Reject button is expanded.
-  const [rejectingId, setRejectingId] = useState(null)
-  const [rejectReason, setRejectReason] = useState('')
   // Debounce timer for search input.
   const searchTimer = useRef(null)
 
@@ -129,45 +125,6 @@ export default function Subscriptions() {
       loadTotals()
     },
   )
-
-  async function accept(id) {
-    setActing(id)
-    try {
-      await api.post(`/admin/subscriptions/${id}/accept`)
-      setItems((curr) => curr.filter((s) => s.id !== id))
-      loadPendingCount()
-      loadTotals()
-    } catch (e) {
-      alert(e?.message ?? t('subscriptions.acceptFailed'))
-    } finally {
-      setActing(null)
-    }
-  }
-
-  async function confirmReject(id) {
-    setActing(id)
-    try {
-      await api.post(`/admin/subscriptions/${id}/reject`, { reason: rejectReason.trim() })
-      setItems((curr) => curr.filter((s) => s.id !== id))
-      setRejectingId(null)
-      setRejectReason('')
-      loadPendingCount()
-    } catch (e) {
-      alert(e?.message ?? t('subscriptions.rejectFailed'))
-    } finally {
-      setActing(null)
-    }
-  }
-
-  function startReject(id) {
-    setRejectingId(id)
-    setRejectReason('')
-  }
-
-  function cancelReject() {
-    setRejectingId(null)
-    setRejectReason('')
-  }
 
   const headline = useMemo(() => {
     const total = items.length
@@ -314,15 +271,6 @@ export default function Subscriptions() {
                 <SubCard
                   key={s.id}
                   sub={s}
-                  showActions={tab === 'pending'}
-                  acting={acting === s.id}
-                  rejecting={rejectingId === s.id}
-                  rejectReason={rejectReason}
-                  setRejectReason={setRejectReason}
-                  onAccept={() => accept(s.id)}
-                  onStartReject={() => startReject(s.id)}
-                  onCancelReject={cancelReject}
-                  onConfirmReject={() => confirmReject(s.id)}
                 />
               ))}
             </div>
@@ -383,11 +331,9 @@ function absoluteUrl(path) {
   return `${origin}${path}`
 }
 
-function SubCard({
-  sub, showActions,
-  acting, rejecting, rejectReason, setRejectReason,
-  onAccept, onStartReject, onCancelReject, onConfirmReject,
-}) {
+// Read-only card: payments now come only from the App Store / Google
+// Play, so legacy cash/FIB rows are shown for history without actions.
+function SubCard({ sub }) {
   const { t, locale } = useI18n()
   const sev = STATUS_STYLES[sub.status] ?? STATUS_STYLES.pending
   const planMeta = PLAN_BADGE[sub.plan] ?? PLAN_BADGE.monthly
@@ -398,7 +344,6 @@ function SubCard({
   const navigate = useNavigate()
   function onCardClick(e) {
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
-    if (rejecting) return
     navigate(`/subscriptions/${sub.id}`)
   }
 
@@ -408,7 +353,6 @@ function SubCard({
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
-        if (rejecting) return
         if (e.key === 'Enter' || e.key === ' ') navigate(`/subscriptions/${sub.id}`)
       }}
       className={`cursor-pointer rounded-xl bg-white/[0.02] border border-white/5 p-4 ring-1 hover:ring-cyan-500/30 transition-shadow ${sev.ring}`}>
@@ -488,59 +432,6 @@ function SubCard({
           <span>{t('subscriptions.expires', { date: fmtDate(sub.expiresAt, locale) })}</span>
         )}
       </div>
-
-      {showActions && (
-        <div onClick={(e) => e.stopPropagation()}>
-          {rejecting ? (
-            <div className="mt-3 space-y-2">
-              <label className="text-[10px] uppercase tracking-wider text-slate-400">
-                {t('subscriptions.rejectReasonLabel')}
-              </label>
-              <textarea
-                value={rejectReason}
-                onChange={(e) => setRejectReason(e.target.value)}
-                rows={2}
-                placeholder={t('subscriptions.rejectReasonPlaceholder')}
-                className="w-full px-3 py-2 rounded-md bg-white/5 ring-1 ring-white/10 text-sm text-slate-200 resize-y"
-              />
-              <div className="flex items-center justify-end gap-2">
-                <button
-                  onClick={onCancelReject}
-                  className="px-3 py-1.5 rounded-md text-sm text-slate-300 hover:bg-white/5"
-                >
-                  {t('common.cancel')}
-                </button>
-                <button
-                  disabled={acting}
-                  onClick={onConfirmReject}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-bold bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 ring-1 ring-rose-500/30 disabled:opacity-50"
-                >
-                  {acting ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
-                  {t('subscriptions.confirmReject')}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 mt-3">
-              <button
-                disabled={acting}
-                onClick={onAccept}
-                className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 ring-1 ring-emerald-500/20 text-sm font-semibold transition-colors disabled:opacity-50"
-              >
-                {acting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                {t('subscriptions.acceptPayment')}
-              </button>
-              <button
-                disabled={acting}
-                onClick={onStartReject}
-                className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 ring-1 ring-rose-500/20 text-sm font-semibold transition-colors disabled:opacity-50"
-              >
-                <X className="w-4 h-4" /> {t('subscriptions.reject')}
-              </button>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   )
 }

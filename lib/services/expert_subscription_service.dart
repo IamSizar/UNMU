@@ -20,51 +20,6 @@ class ExpertSubscriptionService {
     };
   }
 
-  /// POST /api/experts/:id/subscriptions — create a pending subscription.
-  ///
-  /// `receiptUrl` is the relative path to a cash-receipt image uploaded
-  /// via [UploadService.uploadImage] (mig 0024 / B10). Null = no image.
-  static Future<({ExpertSubscription? sub, String? error})> subscribe({
-    required String expertId,
-    required SubPlan plan,
-    required PaymentMethod method,
-    String? paymentRef,
-    String? receiptUrl,
-    String? note,
-    String? promoCode,
-  }) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$_base/experts/$expertId/subscriptions'),
-        headers: await _authHeaders(),
-        body: json.encode({
-          'plan': plan.wireValue,
-          'paymentMethod': method.wireValue,
-          if (paymentRef != null && paymentRef.isNotEmpty) 'paymentRef': paymentRef,
-          if (receiptUrl != null && receiptUrl.isNotEmpty) 'receiptUrl': receiptUrl,
-          if (note != null && note.isNotEmpty) 'userNote': note,
-          if (promoCode != null && promoCode.isNotEmpty) 'promoCode': promoCode,
-        }),
-      );
-      if (response.statusCode == 201) {
-        return (
-          sub: ExpertSubscription.fromJson(
-            json.decode(response.body) as Map<String, dynamic>,
-          ),
-          error: null,
-        );
-      }
-      if (response.statusCode == 401) {
-        await Get.find<AuthController>().handleAuthFailure();
-        return (sub: null, error: 'Session expired — please sign in again.');
-      }
-      final body = _safeDecode(response.body);
-      return (sub: null, error: body['error']?.toString() ?? 'Subscribe failed');
-    } catch (e) {
-      return (sub: null, error: 'Connection error: $e');
-    }
-  }
-
   /// GET /api/me/subscriptions/expert/:id — current sub for one expert, or null.
   static Future<ExpertSubscription?> currentForExpert(String expertId) async {
     try {
@@ -122,6 +77,7 @@ class ExpertSubscriptionService {
         monthlyCents: (body['monthlyPriceCents'] as num?)?.toInt() ?? 1000,
         yearlyCents: (body['yearlyPriceCents'] as num?)?.toInt() ?? 9600,
         currency: (body['priceCurrency'] as String?)?.toLowerCase() ?? 'usd',
+        tier: body['priceTier'] as String?,
       );
     } catch (_) {
       return null;
@@ -169,10 +125,14 @@ class ExpertPricing {
   final int monthlyCents;
   final int yearlyCents;
   final String currency;
+
+  /// Price tier (t1..t4) — picks the store product (iap_access.dart).
+  final String? tier;
   const ExpertPricing({
     required this.monthlyCents,
     required this.yearlyCents,
     required this.currency,
+    this.tier,
   });
 
   String formatCents(int cents) {

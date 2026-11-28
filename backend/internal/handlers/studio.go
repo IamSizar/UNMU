@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"halalstocks/internal/models"
 	"halalstocks/internal/repositories"
 	"log"
 	"net/http"
@@ -164,40 +165,26 @@ func (h *StudioHandler) Earnings(c *gin.Context) {
 
 // ─── /me/expert/pricing (PATCH) ─────────────────────────────────────────
 
-// pricingBody — request body. Both fields are USD cents, validated
-// against the same bounds as the admin variant so an expert can't price
-// their plan into the millions.
+// pricingBody — request body: the price tier (t1..t4). Prices are fixed
+// per tier because each tier is one store product (mig 0063).
 type pricingBody struct {
-	MonthlyCents int `json:"monthlyCents" binding:"min=0,max=1000000"`
-	YearlyCents  int `json:"yearlyCents"  binding:"min=0,max=10000000"`
+	PriceTier string `json:"priceTier" binding:"required"`
 }
 
 // SetPricing — PATCH /api/me/expert/pricing
-//
-// The expert updates their OWN price tiers. Admins still have the
-// existing /admin/experts/:id/pricing route for overriding from the
-// dashboard; this is the self-serve path.
 func (h *StudioHandler) SetPricing(c *gin.Context) {
 	expertID, ok := h.resolveMyExpertID(c)
 	if !ok {
 		return
 	}
 	var body pricingBody
-	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if err := c.ShouldBindJSON(&body); err != nil || !models.IsPriceTier(body.PriceTier) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "priceTier must be t1, t2, t3 or t4. Please update the app."})
 		return
 	}
-	if body.MonthlyCents < 0 || body.YearlyCents < 0 {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "prices must be non-negative",
-		})
-		return
-	}
-	if err := h.social.SetExpertPricing(
-		expertID, body.MonthlyCents, body.YearlyCents, "usd",
-	); err != nil {
-		log.Printf("[studio] SetExpertPricing(%s): %v", expertID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	if err := h.social.SetExpertPriceTier(expertID, body.PriceTier); err != nil {
+		log.Printf("[studio] SetExpertPriceTier(%s): %v", expertID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save the price"})
 		return
 	}
 	updated, _ := h.social.GetExpert(expertID)

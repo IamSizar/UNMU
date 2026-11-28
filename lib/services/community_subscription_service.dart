@@ -97,57 +97,6 @@ class CommunitySubscriptionService {
     };
   }
 
-  /// POST /api/communities/:id/subscribe
-  ///
-  /// `receiptUrl` is the relative path to a cash-receipt image (uploaded
-  /// via [UploadService.uploadImage]). Mirrors the expert subscription
-  /// flow's receipt support added in mig 0024.
-  static Future<({CommunitySubscriptionRow? sub, String? error})> subscribe({
-    required String communityId,
-    required String plan, // monthly | yearly
-    required String paymentMethod, // cash | fib
-    String? paymentRef,
-    String? receiptUrl,
-    String? userNote,
-    String? promoCode,
-  }) async {
-    try {
-      final res = await http.post(
-        Uri.parse('$_base/communities/$communityId/subscribe'),
-        headers: await _authHeaders(),
-        body: json.encode({
-          'plan': plan,
-          'paymentMethod': paymentMethod,
-          if (paymentRef != null && paymentRef.isNotEmpty)
-            'paymentRef': paymentRef,
-          if (receiptUrl != null && receiptUrl.isNotEmpty)
-            'receiptUrl': receiptUrl,
-          if (userNote != null && userNote.isNotEmpty) 'userNote': userNote,
-          if (promoCode != null && promoCode.isNotEmpty) 'promoCode': promoCode,
-        }),
-      );
-      if (res.statusCode == 401) {
-        await Get.find<AuthController>().handleAuthFailure();
-        return (sub: null, error: 'Session expired.');
-      }
-      if (res.statusCode != 201) {
-        return (
-          sub: null,
-          error: _safeDecode(res.body)['error']?.toString() ??
-              'Subscribe failed (${res.statusCode}).',
-        );
-      }
-      return (
-        sub: CommunitySubscriptionRow.fromJson(
-          json.decode(res.body) as Map<String, dynamic>,
-        ),
-        error: null,
-      );
-    } catch (e) {
-      return (sub: null, error: 'Connection error: $e');
-    }
-  }
-
   /// GET /api/me/community-subscriptions — user's own history.
   static Future<({List<CommunitySubscriptionRow>? rows, String? error})>
       mySubs() async {

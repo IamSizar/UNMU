@@ -132,84 +132,6 @@ func scanCommSub(s commSubScanner) (*CommunitySubscription, error) {
 	return &x, nil
 }
 
-// CreateCommSubParams — destructured args. Was getting unwieldy once we
-// added receiptUrl + currency on top of the original 6-arg signature.
-type CreateCommSubParams struct {
-	UserID        int64
-	CommunityID   string
-	Plan          string
-	PaymentMethod string
-	PaymentRef    string
-	ReceiptURL    string
-	UserNote      string
-	PriceCents    int
-	Currency      string
-}
-
-// Create inserts a new pending row. Pulls the price + currency from
-// the community's pricing fields based on `plan`. The handler is
-// responsible for verifying the community has a non-zero price for
-// that plan before calling.
-//
-// Surfaces ErrPendingCommSubExists / ErrActiveCommSubExists when the
-// partial unique indexes block a duplicate row.
-//
-// Sprint-A step 2 — pre-check that no `active` sub already exists for
-// (user, community). The partial unique indexes block "two active"
-// and "two pending" but allow "one active + one new pending" — which
-// would let a paid user submit a 2nd payment proof. Refuse that.
-func (r *CommunitySubscriptionsRepository) Create(p CreateCommSubParams) (*CommunitySubscription, error) {
-	// Active-sub pre-check (Sprint A #2).
-	var activeExists bool
-	if err := r.db.QueryRow(
-		`SELECT EXISTS(
-		    SELECT 1 FROM community_subscriptions
-		     WHERE user_id = $1 AND community_id = $2 AND status = 'active'
-		 )`, p.UserID, p.CommunityID,
-	).Scan(&activeExists); err != nil {
-		return nil, err
-	}
-	if activeExists {
-		return nil, ErrActiveCommSubExists
-	}
-
-	var refArg, noteArg, receiptArg any
-	if strings.TrimSpace(p.PaymentRef) != "" {
-		refArg = strings.TrimSpace(p.PaymentRef)
-	}
-	if strings.TrimSpace(p.UserNote) != "" {
-		noteArg = strings.TrimSpace(p.UserNote)
-	}
-	if strings.TrimSpace(p.ReceiptURL) != "" {
-		receiptArg = strings.TrimSpace(p.ReceiptURL)
-	}
-	currency := strings.ToLower(strings.TrimSpace(p.Currency))
-	if currency == "" {
-		currency = "usd"
-	}
-	row := r.db.QueryRow(`
-		INSERT INTO community_subscriptions
-		    (user_id, community_id, plan, price_cents, currency,
-		     payment_method, payment_ref, user_note, receipt_url)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		RETURNING `+commSubCols,
-		p.UserID, p.CommunityID, p.Plan, p.PriceCents, currency,
-		p.PaymentMethod, refArg, noteArg, receiptArg,
-	)
-	sub, err := scanCommSub(row)
-	if err != nil {
-		msg := err.Error()
-		switch {
-		case strings.Contains(msg, "comm_subs_one_pending_per_pair"):
-			return nil, ErrPendingCommSubExists
-		case strings.Contains(msg, "comm_subs_one_active_per_pair"):
-			return nil, ErrActiveCommSubExists
-		}
-		return nil, err
-	}
-	return sub, nil
-}
-
 // GetByID — single-row fetch. Returns (nil, nil) when not found so
 // the handler can surface a 404.
 func (r *CommunitySubscriptionsRepository) GetByID(id int64) (*CommunitySubscription, error) {
@@ -525,128 +447,6 @@ func (r *CommunitySubscriptionsRepository) AdminTotals() (*AdminCommSubTotals, e
 	return &t, nil
 }
 
-// Accept — flip pending → active, set expires_at, AND insert the
-// matching community_members row in the same transaction. If the user
-// is already a member (somehow), the INSERT silently no-ops via
-// ON CONFLICT.
-//
-// Returns sentinel errors:
-//   - ErrCommSubNotFound  → row doesn't exist
-//   - ErrCommSubNotPending → row exists but isn't pending
-func (r *CommunitySubscriptionsRepository) Accept(
-	id, adminID int64,
-) (*CommunitySubscription, error) {
-	tx, err := r.db.Begin()
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback()
-
-	// Lock the row so a concurrent admin can't double-accept.
-	var (
-		userID      int64
-		communityID string
-		plan        string
-		status      string
-	)
-	err = tx.QueryRow(
-		`SELECT user_id, community_id, plan, status
-		   FROM community_subscriptions WHERE id = $1 FOR UPDATE`,
-		id,
-	).Scan(&userID, &communityID, &plan, &status)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrCommSubNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	if status != "pending" {
-		return nil, ErrCommSubNotPending
-	}
-
-	// Plan duration: monthly = 30d, yearly = 365d. Decided by the
-	// plan field on the row, not by the community's current pricing
-	// (so a price change after submission doesn't change the granted
-	// access window).
-	var ttl time.Duration
-	switch plan {
-	case "monthly":
-		ttl = 30 * 24 * time.Hour
-	case "yearly":
-		ttl = 365 * 24 * time.Hour
-	default:
-		ttl = 30 * 24 * time.Hour
-	}
-	expiresAt := time.Now().Add(ttl)
-
-	if _, err := tx.Exec(
-		`UPDATE community_subscriptions
-		    SET status = 'active', accepted_at = NOW(),
-		        accepted_by = $1, expires_at = $2
-		  WHERE id = $3`,
-		adminID, expiresAt, id,
-	); err != nil {
-		return nil, err
-	}
-	// Insert the membership row — ON CONFLICT keeps it idempotent.
-	if _, err := tx.Exec(
-		`INSERT INTO community_members (user_id, community_id)
-		 VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-		userID, communityID,
-	); err != nil {
-		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
-	return r.AdminGetByID(id)
-}
-
-// Reject — flip pending → rejected with optional reason. Same
-// sentinel-error behaviour as Accept.
-//
-// Step C7 — transactional + `FOR UPDATE` so two admins clicking Reject
-// on the same row at the same time can't both succeed.
-func (r *CommunitySubscriptionsRepository) Reject(
-	id int64, reason string,
-) (*CommunitySubscription, error) {
-	tx, err := r.db.Begin()
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback()
-
-	var status string
-	if err := tx.QueryRow(
-		`SELECT status FROM community_subscriptions WHERE id = $1 FOR UPDATE`, id,
-	).Scan(&status); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrCommSubNotFound
-		}
-		return nil, err
-	}
-	if status != "pending" {
-		return nil, ErrCommSubNotPending
-	}
-	var reasonArg any
-	if strings.TrimSpace(reason) != "" {
-		reasonArg = strings.TrimSpace(reason)
-	}
-	if _, err := tx.Exec(
-		`UPDATE community_subscriptions
-		    SET status = 'rejected', rejected_at = NOW(),
-		        rejection_reason = $1
-		  WHERE id = $2`,
-		reasonArg, id,
-	); err != nil {
-		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
-	return r.AdminGetByID(id)
-}
-
 // Cancel — user-initiated. Active → cancelled (also removes the
 // member row); pending → cancelled (no member row to remove). Returns
 // ErrCommSubNotFound if the row doesn't belong to userID.
@@ -735,11 +535,19 @@ func (r *CommunitySubscriptionsRepository) PromoteExpired() ([]CommSubExpiry, er
 		if err != nil {
 			continue
 		}
-		_, err1 := tx.Exec(
+		res1, err1 := tx.Exec(
 			`UPDATE community_subscriptions
 			    SET status = 'expired'
-			  WHERE id = $1 AND status = 'active'`, p.id,
+			  WHERE id = $1 AND status = 'active' AND expires_at <= NOW()`, p.id,
 		)
+		// A store purchase may have extended the row since the SELECT;
+		// then it is not expired and the membership must stay.
+		if err1 == nil && res1 != nil {
+			if n, _ := res1.RowsAffected(); n == 0 {
+				_ = tx.Rollback()
+				continue
+			}
+		}
 		_, err2 := tx.Exec(
 			`DELETE FROM community_members
 			  WHERE user_id = $1 AND community_id = $2`,

@@ -118,6 +118,17 @@ func (v *AppleIAPVerifier) VerifyReceipt(
 	receiptData string,
 	expectedProductID string,
 ) (*AppleVerifiedTransaction, error) {
+	return v.VerifyReceiptTransaction(ctx, receiptData, expectedProductID, "")
+}
+
+// VerifyReceiptTransaction is VerifyReceipt for one exact transaction:
+// with transactionID set, only that transaction of the product is
+// accepted (non-renewing tier products can be bought many times, so
+// "latest" could be a different purchase). Empty transactionID = latest.
+func (v *AppleIAPVerifier) VerifyReceiptTransaction(
+	ctx context.Context,
+	receiptData, expectedProductID, transactionID string,
+) (*AppleVerifiedTransaction, error) {
 	if v == nil {
 		return nil, fmt.Errorf("apple-iap: verifier not configured")
 	}
@@ -157,7 +168,7 @@ func (v *AppleIAPVerifier) VerifyReceipt(
 		return nil, fmt.Errorf("apple-iap: receipt belongs to another app")
 	}
 
-	txn, err := pickLatestTransaction(resp, expectedProductID)
+	txn, err := pickLatestTransaction(resp, expectedProductID, strings.TrimSpace(transactionID))
 	if err != nil {
 		return nil, err
 	}
@@ -236,6 +247,9 @@ type appleVerifyTransaction struct {
 	// the parsing in pickLatestTransaction.
 	PurchaseDateMS string `json:"purchase_date_ms"`
 	ExpiresDateMS  string `json:"expires_date_ms"`
+	// Set when Apple refunded or revoked the transaction; such a
+	// transaction never grants anything.
+	CancellationDateMS string `json:"cancellation_date_ms"`
 }
 
 // pickLatestTransaction selects the most-recent transaction for
@@ -244,7 +258,7 @@ type appleVerifyTransaction struct {
 // We check both and pick whichever wins on purchase_date.
 func pickLatestTransaction(
 	resp appleVerifyResponse,
-	expectedProductID string,
+	expectedProductID, transactionID string,
 ) (*AppleVerifiedTransaction, error) {
 	candidates := append([]appleVerifyTransaction{}, resp.LatestReceiptInfo...)
 	candidates = append(candidates, resp.Receipt.InApp...)
@@ -255,6 +269,12 @@ func pickLatestTransaction(
 	for i := range candidates {
 		t := &candidates[i]
 		if t.ProductID != expectedProductID {
+			continue
+		}
+		if transactionID != "" && t.TransactionID != transactionID {
+			continue
+		}
+		if t.CancellationDateMS != "" {
 			continue
 		}
 		ms, _ := strconv.ParseInt(t.PurchaseDateMS, 10, 64)

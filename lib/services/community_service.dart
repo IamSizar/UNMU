@@ -105,6 +105,9 @@ class CommunityMeta {
   final int joinPriceMonthlyCents;
   final int joinPriceYearlyCents;
   final String priceCurrency;
+
+  /// Mig 0063 — price tier (t1..t4) of a paid community, null when free.
+  final String? priceTier;
   /// Sprint-C step 7 — owner user id (nullable in DB). Lets the
   /// mobile hub render the gold-crown "owned" card variant when
   /// `ownerId == auth.user.id`.
@@ -127,6 +130,7 @@ class CommunityMeta {
     this.joinPriceMonthlyCents = 0,
     this.joinPriceYearlyCents = 0,
     this.priceCurrency = 'usd',
+    this.priceTier,
     this.ownerId,
   });
 
@@ -158,6 +162,9 @@ class CommunityMeta {
       joinPriceYearlyCents:
           (json['joinPriceYearlyCents'] as num?)?.toInt() ?? 0,
       priceCurrency: json['priceCurrency'] as String? ?? 'usd',
+      priceTier: (json['priceTier'] as String?)?.isEmpty ?? true
+          ? null
+          : json['priceTier'] as String,
       ownerId: (json['ownerId'] as num?)?.toInt(),
     );
   }
@@ -195,6 +202,7 @@ class CommunityMeta {
         joinPriceYearlyCents:
             joinPriceYearlyCents ?? this.joinPriceYearlyCents,
         priceCurrency: priceCurrency ?? this.priceCurrency,
+        priceTier: priceTier,
         ownerId: ownerId,
       );
 }
@@ -805,10 +813,8 @@ class CommunityService {
     bool? isPublic,
     String? category,
     List<String>? tags,
-    // Step-23 — paid community pricing.
-    int? joinPriceMonthlyCents,
-    int? joinPriceYearlyCents,
-    String? priceCurrency,
+    // Mig 0063 — price tier: null = unchanged, '' = free, t1..t4.
+    String? priceTier,
   }) async {
     try {
       final body = <String, dynamic>{};
@@ -821,15 +827,7 @@ class CommunityService {
       if (isPublic != null) body['isPublic'] = isPublic;
       if (category != null) body['category'] = category;
       if (tags != null) body['tags'] = tags;
-      if (joinPriceMonthlyCents != null) {
-        body['joinPriceMonthlyCents'] = joinPriceMonthlyCents;
-      }
-      if (joinPriceYearlyCents != null) {
-        body['joinPriceYearlyCents'] = joinPriceYearlyCents;
-      }
-      if (priceCurrency != null) {
-        body['priceCurrency'] = priceCurrency;
-      }
+      if (priceTier != null) body['priceTier'] = priceTier;
       final res = await http.patch(
         Uri.parse('$_base/communities/$communityId'),
         headers: await _authHeaders(),

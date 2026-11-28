@@ -258,7 +258,6 @@ func main() {
 	expertAppHandler := handlers.NewExpertApplicationHandler(expertAppRepo, userRepo)
 	adminUsersHandler := handlers.NewAdminUsersHandler(userRepo, socialRepo)
 	expertSubHandler := handlers.NewExpertSubscriptionHandler(expertSubRepo, userRepo, socialRepo)
-	expertSubHandler.SetPromo(promoRepo, auditRepo)
 
 	// Apple In-App-Purchase verification (mig 0035). Soft-fails to nil
 	// when APPLE_IAP_SHARED_SECRET is unset — the /me/iap/apple/verify
@@ -268,14 +267,23 @@ func main() {
 	if appleIAPVerifier == nil {
 		log.Printf("[apple-iap] verification disabled (set APPLE_IAP_SHARED_SECRET " +
 			"from App Store Connect → In-App Purchases → App-Specific Shared Secret " +
-			"to enable). Cash/FIB payment paths are unaffected.")
+			"to enable). Apple purchase endpoints answer 503.")
 	}
 	appleIAPRepo := repositories.NewAppleIAPTransactionRepository(database)
 	iapHandler := handlers.NewIAPHandler(appleIAPVerifier, appleIAPRepo, expertSubRepo, userRepo)
 	// Google Play subscriptions (mig 0061). Nil verifier when no service
 	// account is configured; /me/iap/google/verify then answers 503.
-	iapHandler.SetGooglePlay(services.NewGooglePlayVerifier(context.Background()),
-		repositories.NewGooglePlayPurchaseRepository(database))
+	googlePlay := services.NewGooglePlayVerifier(context.Background())
+	iapHandler.SetGooglePlay(googlePlay, repositories.NewGooglePlayPurchaseRepository(database))
+	storeGrants := repositories.NewStoreAccessGrantRepository(database)
+	iapHandler.SetAccessGrants(storeGrants)
+	// App Store Server Notifications v2 (refunds). The verifier only uses
+	// the embedded Apple root, so it is always available.
+	appleNotifVerifier, err := services.NewAppleNotificationVerifier()
+	if err != nil {
+		log.Fatalf("[apple-notifications] %v", err)
+	}
+	appleNotifHandler := handlers.NewAppleNotificationsHandler(appleNotifVerifier, storeGrants)
 	// Reel videos + cover images upload here. When AWS_S3_BUCKET is set
 	// the bytes stream straight to S3 and the response URL is a pre-
 	// signed GET; otherwise the handler falls back to the original
@@ -451,7 +459,6 @@ func main() {
 	// matching the expert-subscription handler's behaviour.
 	communitySubsHandler.SetUserNotifications(userNotificationsRepo)
 	communitySubsHandler.SetNotifier(notifier)
-	communitySubsHandler.SetPromo(promoRepo, auditRepo)
 	communitySubsExpirer := services.NewCommunitySubscriptionExpirer(
 		communitySubsRepo, hub, userNotificationsRepo,
 	)
@@ -504,7 +511,8 @@ func main() {
 	dailyJobs := buildDailyJobs(dailyJobDeps{
 		cfg: cfg, jobRuns: jobRunRepo, stocks: stockRepo, funds: fundamentalRepo,
 		statuses: shariahRepo, settings: appSettingsRepo, pulseAdmin: pulseAdminRepo,
-		drift: services.NewDriftDetector(notificationRepo, portfolioRepo, notifier),
+		drift:      services.NewDriftDetector(notificationRepo, portfolioRepo, notifier),
+		googlePlay: googlePlay, storeGrants: storeGrants,
 	})
 	dailyJobs.Start(context.Background())
 	adminJobsHandler := handlers.NewAdminJobsHandler(jobRunRepo, dailyJobs)
@@ -529,6 +537,12 @@ func main() {
 		api.GET("/health", func(c *gin.Context) {
 			c.JSON(200, gin.H{"status": "ok"})
 		})
+
+		// App Store Server Notifications v2 — public; trusted only through
+		// Apple's signature (docs/payments/REFUNDS_PLAN.md).
+		// Loose per-client limit: Apple sends few calls; bursts are abuse.
+		api.POST("/webhooks/apple/notifications",
+			middleware.NewRateLimiter(60, time.Second).Middleware(), appleNotifHandler.Receive)
 
 		// Public feature flags — the mobile app reads these to hide
 		// disabled features (e.g. the Community tab when communities are off).
@@ -951,6 +965,10 @@ func main() {
 		// Returns 503 when APPLE_IAP_SHARED_SECRET isn't configured.
 		protected.POST("/me/iap/apple/verify", iapHandler.VerifyApple)
 		protected.POST("/me/iap/google/verify", iapHandler.VerifyGoogle)
+		// Expert / community access through a tier product (the only way
+		// to pay for them; cash/FIB were cut off — docs/payments/IAP_ONLY_PLAN.md).
+		protected.POST("/me/iap/access/apple", iapHandler.BuyAccessApple)
+		protected.POST("/me/iap/access/google", iapHandler.BuyAccessGoogle)
 
 		// Abuse / safety reports (mig 0036). User-facing report submission
 		// + their own report history.
@@ -1178,8 +1196,6 @@ func main() {
 		// MUST be registered BEFORE the dynamic-id action routes so
 		// gin doesn't bind "pending-count" as the :id parameter.
 		admin.GET("/subscriptions/:id", expertSubHandler.AdminGet)
-		admin.POST("/subscriptions/:id/accept", expertSubHandler.AdminAccept)
-		admin.POST("/subscriptions/:id/reject", expertSubHandler.AdminReject)
 
 		// Engagement / reliability events (today's instrumentation
 		// surfaced for admin dashboards).
@@ -1334,14 +1350,6 @@ func main() {
 		admin.GET(
 			"/community-subscriptions/:id",
 			communitySubsHandler.AdminGet,
-		)
-		admin.POST(
-			"/community-subscriptions/:id/accept",
-			communitySubsHandler.AdminAccept,
-		)
-		admin.POST(
-			"/community-subscriptions/:id/reject",
-			communitySubsHandler.AdminReject,
 		)
 
 		// ─── Step-21 (mig 0021, item 5.21) — admin polls panel ───

@@ -146,27 +146,15 @@ const market: NavItem[] = [
   { to: '/stocks', label: 'nav.stocks', icon: TrendingUp },
 ]
 
-function monetizationItems(
-  pendingSubsCount: number | null,
-  pendingCommunitySubsCount: number | null,
-  pendingPayoutsCount: number | null,
-): NavItem[] {
+// Subscriptions carry no badge: they are paid only through the App Store /
+// Google Play, so there is no admin queue to work through.
+function monetizationItems(pendingPayoutsCount: number | null): NavItem[] {
   return [
-    {
-      to: '/subscriptions',
-      label: 'nav.subscriptions',
-      icon: CreditCard,
-      badge:
-        pendingSubsCount && pendingSubsCount > 0 ? pendingSubsCount : undefined,
-    },
+    { to: '/subscriptions', label: 'nav.subscriptions', icon: CreditCard },
     {
       to: '/community-subscriptions',
       label: 'nav.communitySubscriptions',
       icon: Users2,
-      badge:
-        pendingCommunitySubsCount && pendingCommunitySubsCount > 0
-          ? pendingCommunitySubsCount
-          : undefined,
     },
     {
       to: '/payouts',
@@ -288,10 +276,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
   const location = useLocation()
   const { t } = useI18n()
   const [pendingCount, setPendingCount] = useState<number | null>(null)
-  const [pendingSubsCount, setPendingSubsCount] = useState<number | null>(null)
   const [pendingProposalsCount, setPendingProposalsCount] =
-    useState<number | null>(null)
-  const [pendingCommunitySubsCount, setPendingCommunitySubsCount] =
     useState<number | null>(null)
   const [pendingSupportCount, setPendingSupportCount] = useState<number | null>(
     null,
@@ -321,17 +306,6 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
     }
   }
 
-  async function loadPendingSubs() {
-    try {
-      const res = await api.get<{ count: number }>(
-        '/admin/subscriptions/pending-count',
-      )
-      setPendingSubsCount(res.count ?? 0)
-    } catch {
-      setPendingSubsCount(0)
-    }
-  }
-
   async function loadPendingProposals() {
     try {
       const res = await api.get<{ count: number }>(
@@ -340,17 +314,6 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
       setPendingProposalsCount(res.count ?? 0)
     } catch {
       setPendingProposalsCount(0)
-    }
-  }
-
-  async function loadPendingCommunitySubs() {
-    try {
-      const res = await api.get<{ count: number }>(
-        '/admin/community-subscriptions/pending-count',
-      )
-      setPendingCommunitySubsCount(res.count ?? 0)
-    } catch {
-      setPendingCommunitySubsCount(0)
     }
   }
 
@@ -403,9 +366,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
     function refreshAll() {
       if (isAdmin) {
         loadPending()
-        loadPendingSubs()
         loadPendingProposals()
-        loadPendingCommunitySubs()
         loadPendingSupport()
         loadPendingReports()
         loadPendingPayouts()
@@ -432,25 +393,6 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
       'application_rejected',
     ],
     loadPending,
-  )
-  useRealtime(
-    [
-      'subscription_submitted',
-      'subscription_active',
-      'subscription_rejected',
-      'subscription_cancelled',
-      'subscription_expired',
-    ],
-    loadPendingSubs,
-  )
-  useRealtime(
-    [
-      'community_subscription_submitted',
-      'community_subscription_active',
-      'community_subscription_rejected',
-      'community_subscription_expired',
-    ],
-    loadPendingCommunitySubs,
   )
   useRealtime(
     [
@@ -553,11 +495,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
           />
           <Section
             title="nav.monetization"
-            items={monetizationItems(
-              pendingSubsCount,
-              pendingCommunitySubsCount,
-              pendingPayoutsCount,
-            )}
+            items={monetizationItems(pendingPayoutsCount)}
             onNavigate={onClose}
             activeKey={activeKey}
           />

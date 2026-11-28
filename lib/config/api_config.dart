@@ -62,5 +62,4 @@ class ApiConfig {
   static const String zakat = '/tools/zakat';
   static const String dca = '/tools/dca';
   static const String ads = '/ads';
-  static const String validatePromo = '/promo/validate';
 }
