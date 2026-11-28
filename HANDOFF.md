@@ -5,7 +5,18 @@ context: read this before planning any work here.
 
 ---
 
-## 2026-11-28 (night) — Subscriptions are App Store / Google Play only (branch `feat/iap-only`, NOT committed, NOT deployed)
+## 2026-11-28 (night) — Subscriptions are App Store / Google Play only (PR #10 → main `8bd24a3`; DEPLOYED to staging and production)
+
+**Deploy (2026-11-28 ~15:45 +03):**
+- Production was backed up with `pg_dump -Fc` first (328 KB, 67 tables, local scratch file).
+- Migrations 0063 and 0064 were applied to staging and production with `psql -v ON_ERROR_STOP=1`.
+- PR #10 was squash-merged and auto-deployed: production backend deployment `f7a03d1c` SUCCESS. `/api/health` returns 200, and the new webhook route answers 400 to an empty body.
+- Production tiers after 0063:
+  - Experts: $10 and $12 became t2; $15, $18 and $20 became t3.
+  - Paid communities: $25 and $30 became t3; $50 became t4.
+- The cut-off script ran on staging (0 rows) and production (5 rows rejected: experts 45, 52, 55; communities 16, 17). All of their users (9009, 9011, 9013, 9016) are internal `@unmu.app` demo accounts, so there are no real refunds.
+- `SENTRY_DSN` is not set in production, so `CaptureError` alerts (refund failures included) appear only in the Railway logs.
+- `STORE_REFUNDS_ENABLED` is not set yet, and there is no Google service account, so only Apple refunds can work once the webhook URL is set.
 
 **Asked for:** "subscriptions in the app will all be only IAP". Zaid chose fixed price tiers and to cut off cash/FIB now, then said "go" on `docs/payments/IAP_ONLY_PLAN.md` (read its "As built" section).
 
