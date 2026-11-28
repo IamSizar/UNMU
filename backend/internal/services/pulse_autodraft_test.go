@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anthropics/anthropic-sdk-go/v2"
+	"google.golang.org/genai"
 
 	"halalstocks/internal/marketdata"
 	"halalstocks/internal/models"
@@ -139,20 +139,23 @@ func TestAutoDraftSkipsWhenNothingOpen(t *testing.T) {
 }
 
 func TestParsePulseDraftReply(t *testing.T) {
-	var msg anthropic.BetaMessage
-	raw := `{"id":"m","type":"message","role":"assistant","model":"claude-opus-5-5","stop_reason":"end_turn",
-	  "content":[{"type":"text","text":"{\"items\":[{\"slot\":\"gulf\",\"article_index\":2,\"classification\":\"analysis\"}]}"}],
-	  "usage":{"input_tokens":1,"output_tokens":1}}`
-	if err := json.Unmarshal([]byte(raw), &msg); err != nil {
+	var resp genai.GenerateContentResponse
+	raw := `{"candidates":[{"finishReason":"STOP","content":{"role":"model","parts":[
+	  {"text":"{\"items\":[{\"slot\":\"gulf\",\"article_index\":2,\"classification\":\"analysis\"}]}"}]}}]}`
+	if err := json.Unmarshal([]byte(raw), &resp); err != nil {
 		t.Fatal(err)
 	}
-	got, err := parsePulseDraftReply(&msg)
+	got, err := parsePulseDraftReply(&resp)
 	if err != nil || len(got) != 1 || got[0].Slot != "gulf" || got[0].ArticleIndex != 2 {
 		t.Fatalf("got %+v %v", got, err)
 	}
-	msg.StopReason = anthropic.BetaStopReasonRefusal
-	if _, err := parsePulseDraftReply(&msg); err == nil {
-		t.Error("refusal must be an error")
+	resp.Candidates[0].FinishReason = genai.FinishReasonMaxTokens
+	if _, err := parsePulseDraftReply(&resp); err == nil {
+		t.Error("a cut-off reply must be an error")
+	}
+	blocked := genai.GenerateContentResponse{PromptFeedback: &genai.GenerateContentResponsePromptFeedback{BlockReason: "SAFETY"}}
+	if _, err := parsePulseDraftReply(&blocked); err == nil {
+		t.Error("a blocked prompt must be an error")
 	}
 }
 

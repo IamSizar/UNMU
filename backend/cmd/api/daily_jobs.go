@@ -49,18 +49,28 @@ func buildDailyJobs(d dailyJobDeps) *services.DailyJobRunner {
 			},
 		})
 	}
-	if cfg.PulseAutodraftEnabled && cfg.AnthropicAPIKey == "" {
-		log.Printf("[daily-jobs] PULSE_AUTODRAFT_ENABLED but ANTHROPIC_API_KEY not set: auto-draft off")
-	} else if cfg.PulseAutodraftEnabled {
-		drafter := &services.PulseAutoDrafter{
-			News: eodhd, Store: d.pulseAdmin, Stocks: d.stocks,
-			Writer: services.NewClaudePulseWriter(cfg.AnthropicAPIKey, cfg.PulseAutodraftModel),
-			Now:    time.Now,
-		}
-		runner.Register(services.DailyJob{
-			Name: services.JobPulseAutodraft, HourUTC: cfg.PulseAutodraftHourUTC, Run: drafter.Run,
-		})
+	if cfg.PulseAutodraftEnabled {
+		registerAutodraft(runner, d, eodhd)
 	}
 	log.Printf("[daily-jobs] registered: %v", runner.Names())
 	return runner
+}
+
+// registerAutodraft adds the Pulse auto-draft job when GEMINI_API_KEY is set.
+func registerAutodraft(runner *services.DailyJobRunner, d dailyJobDeps, eodhd *marketdata.EODHDProvider) {
+	if d.cfg.GeminiAPIKey == "" {
+		log.Printf("[daily-jobs] PULSE_AUTODRAFT_ENABLED but GEMINI_API_KEY not set: auto-draft off")
+		return
+	}
+	writer, err := services.NewGeminiPulseWriter(context.Background(), d.cfg.GeminiAPIKey, d.cfg.PulseAutodraftModel)
+	if err != nil {
+		log.Printf("[daily-jobs] auto-draft off: %v", err)
+		return
+	}
+	drafter := &services.PulseAutoDrafter{
+		News: eodhd, Store: d.pulseAdmin, Stocks: d.stocks, Writer: writer, Now: time.Now,
+	}
+	runner.Register(services.DailyJob{
+		Name: services.JobPulseAutodraft, HourUTC: d.cfg.PulseAutodraftHourUTC, Run: drafter.Run,
+	})
 }

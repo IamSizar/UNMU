@@ -5,7 +5,7 @@ context: read this before planning any work here.
 
 ---
 
-## 2026-11-28 (later) — Daily screening refresh + AI-drafted Pulse (PR #7, branch `feat/pulse-autodraft`; STAGING deployed, production NOT)
+## 2026-11-28 (later) — Daily screening refresh + AI-drafted Pulse (PR #7 → main `f934e72`; DEPLOYED to staging and production)
 
 **Asked for:** Pulse "automate it and make it fetch daily news", then "go ahead all approved and agreed lets buld this". The plan and test list are in `docs/pulse/AUTODRAFT.md`. The Phase 3 public API product is NOT built: it waits on the EODHD redistribution licence and a Sharia sign-off.
 
@@ -14,7 +14,7 @@ context: read this before planning any work here.
 - **Screening refresh:** the `cmd/ingest_eodhd` loop moved to `services/screening_refresh.go`. The command keeps the same behaviour and log lines.
 - **EODHD news fetcher** (`marketdata/eodhd_news.go`).
 - **Pulse auto-draft** (`services/pulse_autodraft*.go`, `pulse_claude.go`): Claude `claude-opus-5-5` with structured output and the server-side refusal fallback, effort medium, one call a day. Picks are saved as drafts with no author (`created_by` NULL) and the change-log note "auto-draft from news"; editors still verify, review and approve.
-- **New env vars, all off by default:** `DAILY_SCREENING_ENABLED`, `DAILY_SCREENING_HOUR_UTC` (2), `PULSE_AUTODRAFT_ENABLED`, `PULSE_AUTODRAFT_HOUR_UTC` (3), `PULSE_AUTODRAFT_MODEL`, `ANTHROPIC_API_KEY`.
+- **New env vars, all off by default:** `DAILY_SCREENING_ENABLED`, `DAILY_SCREENING_HOUR_UTC` (2), `PULSE_AUTODRAFT_ENABLED`, `PULSE_AUTODRAFT_HOUR_UTC` (3), `PULSE_AUTODRAFT_MODEL`, and the AI key (now `GEMINI_API_KEY`; it was `ANTHROPIC_API_KEY` before `bb2272f`).
 
 **Verified:**
 - `go vet ./...` is clean; `PULSE_TEST_DSN=... go test ./...` all passes. New tests are listed in AUTODRAFT.md.
@@ -38,9 +38,25 @@ context: read this before planning any work here.
 - Auto-draft logged "ANTHROPIC_API_KEY not set: auto-draft off", as designed.
 - `/api/admin/jobs` without auth returns 401.
 
+**Production (done, Zaid: "Yes, do production"):**
+- Migration 0062 applied; 30 users intact.
+- Set `DAILY_SCREENING_ENABLED=true` and `PULSE_AUTODRAFT_ENABLED=true`.
+- PR #7 squash-merged into `main` (`f934e72`); Railway deployed it (SUCCESS, health 200).
+- **The first screening run refreshed nothing.** `job_runs` says succeeded, but 0 refreshed and 25 skipped. The logs show EODHD returning `401 Unauthorized` on `/api/fundamentals` for every covered ticker (AAPL, TSLA, ...). The production `EODHD_API_KEY` no longer has fundamentals access; the last good refresh was 2026-05-23. **Zaid:** check the EODHD subscription or key, then run `POST /api/admin/jobs/screening_refresh/run`.
+- **Trap:** `FetchFundamentalsBatch` swallows HTTP errors, so a 401 looks like "no coverage", and the job reports success.
+- Auto-draft stays off until an AI key is set on the production backend. The news endpoint will likely hit the same EODHD 401.
+
+**Follow-up (branch `fix/eodhd-auth-failure`, same day):**
+- `a9111e8`: an EODHD 401/403 now returns `marketdata.ErrEODHDAuth`, and the refresh stops, so `job_runs` shows **failed** with the reason instead of "succeeded, 0 refreshed".
+- `bb2272f`: **Gemini replaces Claude** for drafts. Zaid: "we will use gemini not anthropic".
+  - Uses the official Go SDK `google.golang.org/genai`, with env `GEMINI_API_KEY`.
+  - Default model is `gemini-3.8-flash`, the newest model marked stable in Google's list on 2026-11-28. Override it with `PULSE_AUTODRAFT_MODEL`.
+  - The Anthropic SDK is removed, and `ANTHROPIC_API_KEY` is no longer read.
+  - The Gemini call has NOT been run for real: there is no Gemini key on this machine.
+
 **To deploy (needs Zaid's go):**
 1. Apply 0062 to staging, then to production.
-2. Set `ANTHROPIC_API_KEY`, and set `DAILY_SCREENING_ENABLED=true` and `PULSE_AUTODRAFT_ENABLED=true` on the backend.
+2. Set `GEMINI_API_KEY`, and set `DAILY_SCREENING_ENABLED=true` and `PULSE_AUTODRAFT_ENABLED=true` on the backend.
 3. Deploy, then watch `GET /api/admin/jobs` the next morning.
 
 ---

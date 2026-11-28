@@ -13,7 +13,7 @@ import (
 
 // AutoDraftNote is the change-log note on every system-created draft, so
 // editors can tell a machine draft from a human one.
-const AutoDraftNote = "auto-draft from news (Claude); verify the source before review"
+const AutoDraftNote = "auto-draft from news (AI); verify the source before review"
 
 // TakenSlots returns the slots that already have an item (any status) on
 // date (YYYY-MM-DD). The auto-draft job never adds a second item to them.

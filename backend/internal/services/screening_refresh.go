@@ -8,6 +8,7 @@ package services
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -47,7 +48,8 @@ type ScreeningRefresher struct {
 }
 
 // RefreshAll refreshes every stock. A single stock's failure is counted and
-// logged, not returned; only a failure to load the stock list is an error.
+// logged, not returned. A failure to load the stock list, or EODHD
+// rejecting the key, stops the run with an error so the job shows as failed.
 func (r *ScreeningRefresher) RefreshAll(ctx context.Context) (ScreeningRefreshStats, error) {
 	var stats ScreeningRefreshStats
 	r.applyThresholds()
@@ -61,6 +63,8 @@ func (r *ScreeningRefresher) RefreshAll(ctx context.Context) (ScreeningRefreshSt
 			return stats, ctx.Err()
 		}
 		switch r.refreshOne(st) {
+		case refreshAuthRejected:
+			return stats, fmt.Errorf("screening refresh stopped after %d stocks: %w", stats.Real, marketdata.ErrEODHDAuth)
 		case refreshReal:
 			stats.Real++
 		case refreshSkipped:
@@ -90,11 +94,16 @@ const (
 	refreshReal refreshOutcome = iota
 	refreshSkipped
 	refreshFailed
+	refreshAuthRejected
 )
 
 // refreshOne pulls, saves and re-screens one stock.
 func (r *ScreeningRefresher) refreshOne(st *models.Stock) refreshOutcome {
-	funds, _ := r.Provider.FetchFundamentalsBatch([]string{st.Ticker})
+	funds, err := r.Provider.FetchFundamentalsBatch([]string{st.Ticker})
+	if errors.Is(err, marketdata.ErrEODHDAuth) {
+		log.Printf("FAIL  %-6s EODHD rejected the API key", st.Ticker)
+		return refreshAuthRejected
+	}
 	if len(funds) == 0 {
 		log.Printf("SKIP  %-6s %-28s — no EODHD coverage (left on existing data)", st.Ticker, st.Name)
 		return refreshSkipped
