@@ -5,7 +5,7 @@ context: read this before planning any work here.
 
 ---
 
-## 2026-11-28 (later) — Daily screening refresh + AI-drafted Pulse (branch `feat/pulse-autodraft`, NOT deployed)
+## 2026-11-28 (later) — Daily screening refresh + AI-drafted Pulse (PR #7, branch `feat/pulse-autodraft`; STAGING deployed, production NOT)
 
 **Asked for:** Pulse "automate it and make it fetch daily news", then "go ahead all approved and agreed lets buld this". The plan and test list are in `docs/pulse/AUTODRAFT.md`. The Phase 3 public API product is NOT built: it waits on the EODHD redistribution licence and a Sharia sign-off.
 
@@ -29,6 +29,14 @@ context: read this before planning any work here.
 - EODHD news takes ONE ticker per request (`s=A,B` returns 422). The demo key only covers a few US tickers and returns 403 on the general feed.
 - Gulf names are not in `eodhdSymbolMap`, so the gulf slot will often be empty.
 - `pulse_item_versions.reason` only allows create/edit/update/correction, so auto-drafts use `create`.
+
+**Staging (done, Zaid approved "push it and deploy"):**
+- Migration 0062 applied.
+- Set `DAILY_SCREENING_ENABLED=true`, `DAILY_SCREENING_HOUR_UTC=0` and `PULSE_AUTODRAFT_ENABLED=true`.
+- `railway up` deployment `f6dd010a` succeeded; health returns 200.
+- The job ran on start-up and `job_runs` shows `screening_refresh | succeeded | 0 refreshed, 1 skipped`. Staging has only 1 test stock, which EODHD doesn't cover.
+- Auto-draft logged "ANTHROPIC_API_KEY not set: auto-draft off", as designed.
+- `/api/admin/jobs` without auth returns 401.
 
 **To deploy (needs Zaid's go):**
 1. Apply 0062 to staging, then to production.
