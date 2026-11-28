@@ -7,7 +7,9 @@ import '../../widgets/skeleton_loaders.dart';
 import '../../widgets/platform_adaptive/platform_app_bar.dart';
 import '../../controllers/auth_controller.dart';
 import '../../widgets/ads/banner_ad_widget.dart';
+import '../../widgets/common/load_error_view.dart';
 import '../../widgets/platform_adaptive/platform_refresh_indicator.dart';
+import '../../widgets/profile_avatar_button.dart';
 
 class IndexesScreen extends StatefulWidget {
   const IndexesScreen({super.key});
@@ -58,7 +60,11 @@ class _IndexesScreenState extends State<IndexesScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: PlatformAppBar(title: 'indexes.title'.tr),
+      appBar: PlatformAppBar(
+        title: 'indexes.title'.tr,
+        // Profile lives here on every tab now, not in the bottom bar.
+        actions: const [ProfileAvatarButton()],
+      ),
       body: Obx(() {
         final provider = Get.find<StocksController>();
         final categories = _groupIndexes(provider.marketIndexes);
@@ -86,7 +92,13 @@ class _IndexesScreenState extends State<IndexesScreen> {
                     // Loading: marketIndexes is empty until the first fetch
                     // resolves — show shimmer skeletons that match the loaded
                     // layout (no content-shift) instead of blank space.
-                    if (provider.marketIndexes.isEmpty)
+                    if (provider.marketIndexes.isEmpty &&
+                        provider.indexesFailed.value)
+                      LoadErrorView(
+                        busy: provider.indexesLoading.value,
+                        onRetry: _loadData,
+                      )
+                    else if (provider.marketIndexes.isEmpty)
                       const IndexListSkeleton()
                     else
                       ...categories.entries.map((entry) {

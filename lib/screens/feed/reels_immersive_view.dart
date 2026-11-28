@@ -20,6 +20,7 @@ import '../../widgets/social/animated_like_heart.dart';
 import '../../widgets/social/comments_sheet.dart';
 import '../social/expert_profile_screen.dart';
 import '../social/social_tokens.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Instagram-style immersive vertical reels viewer, embedded inside the
 /// Feed tab. Renders one reel per page in a vertical PageView; swipe up
@@ -971,7 +972,7 @@ class _ReelPageState extends State<_ReelPage> {
         else if (!ready)
           Center(
             child: _fadeChild(
-              const CircularProgressIndicator(color: Colors.white),
+              const PlatformSpinner(color: Colors.white),
             ),
           ),
 

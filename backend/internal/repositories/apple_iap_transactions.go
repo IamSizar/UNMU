@@ -3,9 +3,9 @@ package repositories
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 // AppleIAPTransactionRepository persists verified Apple IAP transactions
@@ -33,9 +33,20 @@ type AppleIAPTransaction struct {
 	CreatedAt             time.Time       `json:"createdAt"`
 }
 
+// ErrAppleSubOwnedByAnotherUser means the Apple subscription (its
+// original_transaction_id) was first verified by a different account.
+var ErrAppleSubOwnedByAnotherUser = errors.New("apple-iap: subscription belongs to another account")
+
 // Upsert inserts a new transaction row, or returns the existing one
 // when transaction_id already exists (replay → idempotent). Returns the
 // resulting row and whether it was newly inserted.
+//
+// A subscription belongs to the first account that verified it. Every
+// renewal has a new transaction_id but the same original_transaction_id,
+// so ownership is checked on original_transaction_id; otherwise another
+// account could claim a renewal of someone else's subscription. The check
+// and insert run under a per-subscription advisory lock so two accounts
+// cannot both claim it at the same moment.
 func (r *AppleIAPTransactionRepository) Upsert(
 	userID int64,
 	transactionID, originalTransactionID, productID, environment string,
@@ -43,45 +54,84 @@ func (r *AppleIAPTransactionRepository) Upsert(
 	expiresDate *time.Time,
 	rawPayload []byte,
 ) (*AppleIAPTransaction, bool, error) {
-	// Try insert first — on the unique conflict, fetch the existing.
-	row := r.db.QueryRow(`
+	tx, err := r.db.Begin()
+	if err != nil {
+		return nil, false, fmt.Errorf("apple-iap upsert: begin: %w", err)
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(`SELECT pg_advisory_xact_lock(hashtext('apple_iap:' || $1))`,
+		originalTransactionID); err != nil {
+		return nil, false, fmt.Errorf("apple-iap upsert: lock: %w", err)
+	}
+	if err := checkSubOwner(tx, originalTransactionID, userID); err != nil {
+		return nil, false, err
+	}
+
+	row := tx.QueryRow(`
 		INSERT INTO apple_iap_transactions (
 			user_id, transaction_id, original_transaction_id, product_id,
 			environment, purchase_date, expires_date, raw_payload
 		)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		ON CONFLICT (transaction_id) DO NOTHING
-		RETURNING id, user_id, transaction_id, original_transaction_id,
-		          product_id, environment, purchase_date, expires_date,
-		          raw_payload, created_at
-	`, userID, transactionID, originalTransactionID, productID,
+		RETURNING `+appleTxColumns, userID, transactionID, originalTransactionID, productID,
 		environment, purchaseDate, expiresDate, rawPayload)
+	t, err := scanAppleTx(row)
+	inserted := err == nil
+	if err == sql.ErrNoRows {
+		// transaction_id already stored: return that row (idempotent replay).
+		t, err = scanAppleTx(tx.QueryRow(`SELECT `+appleTxColumns+`
+			FROM apple_iap_transactions WHERE transaction_id = $1`, transactionID))
+	}
+	if err != nil {
+		return nil, false, fmt.Errorf("apple-iap upsert: %w", err)
+	}
+	if t.UserID != userID {
+		return nil, false, ErrAppleSubOwnedByAnotherUser
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, false, fmt.Errorf("apple-iap upsert: commit: %w", err)
+	}
+	return t, inserted, nil
+}
 
+// checkSubOwner fails when the subscription was first verified by another
+// account. Older data may already hold several owners; the earliest wins.
+func checkSubOwner(tx *sql.Tx, originalTransactionID string, userID int64) error {
+	var owner int64
+	err := tx.QueryRow(`
+		SELECT user_id FROM apple_iap_transactions
+		WHERE original_transaction_id = $1
+		ORDER BY created_at, id LIMIT 1`, originalTransactionID).Scan(&owner)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("apple-iap upsert: owner lookup: %w", err)
+	}
+	if owner != userID {
+		return ErrAppleSubOwnedByAnotherUser
+	}
+	return nil
+}
+
+const appleTxColumns = `id, user_id, transaction_id, original_transaction_id,
+		          product_id, environment, purchase_date, expires_date,
+		          raw_payload, created_at`
+
+func scanAppleTx(row *sql.Row) (*AppleIAPTransaction, error) {
 	var t AppleIAPTransaction
 	var rawJSON []byte
-	err := row.Scan(
+	if err := row.Scan(
 		&t.ID, &t.UserID, &t.TransactionID, &t.OriginalTransactionID,
 		&t.ProductID, &t.Environment, &t.PurchaseDate, &t.ExpiresDate,
 		&rawJSON, &t.CreatedAt,
-	)
-	if err == nil {
-		t.RawPayload = rawJSON
-		return &t, true, nil
+	); err != nil {
+		return nil, err
 	}
-	if err != sql.ErrNoRows {
-		// Unique-constraint conflicts come back as 23505 — anything else
-		// is a real DB problem.
-		if pgErr, ok := err.(*pq.Error); !ok || pgErr.Code != "23505" {
-			return nil, false, err
-		}
-	}
-
-	// Conflict path: pull the existing row.
-	existing, err := r.GetByTransactionID(transactionID)
-	if err != nil {
-		return nil, false, err
-	}
-	return existing, false, nil
+	t.RawPayload = rawJSON
+	return &t, nil
 }
 
 func (r *AppleIAPTransactionRepository) GetByTransactionID(transactionID string) (*AppleIAPTransaction, error) {

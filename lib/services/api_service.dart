@@ -124,19 +124,7 @@ class ApiService {
     String token,
   ) async {
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/user/portfolio'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        return List<Map<String, dynamic>>.from(data['portfolio'] ?? []);
-      }
-      return [];
+      return await fetchUserPortfolio(token);
     } catch (e) {
       return [];
     }
@@ -403,20 +391,45 @@ class ApiService {
   }
 
   // Get Market Indexes
+  /// Market indexes; an empty list on any failure (for decorative widgets).
+  /// Screens that must tell "failed" from "none" use [fetchMarketIndexes].
   static Future<List<Map<String, dynamic>>> getMarketIndexes() async {
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/market/indexes'),
-        headers: {'Content-Type': 'application/json'},
-      );
-
-      if (response.statusCode == 200) {
-        return List<Map<String, dynamic>>.from(json.decode(response.body));
-      }
-      return [];
+      return await fetchMarketIndexes();
     } catch (e) {
       return [];
     }
+  }
+
+  /// Market indexes; THROWS on a network error or non-200 reply.
+  static Future<List<Map<String, dynamic>>> fetchMarketIndexes() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/market/indexes'),
+      headers: {'Content-Type': 'application/json'},
+    );
+    if (response.statusCode != 200) {
+      throw Exception('market/indexes returned ${response.statusCode}');
+    }
+    return List<Map<String, dynamic>>.from(json.decode(response.body));
+  }
+
+  /// The user's portfolio + watchlist rows; THROWS on a network error or
+  /// non-200 reply. [getUserPortfolio] is the never-throwing variant.
+  static Future<List<Map<String, dynamic>>> fetchUserPortfolio(
+    String token,
+  ) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/user/portfolio'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+    if (response.statusCode != 200) {
+      throw Exception('user/portfolio returned ${response.statusCode}');
+    }
+    final data = json.decode(response.body);
+    return List<Map<String, dynamic>>.from(data['portfolio'] ?? []);
   }
 
   // Get Exchange Rate

@@ -28,6 +28,12 @@ class LanguageController extends GetxController {
     final prefs = await SharedPreferences.getInstance();
     final code = prefs.getString('language') ?? 'en';
     _locale.value = Locale(code);
+    // Tell GetX too, otherwise `.tr` keeps the default (English) strings even
+    // though layout direction and content already follow the saved language.
+    // Only when it differs, to avoid a needless rebuild for English users.
+    if (Get.locale?.languageCode != code) {
+      Get.updateLocale(_locale.value);
+    }
   }
 
   Future<void> setLanguage(String languageCode) async {

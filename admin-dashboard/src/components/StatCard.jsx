@@ -23,13 +23,15 @@ export default function StatCard({
   label,
   value,
   sub,
-  change,
+  // Defaults mark these optional for TypeScript callers (allowJs infers
+  // required props from a plain destructure).
+  change = undefined,
   icon: Icon,
   tone = 'cyan',
   live = false,
   // Optional formatter for the number ticker — only used when `value`
   // is a number. Defaults to `n.toLocaleString()`.
-  format,
+  format = undefined,
 }) {
   const { t: translate } = useI18n()
   const tones = {

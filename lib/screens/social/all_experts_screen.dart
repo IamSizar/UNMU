@@ -6,6 +6,7 @@ import '../../widgets/social/leaderboard_row.dart';
 import 'expert_profile_screen.dart';
 import 'mock_social_data.dart';
 import 'social_tokens.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Full ranked list of every visible expert on the platform.
 ///
@@ -176,7 +177,7 @@ class _AllExpertsScreenState extends State<AllExpertsScreen> {
               onRefresh: _load,
               color: SocialTokens.violet,
               child: _loading && _experts.isEmpty
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const Center(child: PlatformSpinner())
                   : _error != null
                       ? _ErrorView(message: _error!, onRetry: _load, palette: palette)
                       : filtered.isEmpty

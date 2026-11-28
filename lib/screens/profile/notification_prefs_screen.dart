@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import '../../services/notification_prefs_service.dart';
 import '../../utils/haptic_utils.dart';
 import '../social/social_tokens.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Settings sub-screen — per-user notification toggles.
 ///
@@ -116,7 +117,7 @@ class _NotificationPrefsScreenState extends State<NotificationPrefsScreen> {
       ),
       body: SafeArea(
         child: _loading
-            ? const Center(child: CircularProgressIndicator())
+            ? const Center(child: PlatformSpinner())
             : ListView(
                 physics: const BouncingScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
@@ -450,7 +451,7 @@ class _PrefRow extends StatelessWidget {
               const SizedBox(
                 width: 18,
                 height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
+                child: PlatformSpinner(strokeWidth: 2),
               )
             else
               Switch.adaptive(

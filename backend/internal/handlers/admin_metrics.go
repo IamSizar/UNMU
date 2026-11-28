@@ -167,7 +167,6 @@ func (h *AdminMetricsHandler) Metrics(c *gin.Context) {
 		  COUNT(*) FILTER (WHERE post_type IN ('video','reel') AND created_at > NOW() - INTERVAL '7 days')
 		FROM posts
 		WHERE COALESCE(is_hidden, FALSE) = FALSE
-		  AND deleted_at IS NULL
 	`).Scan(
 		&resp.Content.Articles, &resp.Content.ArticlesThisWeek,
 		&resp.Content.Videos, &resp.Content.VideosThisWeek,
@@ -304,7 +303,6 @@ func (h *AdminMetricsHandler) loadContentByDay() ([]metricsContentDay, error) {
 		  FROM posts
 		  WHERE created_at >= (CURRENT_DATE - 6)
 		    AND COALESCE(is_hidden, FALSE) = FALSE
-		    AND deleted_at IS NULL
 		  GROUP BY 1
 		)
 		SELECT
@@ -341,12 +339,12 @@ func (h *AdminMetricsHandler) loadTopExperts() ([]metricsTopExpert, error) {
 		    WHERE p.expert_id = e.id AND p.target_type = 'expert'
 		      AND p.post_type = 'article'
 		      AND COALESCE(p.is_hidden, FALSE) = FALSE
-		      AND p.deleted_at IS NULL)                                      AS articles,
+		      )                                                              AS articles,
 		  (SELECT COUNT(*) FROM posts p
 		    WHERE p.expert_id = e.id AND p.target_type = 'expert'
 		      AND p.post_type IN ('video','reel')
 		      AND COALESCE(p.is_hidden, FALSE) = FALSE
-		      AND p.deleted_at IS NULL)                                      AS videos,
+		      )                                                              AS videos,
 		  COALESCE(u.avatar_url, '')                                         AS avatar_url
 		FROM experts e
 		LEFT JOIN users u ON u.expert_id = e.id

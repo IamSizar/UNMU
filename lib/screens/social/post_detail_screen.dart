@@ -9,6 +9,7 @@ import '../../widgets/social/source_badge.dart';
 import '../../localization/locale_format.dart';
 import 'mock_social_data.dart';
 import 'social_tokens.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// =============================================================================
 /// Full-screen Post Detail viewer — EDGE-TO-EDGE immersive.
@@ -199,7 +200,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               if (_commentsLoading)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 14),
-                  child: Center(child: CircularProgressIndicator()),
+                  child: Center(child: PlatformSpinner()),
                 )
               else if (_comments != null)
                 ..._comments!.isEmpty

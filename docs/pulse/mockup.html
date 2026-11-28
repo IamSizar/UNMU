@@ -1,0 +1,740 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UNMU Pulse — UI mockups</title>
+<!--
+  UNMU Pulse (نبض أنمو) — UI mockups, Aurora bento style, UNMU logo colours.
+
+  Purpose: design review only. Not shipped code. All news text, sources and
+  tickers below are SAMPLE content written for layout purposes.
+
+  Logo colours (sampled from assets/branding/unmu_icon.png):
+    teal  #00B7B7   — the mark and the Arabic wordmark
+    ink   #0B1B1E   — the Latin wordmark (logo black, softened a touch)
+    white #FFFFFF   — the logo field
+
+  Aurora recipe (from aurora-bento + the approved Sales Live look):
+    calm pale page, glass cards (white/30 + white/60 edge + tinted shadow),
+    segmented control with a raised white pill, tone cards for the few places
+    colour is allowed, thinking-orb for loading. Colour is kept to tone cards
+    and the primary action only.
+
+  Contrast: text on the teal tone uses a deepened teal (#007F86, 5.0:1 with
+  white) so the 4.5:1 floor holds; #00B7B7 itself is only used for the mark,
+  fills, borders and decorative light, never for small white text.
+-->
+<style>
+  :root {
+    --teal: #00B7B7;
+    --teal-deep: #007F86;
+    --teal-ink: #005A60;
+    --ink: #0B1B1E;
+    --page: #EAF3F3;
+    --text: #0B1B1E;
+    --text-2: #3C5154;
+    --text-3: #5F767A;
+    --glass: rgba(255,255,255,.42);
+    --glass-edge: rgba(255,255,255,.75);
+    --glass-shadow: 0 24px 48px -26px rgba(40,70,120,.38);
+    --chip: rgba(0,183,183,.13);
+    --chip-text: #005A60;
+    --track: rgba(255,255,255,.5);
+    --pill: #fff;
+    --sans: -apple-system, "SF Pro Text", "SF Pro Display", Roboto, "Segoe UI", system-ui, sans-serif;
+  }
+  .dark {
+    --page: #061214;
+    --text: #FFFFFF;
+    --text-2: #C9D8DA;
+    --text-3: #8DA3A7;
+    --glass: rgba(255,255,255,.07);
+    --glass-edge: rgba(255,255,255,.14);
+    --glass-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+    --chip: rgba(0,183,183,.22);
+    --chip-text: #7FE7E7;
+    --track: rgba(255,255,255,.08);
+    --pill: rgba(255,255,255,.16);
+  }
+
+  * { box-sizing: border-box; margin: 0; }
+  body { font-family: var(--sans); background: #CFD9DA; color: #0B1B1E; padding: 40px 28px 80px; }
+  h1 { font-size: 28px; letter-spacing: -.02em; }
+  .lead { color: #3C5154; margin: 8px 0 32px; max-width: 760px; line-height: 1.5; font-size: 15px; }
+  h2.row-title { font-size: 13px; text-transform: uppercase; letter-spacing: .12em; color: #3C5154; margin: 44px 0 16px; }
+  .row { display: flex; gap: 36px; flex-wrap: wrap; align-items: flex-start; }
+  .cap { font-size: 12px; color: #3C5154; margin-top: 14px; text-align: center; max-width: 390px; line-height: 1.45; }
+  .note { font-size: 12px; color: #3C5154; max-width: 520px; line-height: 1.5; }
+
+  /* ── Phone frame ─────────────────────────────────────────────────── */
+  .phone {
+    width: 390px; height: 880px; border-radius: 46px; overflow: hidden; position: relative;
+    box-shadow: 0 0 0 10px #101C1E, 0 40px 80px -30px rgba(0,0,0,.45);
+    background: var(--page); color: var(--text);
+  }
+  .page {
+    position: absolute; inset: 0; background-color: var(--page);
+    background-image:
+      radial-gradient(420px 360px at 0% 0%, rgba(0,183,183,.22), transparent 70%),
+      radial-gradient(380px 340px at 100% 12%, rgba(120,175,255,.20), transparent 70%),
+      radial-gradient(380px 340px at 70% 100%, rgba(150,110,235,.14), transparent 70%);
+  }
+  .dark .page {
+    background-image:
+      radial-gradient(420px 360px at 0% 0%, rgba(0,183,183,.34), transparent 70%),
+      radial-gradient(380px 340px at 100% 14%, rgba(49,90,245,.26), transparent 70%),
+      radial-gradient(380px 340px at 60% 100%, rgba(138,91,199,.28), transparent 70%);
+  }
+  .scroll { position: absolute; inset: 0; padding: 54px 16px 110px; overflow: hidden; }
+  .status { position: absolute; top: 0; inset-inline: 0; height: 48px; display: flex; justify-content: space-between;
+    align-items: flex-end; padding: 0 28px 6px; font-size: 14px; font-weight: 600; z-index: 5; }
+
+  /* ── Glass + tones ───────────────────────────────────────────────── */
+  .glass {
+    border-radius: 26px; border: 1px solid var(--glass-edge); background: var(--glass);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.9), var(--glass-shadow);
+    backdrop-filter: blur(30px) saturate(1.3); -webkit-backdrop-filter: blur(30px) saturate(1.3);
+  }
+  .dark .glass { box-shadow: inset 0 1px 0 rgba(255,255,255,.1); }
+  .tone-teal {
+    color: #fff; border-radius: 26px; position: relative; overflow: hidden;
+    background:
+      radial-gradient(circle at 92% 8%, rgba(0,183,183,.95) 0%, rgba(0,183,183,0) 42%),
+      radial-gradient(circle at 6% 100%, rgba(0,183,183,.55) 0%, rgba(0,183,183,0) 46%),
+      var(--teal-deep);
+    box-shadow: 0 22px 44px -26px rgba(0,90,96,.65);
+  }
+  .dark .tone-teal {
+    background:
+      radial-gradient(circle at 90% 8%, rgba(0,183,183,.55) 0%, rgba(0,183,183,0) 55%),
+      radial-gradient(circle at 10% 95%, rgba(0,183,183,.2) 0%, rgba(0,183,183,0) 60%),
+      #06383D;
+    box-shadow: none; border: 1px solid rgba(0,183,183,.28);
+  }
+  .tone-ink {
+    color: #fff; border-radius: 26px; position: relative; overflow: hidden;
+    background:
+      radial-gradient(circle at 90% 10%, rgba(0,183,183,.42) 0%, rgba(0,183,183,0) 50%),
+      radial-gradient(circle at 8% 100%, rgba(0,183,183,.16) 0%, rgba(0,183,183,0) 55%),
+      #0B1B1E;
+    box-shadow: 0 22px 44px -26px rgba(11,27,30,.7);
+  }
+  .dark .tone-ink { border: 1px solid rgba(255,255,255,.1); box-shadow: none;
+    background: radial-gradient(circle at 90% 10%, rgba(0,183,183,.3) 0%, rgba(0,183,183,0) 52%), #0E2226; }
+
+  /* ── Type + chips ────────────────────────────────────────────────── */
+  .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+  .h-title { font-size: 19px; font-weight: 750; line-height: 1.25; letter-spacing: -.01em; }
+  .meta { font-size: 12px; opacity: .92; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .badge { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px; border-radius: 999px;
+    font-size: 10.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase;
+    background: var(--chip); color: var(--chip-text); white-space: nowrap; }
+  .badge.on-tone { background: rgba(255,255,255,.2); color: #fff; }
+  .badge.analysis { background: rgba(138,91,199,.16); color: #5B3A8E; }
+  .dark .badge.analysis { background: rgba(167,139,250,.22); color: #D8CBFF; }
+  .chip-new { background: #fff; color: var(--teal-ink); }
+  .ico { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  .ico.sm { width: 14px; height: 14px; }
+  .stock-chip { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 12px; border-radius: 999px;
+    background: rgba(255,255,255,.55); border: 1px solid var(--glass-edge); font-size: 12px; font-weight: 700; color: var(--text); white-space: nowrap; }
+  .dark .stock-chip { background: rgba(255,255,255,.08); }
+  .stock-chip.on-tone { background: rgba(255,255,255,.18); border-color: rgba(255,255,255,.3); color: #fff; }
+  .dot-up { width: 7px; height: 7px; border-radius: 50%; background: #10B981; }
+
+  /* ── Header ──────────────────────────────────────────────────────── */
+  .head { display: flex; align-items: center; justify-content: space-between; margin: 6px 4px 14px; }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand svg { width: 36px; height: 30px; }
+  .brand b { font-size: 21px; letter-spacing: -.02em; display: block; line-height: 1; }
+  .brand small { font-size: 11.5px; color: var(--text-3); display: block; margin-top: 3px; }
+  .avatar { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 14px;
+    color: #fff; background: var(--teal-deep); border: 1.5px solid rgba(255,255,255,.7); }
+  .head-r { display: flex; gap: 8px; align-items: center; }
+
+  /* ── Segmented control (Sales Live) ──────────────────────────────── */
+  .seg { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--track); border: 1px solid var(--glass-edge); gap: 2px; }
+  .seg span { padding: 7px 14px; border-radius: 999px; font-size: 12.5px; font-weight: 650; color: var(--text-2); }
+  .seg span.on { background: var(--pill); color: var(--text); box-shadow: 0 4px 10px -4px rgba(40,70,120,.3); }
+  .dark .seg span.on { box-shadow: none; }
+
+  /* ── Pulse home bento ────────────────────────────────────────────── */
+  .day { display: flex; align-items: center; justify-content: space-between; margin: 0 4px 12px; }
+  .day h2 { font-size: 24px; letter-spacing: -.02em; }
+  .day p { font-size: 12.5px; color: var(--text-3); margin-top: 2px; }
+  .orbs { display: flex; gap: 6px; align-items: center; font-size: 11.5px; color: var(--text-3); }
+  .orb { width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff, var(--teal) 55%, var(--teal-deep)); box-shadow: 0 0 10px rgba(0,183,183,.7); }
+  .bento { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .card { padding: 16px; display: flex; flex-direction: column; gap: 9px; }
+  .card.hero { grid-column: span 2; padding: 18px; gap: 11px; }
+  .card .top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  .slot { display: flex; align-items: center; gap: 7px; }
+  .card .h-title.sm { font-size: 15px; }
+  .card .foot { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
+  .tail { font-size: 11.5px; color: var(--text-3); }
+  .tone-teal .tail, .tone-ink .tail { color: rgba(255,255,255,.85); }
+
+  /* ── Bottom nav pill (matches ModernBottomNav) ───────────────────── */
+  .nav { position: absolute; inset-inline: 12px; bottom: 22px; height: 64px; border-radius: 999px; padding: 6px;
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; align-items: center; z-index: 6;
+    background: var(--glass); border: 1px solid var(--glass-edge);
+    backdrop-filter: blur(34px) saturate(1.15); -webkit-backdrop-filter: blur(34px) saturate(1.15);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 18px 36px -18px rgba(40,70,120,.5); }
+  .dark .nav { box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 18px 36px -18px rgba(0,0,0,.7); }
+  .nav div { height: 52px; border-radius: 999px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    font-size: 10px; font-weight: 650; color: var(--text-3); }
+  .nav div.on { background: linear-gradient(180deg, rgba(0,183,183,.26), rgba(0,183,183,.16)); color: var(--text); box-shadow: 0 0 18px -4px rgba(0,183,183,.5); }
+  .nav .ico { width: 21px; height: 21px; }
+
+  /* ── Detail ──────────────────────────────────────────────────────── */
+  .bar { display: flex; align-items: center; justify-content: space-between; margin: 6px 0 14px; }
+  .round { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; }
+  .rtl-flip { transform: scaleX(-1); }
+  .detail-title { font-size: 23px; font-weight: 800; line-height: 1.2; letter-spacing: -.02em; margin: 12px 2px 10px; }
+  .summary { font-size: 15px; line-height: 1.5; color: var(--text-2); margin: 0 2px 12px; }
+  .block { padding: 15px 16px; margin-bottom: 10px; }
+  .block h3 { font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); margin-bottom: 10px; display: flex; align-items: center; gap: 7px; }
+  .block p { font-size: 13.5px; line-height: 1.55; color: var(--text-2); }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; font-size: 13px; }
+  .kv dt { color: var(--text-3); } .kv dd { margin: 0; font-weight: 650; color: var(--text); overflow-wrap: anywhere; }
+  .linkrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .linkrow .nm b { display: block; font-size: 15px; } .linkrow .nm span { font-size: 12px; color: var(--text-3); }
+  .btn { height: 46px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 20px; font-weight: 750; font-size: 14.5px; }
+  .btn.primary { background: var(--teal-deep); color: #fff; box-shadow: 0 14px 26px -14px rgba(0,127,134,.9); }
+  .btn.ghost { background: var(--track); border: 1px solid var(--glass-edge); color: var(--text); }
+  .corr { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 18px; background: rgba(245,166,35,.16); font-size: 12.5px; line-height: 1.45; color: var(--text-2); margin-bottom: 10px; }
+
+  /* ── Archive ─────────────────────────────────────────────────────── */
+  .dates { display: flex; gap: 8px; margin: 4px 0 14px; }
+  .dates div { flex: 1; text-align: center; padding: 9px 0; border-radius: 18px; background: var(--track); border: 1px solid var(--glass-edge); font-size: 11px; color: var(--text-3); }
+  .dates div b { display: block; font-size: 17px; color: var(--text); margin-top: 2px; }
+  .dates div.on { background: var(--teal-deep); border-color: transparent; color: rgba(255,255,255,.88); }
+  .dates div.on b { color: #fff; }
+  .search { height: 42px; border-radius: 999px; display: flex; align-items: center; gap: 9px; padding: 0 16px; color: var(--text-3); font-size: 14px; margin-bottom: 12px; }
+  .row-item { padding: 13px 14px; margin-bottom: 9px; display: flex; gap: 12px; align-items: flex-start; }
+  .row-item .ic { width: 38px; height: 38px; border-radius: 14px; display: grid; place-items: center; background: var(--chip); color: var(--chip-text); flex: none; }
+  .row-item b { font-size: 14px; line-height: 1.3; display: block; }
+  .row-item span { font-size: 11.5px; color: var(--text-3); display: block; margin-top: 3px; }
+  .daylabel { font-size: 11.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); margin: 8px 4px; }
+
+  /* ── States ──────────────────────────────────────────────────────── */
+  .skel { height: 14px; border-radius: 8px; background: linear-gradient(90deg, rgba(120,150,155,.18), rgba(120,150,155,.34), rgba(120,150,155,.18)); }
+  .center { display: grid; place-items: center; text-align: center; gap: 10px; padding: 30px 18px; }
+  .center h4 { font-size: 17px; } .center p { font-size: 13px; color: var(--text-3); line-height: 1.5; max-width: 250px; }
+  .big-orb { width: 54px; height: 54px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff, var(--teal) 50%, var(--teal-deep)); box-shadow: 0 0 36px rgba(0,183,183,.6); }
+  .sw { width: 44px; height: 26px; border-radius: 999px; background: var(--teal-deep); position: relative; flex: none; }
+  .sw i { position: absolute; top: 3px; inset-inline-end: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; }
+  .sw.off { background: var(--track); border: 1px solid var(--glass-edge); }
+  .sw.off i { inset-inline-end: auto; inset-inline-start: 2px; top: 2px; background: #C9D8DA; }
+
+  /* ── Admin dashboard (desktop) ───────────────────────────────────── */
+  .desk { width: 1180px; height: 780px; border-radius: 22px; overflow: hidden; position: relative; display: grid; grid-template-columns: 220px 1fr;
+    box-shadow: 0 0 0 1px rgba(0,0,0,.08), 0 40px 80px -30px rgba(0,0,0,.4); background: var(--page); color: var(--text); }
+  .side { position: relative; padding: 22px 14px; border-inline-end: 1px solid var(--glass-edge); background: rgba(255,255,255,.3); }
+  .side .brand { margin: 0 6px 22px; }
+  .side a { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; font-size: 13.5px; color: var(--text-2); font-weight: 600; margin-bottom: 3px; }
+  .side a.on { background: var(--pill); color: var(--text); box-shadow: 0 6px 14px -8px rgba(40,70,120,.4); }
+  .side .sec { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--text-3); margin: 16px 12px 6px; }
+  .main { position: relative; padding: 22px 26px; overflow: hidden; }
+  .crumb { font-size: 12.5px; color: var(--text-3); }
+  .main h2 { font-size: 24px; letter-spacing: -.02em; margin: 2px 0 14px; display: flex; align-items: center; gap: 12px; }
+  .steps { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+  .step { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 650; color: var(--text-3); }
+  .step i { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 11px; background: var(--track); border: 1px solid var(--glass-edge); }
+  .step.done { color: var(--text-2); } .step.done i { background: var(--teal-deep); color: #fff; border-color: transparent; }
+  .step.now { color: var(--text); } .step.now i { background: #fff; color: var(--teal-ink); box-shadow: 0 0 0 3px rgba(0,183,183,.35); }
+  .bar-line { flex: 0 0 26px; height: 2px; border-radius: 2px; background: var(--glass-edge); }
+  .cols { display: grid; grid-template-columns: 1.55fr 1fr; gap: 14px; }
+  .field { margin-bottom: 11px; }
+  .field label { display: block; font-size: 11px; font-weight: 700; color: var(--text-3); letter-spacing: .06em; text-transform: uppercase; margin-bottom: 5px; }
+  .input { min-height: 38px; border-radius: 14px; padding: 9px 13px; background: var(--track); border: 1px solid var(--glass-edge); font-size: 13.5px; color: var(--text); line-height: 1.4; }
+  .input.tall { min-height: 70px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .log { font-size: 12.5px; color: var(--text-2); display: grid; gap: 9px; }
+  .log div { display: flex; gap: 9px; align-items: flex-start; line-height: 1.35; } .log b { color: var(--text); }
+  .log i { width: 8px; height: 8px; border-radius: 50%; background: var(--teal); margin-top: 5px; flex: none; }
+  .tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .tbl th { text-align: start; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); padding: 8px 10px; }
+  .tbl td { padding: 11px 10px; border-top: 1px solid var(--glass-edge); color: var(--text-2); }
+  .tbl td b { color: var(--text); }
+  .st { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 750; background: var(--chip); color: var(--chip-text); }
+  .st.warn { background: rgba(245,166,35,.22); color: #7A4F00; } .st.draft { background: rgba(110,130,135,.2); color: #44585B; }
+  .st.pub { background: var(--teal-deep); color: #fff; }
+</style>
+</head>
+<body>
+
+<!-- Icon sprite: thin-line icons (stand-ins for SF Symbols on iOS / Material Symbols on Android) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l2.5-6 4 12 2.5-6H21"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></symbol>
+    <symbol id="i-gulf" viewBox="0 0 24 24"><path d="M3 20h18M5 20V10m14 10V10M9 20v-6m6 6v-6M3 10l9-6 9 6"/></symbol>
+    <symbol id="i-scale" viewBox="0 0 24 24"><path d="M12 4v16M7 20h10M5 8h14M5 8l-2.5 6a3 3 0 0 0 5 0L5 8Zm14 0-2.5 6a3 3 0 0 0 5 0L19 8Z"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3ZM18.5 16l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2Z"/></symbol>
+    <symbol id="i-explore" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5 13.5 13.5 8.5 15.5 10.5 10.5 15.5 8.5Z"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M5 20V10m7 10V4m7 16v-7"/></symbol>
+    <symbol id="i-groups" viewBox="0 0 24 24"><circle cx="9" cy="9" r="3"/><circle cx="17" cy="10" r="2.3"/><path d="M3 19c.6-3 3-4.5 6-4.5s5.4 1.5 6 4.5M15.5 14.8c2.5-.2 4.6.9 5.5 3.7"/></symbol>
+    <symbol id="i-feed" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="6" rx="2"/><rect x="4" y="13" width="16" height="7" rx="2"/></symbol>
+    <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M7 4h10v16l-5-3.5L7 20V4Z"/></symbol>
+    <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 15V4m0 0L8 8m4-4 4 4M5 13v6h14v-6"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3Z"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 17V11a6 6 0 0 1 12 0v6l1.5 2h-15L6 17ZM10 21h4"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></symbol>
+    <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M3 9c5-4.5 13-4.5 18 0M6 12.5c3.4-3 8.6-3 12 0M9.2 16c1.7-1.4 3.9-1.4 5.6 0M12 19.5v.1"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c.5-3.4 3-5 6-5s5.5 1.6 6 5M16 5.2a3.2 3.2 0 0 1 0 5.6M18 15.5c1.8.6 2.8 2 3 4.5"/></symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6V3Z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></symbol>
+    <symbol id="i-warn" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V13M12 16.4v.1"/></symbol>
+    <!-- UNMU mark: stepped blocks + arch, redrawn from assets/branding/unmu_icon.png -->
+    <symbol id="logo" viewBox="240 160 920 700">
+      <path fill="#00B7B7" d="M660 185A460 640 0 0 1 1120 825H935A275 445 0 0 0 660 380Z"/>
+      <path fill="#00B7B7" d="M468 380H658Q640 490 658 600H465Q448 490 468 380Z"/>
+      <path fill="#00B7B7" d="M280 600H470Q458 712 472 825H280Q268 712 280 600Z"/>
+    </symbol>
+  </defs>
+</svg>
+
+<h1>UNMU Pulse <span dir="rtl" lang="ar">· نبض أُنمُو</span></h1>
+<p class="lead">UI mockups for Phase 1 in the UNMU logo colours (teal <b>#00B7B7</b>, ink black, white) and the Aurora bento finish: calm pale page, frosted glass cards, tone cards only where colour is allowed, segmented control, orbs for loading. Light and dark, English and Arabic (RTL). All news text is sample content.</p>
+
+<!-- ═════════ ROW 1 — HOME ═════════ -->
+<h2 class="row-title">1 · Pulse home (first tab) — light EN · dark AR RTL · loading/empty · error</h2>
+<div class="row">
+
+  <div>
+    <div class="phone">
+      <div class="page"></div>
+      <div class="status"><span>9:41</span><span>5G ▮▮▮</span></div>
+      <div class="scroll">
+        <div class="head">
+          <div class="brand"><svg><use href="#logo"/></svg><div><b>Pulse</b><small>by UNMU</small></div></div>
+          <div class="head-r"><div class="round glass"><svg class="ico"><use href="#i-bell"/></svg></div><div class="avatar">Z</div></div>
+        </div>
+        <div class="day">
+          <div><h2>Today</h2><p>Thursday, 22 October · updated 09:12</p></div>
+          <div class="orbs"><span class="orb"></span>Live</div>
+        </div>
+        <div class="bento">
+          <div class="card hero tone-teal">
+            <div class="top">
+              <div class="slot eyebrow"><svg class="ico"><use href="#i-globe"/></svg>Top global event</div>
+              <span class="badge on-tone"><svg class="ico sm"><use href="#i-shield"/></svg>Confirmed</span>
+            </div>
+            <div class="h-title" style="font-size:22px">Central banks signal a slower pace of rate cuts as inflation holds</div>
+            <div class="meta"><svg class="ico sm"><use href="#i-clock"/></svg>Verified 08:40 · Central bank statement</div>
+            <div class="foot"><span class="badge chip-new">New</span><span class="tail">Read details ›</span></div>
+          </div>
+          <div class="card glass">
+            <div class="top"><div class="slot eyebrow" style="color:var(--teal-ink)"><svg class="ico"><use href="#i-gulf"/></svg>Gulf</div></div>
+            <div class="h-title sm">Gulf exchange announces new listing rules for mid-cap firms</div>
+            <div class="meta" style="color:var(--text-3)"><svg class="ico sm"><use href="#i-clock"/></svg>08:55</div>
+            <div class="foot"><span class="badge"><svg class="ico sm"><use href="#i-shield"/></svg>Confirmed</span></div>
+          </div>
+          <div class="card tone-ink">
+            <div class="top"><div class="slot eyebrow" style="color:#7FE7E7"><svg class="ico"><use href="#i-scale"/></svg>Sharia</div></div>
+            <div class="h-title sm">Screening status of a listed bank changes after review</div>
+            <div class="meta"><svg class="ico sm"><use href="#i-clock"/></svg>09:05</div>
+            <div class="foot"><span class="badge on-tone">Updated</span><span class="stock-chip on-tone" style="height:24px;font-size:11px"><span class="dot-up"></span>In portfolio</span></div>
+          </div>
+          <div class="card hero glass">
+            <div class="top">
+              <div class="slot eyebrow" style="color:var(--teal-ink)"><svg class="ico"><use href="#i-spark"/></svg>Opportunity to follow</div>
+              <span class="badge analysis">Analysis</span>
+            </div>
+            <div class="h-title sm" style="font-size:17px">Dividend window opens for a screened halal utility stock</div>
+            <div class="foot">
+              <span class="stock-chip"><svg class="ico sm"><use href="#i-chart"/></svg>SAMPLE · Tadawul</span>
+              <span class="tail">Not on your lists</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="nav">
+        <div class="on"><svg class="ico"><use href="#i-pulse"/></svg>Pulse</div>
+        <div><svg class="ico"><use href="#i-explore"/></svg>Discover</div>
+        <div><svg class="ico"><use href="#i-chart"/></svg>Indexes</div>
+        <div><svg class="ico"><use href="#i-groups"/></svg>Social</div>
+        <div><svg class="ico"><use href="#i-feed"/></svg>Feed</div>
+      </div>
+    </div>
+    <p class="cap">Four slots as a bento: global (hero tone), Gulf (glass), Sharia (ink tone), opportunity (wide glass). “Confirmed” vs “Analysis” on every card. Pulse is the first tab and the default on open.</p>
+  </div>
+
+  <div>
+    <div class="phone dark" dir="rtl" lang="ar">
+      <div class="page"></div>
+      <div class="status" dir="ltr"><span>9:41</span><span>5G ▮▮▮</span></div>
+      <div class="scroll">
+        <div class="head">
+          <div class="brand"><svg><use href="#logo"/></svg><div><b>نبض</b><small>من أُنمُو</small></div></div>
+          <div class="head-r"><div class="round glass"><svg class="ico"><use href="#i-bell"/></svg></div><div class="avatar">ز</div></div>
+        </div>
+        <div class="day">
+          <div><h2>اليوم</h2><p>الخميس، ٢٢ أكتوبر · آخر تحديث ٠٩:١٢</p></div>
+          <div class="orbs"><span class="orb"></span>مباشر</div>
+        </div>
+        <div class="bento">
+          <div class="card hero tone-teal">
+            <div class="top">
+              <div class="slot eyebrow"><svg class="ico"><use href="#i-globe"/></svg>أهم حدث عالمي</div>
+              <span class="badge on-tone"><svg class="ico sm"><use href="#i-shield"/></svg>مؤكدة</span>
+            </div>
+            <div class="h-title" style="font-size:21px;line-height:1.45">البنوك المركزية تلمّح إلى إبطاء خفض الفائدة مع استمرار التضخم</div>
+            <div class="meta"><svg class="ico sm"><use href="#i-clock"/></svg>تم التحقق ٠٨:٤٠ · بيان البنك المركزي</div>
+            <div class="foot"><span class="badge chip-new">جديد</span><span class="tail">‹ اقرأ التفاصيل</span></div>
+          </div>
+          <div class="card glass">
+            <div class="top"><div class="slot eyebrow" style="color:var(--chip-text)"><svg class="ico"><use href="#i-gulf"/></svg>خليجي</div></div>
+            <div class="h-title sm" style="line-height:1.5">بورصة خليجية تعلن قواعد إدراج جديدة للشركات المتوسطة</div>
+            <div class="meta" style="color:var(--text-3)"><svg class="ico sm"><use href="#i-clock"/></svg>٠٨:٥٥</div>
+            <div class="foot"><span class="badge"><svg class="ico sm"><use href="#i-shield"/></svg>مؤكدة</span></div>
+          </div>
+          <div class="card tone-ink">
+            <div class="top"><div class="slot eyebrow" style="color:#7FE7E7"><svg class="ico"><use href="#i-scale"/></svg>شرعي</div></div>
+            <div class="h-title sm" style="line-height:1.5">تغيّر حالة الفحص الشرعي لبنك مدرج بعد المراجعة</div>
+            <div class="meta"><svg class="ico sm"><use href="#i-clock"/></svg>٠٩:٠٥</div>
+            <div class="foot"><span class="badge on-tone">تم التحديث</span><span class="stock-chip on-tone" style="height:24px;font-size:11px"><span class="dot-up"></span>في محفظتك</span></div>
+          </div>
+          <div class="card hero glass">
+            <div class="top">
+              <div class="slot eyebrow" style="color:var(--chip-text)"><svg class="ico"><use href="#i-spark"/></svg>فرصة للمتابعة</div>
+              <span class="badge analysis">تحليل وتفسير</span>
+            </div>
+            <div class="h-title sm" style="font-size:17px;line-height:1.5">بدء فترة توزيع الأرباح لسهم خدمات حلال خاضع للفحص</div>
+            <div class="foot">
+              <span class="stock-chip"><svg class="ico sm"><use href="#i-chart"/></svg>عيّنة · تداول</span>
+              <span class="tail">ليس في قوائمك</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="nav">
+        <div class="on"><svg class="ico"><use href="#i-pulse"/></svg>نبض</div>
+        <div><svg class="ico"><use href="#i-explore"/></svg>استكشف</div>
+        <div><svg class="ico"><use href="#i-chart"/></svg>المؤشرات</div>
+        <div><svg class="ico"><use href="#i-groups"/></svg>المجتمع</div>
+        <div><svg class="ico"><use href="#i-feed"/></svg>المحتوى</div>
+      </div>
+    </div>
+    <p class="cap">Dark + Arabic (RTL). Layout mirrors with logical properties; the tab order reverses so Pulse stays first at the reading start.</p>
+  </div>
+
+  <div>
+    <div class="phone">
+      <div class="page"></div>
+      <div class="status"><span>9:41</span><span>5G ▮▮▮</span></div>
+      <div class="scroll">
+        <div class="head">
+          <div class="brand"><svg><use href="#logo"/></svg><div><b>Pulse</b><small>by UNMU</small></div></div>
+          <div class="head-r"><div class="avatar">Z</div></div>
+        </div>
+        <div class="day"><div><h2>Today</h2><p>Loading today's Pulse…</p></div><div class="orbs"><span class="orb"></span></div></div>
+        <div class="bento">
+          <div class="card hero glass" style="gap:12px;height:140px"><div class="skel" style="width:40%"></div><div class="skel" style="width:92%;height:20px"></div><div class="skel" style="width:70%;height:20px"></div><div class="skel" style="width:50%;margin-top:auto"></div></div>
+          <div class="card glass" style="gap:10px;height:120px"><div class="skel" style="width:50%"></div><div class="skel"></div><div class="skel" style="width:80%"></div></div>
+          <div class="card glass" style="gap:10px;height:120px"><div class="skel" style="width:50%"></div><div class="skel"></div><div class="skel" style="width:80%"></div></div>
+        </div>
+        <div class="glass center" style="margin-top:14px;border-radius:26px">
+          <div class="big-orb"></div>
+          <h4>No Pulse published yet today</h4>
+          <p>Today's briefing is being prepared. Read yesterday's Pulse in the archive while you wait.</p>
+          <span class="btn ghost" style="height:40px">Open archive</span>
+        </div>
+      </div>
+      <div class="nav">
+        <div class="on"><svg class="ico"><use href="#i-pulse"/></svg>Pulse</div>
+        <div><svg class="ico"><use href="#i-explore"/></svg>Discover</div>
+        <div><svg class="ico"><use href="#i-chart"/></svg>Indexes</div>
+        <div><svg class="ico"><use href="#i-groups"/></svg>Social</div>
+        <div><svg class="ico"><use href="#i-feed"/></svg>Feed</div>
+      </div>
+    </div>
+    <p class="cap">Loading: skeletons that match the bento. Empty (nothing published yet): orb + friendly line + “Open archive”.</p>
+  </div>
+
+  <div>
+    <div class="phone dark">
+      <div class="page"></div>
+      <div class="status"><span>9:41</span><span>5G ▮▮▮</span></div>
+      <div class="scroll">
+        <div class="head">
+          <div class="brand"><svg><use href="#logo"/></svg><div><b>Pulse</b><small>by UNMU</small></div></div>
+          <div class="head-r"><div class="avatar">Z</div></div>
+        </div>
+        <div class="glass center" style="margin-top:80px;border-radius:30px;padding:44px 22px">
+          <div class="round" style="width:64px;height:64px;background:var(--chip);color:var(--chip-text)"><svg class="ico" style="width:30px;height:30px"><use href="#i-wifi"/></svg></div>
+          <h4>Couldn't load today's Pulse</h4>
+          <p>Check your connection and try again. Your saved items are still available.</p>
+          <span class="btn primary">Try again</span>
+          <span class="tail">We'll retry automatically when you're back online</span>
+        </div>
+      </div>
+      <div class="nav">
+        <div class="on"><svg class="ico"><use href="#i-pulse"/></svg>Pulse</div>
+        <div><svg class="ico"><use href="#i-explore"/></svg>Discover</div>
+        <div><svg class="ico"><use href="#i-chart"/></svg>Indexes</div>
+        <div><svg class="ico"><use href="#i-groups"/></svg>Social</div>
+        <div><svg class="ico"><use href="#i-feed"/></svg>Feed</div>
+      </div>
+    </div>
+    <p class="cap">Error state: what happened, what to do, Retry. Calm tone, no raw codes.</p>
+  </div>
+</div>
+
+<!-- ═════════ ROW 2 — DETAIL / ARCHIVE / SETTINGS ═════════ -->
+<h2 class="row-title">2 · Item detail · analysis item · archive · notification settings</h2>
+<div class="row">
+
+  <div>
+    <div class="phone">
+      <div class="page"></div>
+      <div class="status"><span>9:41</span><span>5G ▮▮▮</span></div>
+      <div class="scroll">
+        <div class="bar">
+          <div class="round glass"><svg class="ico"><use href="#i-back"/></svg></div>
+          <div class="head-r"><div class="round glass"><svg class="ico"><use href="#i-bookmark"/></svg></div><div class="round glass"><svg class="ico"><use href="#i-share"/></svg></div></div>
+        </div>
+        <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
+          <span class="badge"><svg class="ico sm"><use href="#i-scale"/></svg>Sharia change</span>
+          <span class="badge"><svg class="ico sm"><use href="#i-shield"/></svg>Confirmed</span>
+          <span class="badge" style="background:rgba(245,166,35,.22);color:#7A4F00">Updated 09:30</span>
+        </div>
+        <div class="detail-title">Screening status of a listed bank changes after debt-ratio review</div>
+        <div class="summary">The bank's interest-bearing debt ratio crossed the screening threshold in its latest filing, moving it from “compliant” to “under review”.</div>
+        <div class="corr"><svg class="ico" style="color:#9A6200"><use href="#i-warn"/></svg><div><b>Updated at 09:30.</b> The debt ratio figure was corrected. <u>View previous version</u></div></div>
+        <div class="glass block">
+          <h3><svg class="ico sm"><use href="#i-shield"/></svg>Sources &amp; evidence</h3>
+          <dl class="kv">
+            <dt>Source</dt><dd>Company filing, Q3 report</dd>
+            <dt>Link</dt><dd style="color:var(--teal-ink)">filings.example.com/q3 ↗</dd>
+            <dt>Evidence</dt><dd>Debt to market cap 33.4% vs 33% limit</dd>
+            <dt>Verified</dt><dd>22 Oct 2026 · 09:05</dd>
+            <dt>Published</dt><dd>22 Oct 2026 · 09:10</dd>
+          </dl>
+        </div>
+        <div class="glass block">
+          <div class="linkrow">
+            <div class="nm"><b>SAMPLE Bank</b><span>Tadawul · Banks</span></div>
+            <span class="stock-chip"><span class="dot-up"></span>In your portfolio</span>
+          </div>
+        </div>
+      </div>
+      <div class="nav" style="grid-template-columns:1.3fr 1fr;padding:6px 8px">
+        <div style="flex-direction:row;gap:8px;font-size:14px;color:#fff;background:var(--teal-deep);box-shadow:0 12px 24px -12px rgba(0,127,134,.9)"><svg class="ico"><use href="#i-chart"/></svg>Open stock</div>
+        <div style="flex-direction:row;gap:8px;font-size:14px;color:var(--text)"><svg class="ico"><use href="#i-bookmark"/></svg>Save</div>
+      </div>
+    </div>
+    <p class="cap">Detail: type badges, correction notice (previous version kept), Sources &amp; evidence with verification time, linked stock with portfolio marker. No comments or likes (spec §10).</p>
+  </div>
+
+  <div>
+    <div class="phone dark">
+      <div class="page"></div>
+      <div class="status"><span>9:41</span><span>5G ▮▮▮</span></div>
+      <div class="scroll">
+        <div class="bar">
+          <div class="round glass"><svg class="ico"><use href="#i-back"/></svg></div>
+          <div class="head-r"><div class="round glass" style="color:var(--chip-text)"><svg class="ico" style="fill:currentColor"><use href="#i-bookmark"/></svg></div><div class="round glass"><svg class="ico"><use href="#i-share"/></svg></div></div>
+        </div>
+        <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
+          <span class="badge"><svg class="ico sm"><use href="#i-spark"/></svg>Opportunity</span>
+          <span class="badge analysis">Analysis &amp; interpretation</span>
+        </div>
+        <div class="detail-title">Dividend window opens for a screened halal utility stock</div>
+        <div class="glass block" style="background:rgba(138,91,199,.14)">
+          <h3 style="color:#D8CBFF"><svg class="ico sm"><use href="#i-doc"/></svg>Analysis, not a confirmed fact</h3>
+          <p>This item explains what the announcement may mean. It is interpretation and is labelled separately from confirmed information.</p>
+        </div>
+        <div class="summary">The company announced its dividend schedule. Eligible holders must own the stock before the record date.</div>
+        <div class="glass block">
+          <h3><svg class="ico sm"><use href="#i-shield"/></svg>Sources &amp; evidence</h3>
+          <dl class="kv">
+            <dt>Source</dt><dd>Exchange announcement</dd>
+            <dt>Evidence</dt><dd>Dividend schedule notice</dd>
+            <dt>Verified</dt><dd>22 Oct 2026 · 08:20</dd>
+          </dl>
+        </div>
+        <div class="glass block"><div class="linkrow"><div class="nm"><b>SAMPLE Utilities</b><span>Tadawul · Utilities</span></div><span class="stock-chip">+ Watchlist</span></div></div>
+      </div>
+      <div class="nav" style="grid-template-columns:1.3fr 1fr;padding:6px 8px">
+        <div style="flex-direction:row;gap:8px;font-size:14px;color:#fff;background:var(--teal-deep)"><svg class="ico"><use href="#i-chart"/></svg>Open stock</div>
+        <div style="flex-direction:row;gap:8px;font-size:14px;color:var(--text)"><svg class="ico"><use href="#i-bookmark"/></svg>Saved</div>
+      </div>
+    </div>
+    <p class="cap">Dark · analysis item. Analysis gets a violet-tinted badge and a plain “not a confirmed fact” note, so the two types are never confused.</p>
+  </div>
+
+  <div>
+    <div class="phone">
+      <div class="page"></div>
+      <div class="status"><span>9:41</span><span>5G ▮▮▮</span></div>
+      <div class="scroll">
+        <div class="bar" style="margin-bottom:8px">
+          <div class="h-title" style="font-size:26px;letter-spacing:-.02em;margin-inline-start:4px">Archive</div>
+          <div class="seg"><span class="on">All</span><span>Saved</span></div>
+        </div>
+        <div class="search glass"><svg class="ico"><use href="#i-search"/></svg>Search past Pulse</div>
+        <div class="dates">
+          <div>Sun<b>18</b></div><div>Mon<b>19</b></div><div>Tue<b>20</b></div><div>Wed<b>21</b></div><div class="on">Thu<b>22</b></div>
+        </div>
+        <div class="daylabel">Wednesday, 21 October</div>
+        <div class="glass row-item"><div class="ic"><svg class="ico"><use href="#i-globe"/></svg></div><div><b>Oil prices settle after supply data</b><span>Global · Confirmed · 08:40</span></div></div>
+        <div class="glass row-item"><div class="ic"><svg class="ico"><use href="#i-gulf"/></svg></div><div><b>Regional bond issuance reaches a quarterly high</b><span>Gulf · Confirmed · 09:00</span></div></div>
+        <div class="glass row-item"><div class="ic"><svg class="ico"><use href="#i-scale"/></svg></div><div><b>Screening thresholds clarified for sukuk holdings</b><span>Sharia · Corrected · 09:15</span></div></div>
+        <div class="glass row-item"><div class="ic"><svg class="ico"><use href="#i-spark"/></svg></div><div><b>Index inclusion window for two screened stocks</b><span>Opportunity · Analysis · 09:20</span></div></div>
+        <div class="daylabel">Tuesday, 20 October</div>
+        <div class="glass row-item"><div class="ic"><svg class="ico"><use href="#i-globe"/></svg></div><div><b>Manufacturing data beats forecasts</b><span>Global · Confirmed · 08:35</span></div></div>
+      </div>
+      <div class="nav">
+        <div class="on"><svg class="ico"><use href="#i-pulse"/></svg>Pulse</div>
+        <div><svg class="ico"><use href="#i-explore"/></svg>Discover</div>
+        <div><svg class="ico"><use href="#i-chart"/></svg>Indexes</div>
+        <div><svg class="ico"><use href="#i-groups"/></svg>Social</div>
+        <div><svg class="ico"><use href="#i-feed"/></svg>Feed</div>
+      </div>
+    </div>
+    <p class="cap">Archive: day strip, search, past Pulse by day; the segmented control switches to the user's saved Pulse.</p>
+  </div>
+
+  <div>
+    <div class="phone dark" dir="rtl" lang="ar">
+      <div class="page"></div>
+      <div class="status" dir="ltr"><span>9:41</span><span>5G ▮▮▮</span></div>
+      <div class="scroll">
+        <div class="bar" style="margin-bottom:12px">
+          <div class="round glass"><svg class="ico rtl-flip"><use href="#i-back"/></svg></div>
+          <div class="h-title" style="font-size:21px">إعدادات إشعارات نبض</div>
+          <span style="width:38px"></span>
+        </div>
+        <div class="glass block">
+          <div class="linkrow"><div class="nm"><b>إشعارات نبض أُنمُو</b><span>المفتاح الرئيسي لكل إشعارات نبض</span></div><div class="sw"><i></i></div></div>
+        </div>
+        <div class="glass block">
+          <h3>أخبرني عند</h3>
+          <div style="display:grid;gap:16px;font-size:14px">
+            <div class="linkrow"><span>نشر نبض جديد</span><div class="sw"><i></i></div></div>
+            <div class="linkrow"><span>تحديث عنصر سابق</span><div class="sw"><i></i></div></div>
+            <div class="linkrow"><span>تصحيح عنصر سابق</span><div class="sw"><i></i></div></div>
+            <div class="linkrow"><span>تغيّر مهم في عنصر محفوظ</span><div class="sw off"><i></i></div></div>
+          </div>
+        </div>
+        <div class="glass block" style="display:flex;gap:10px;align-items:flex-start"><svg class="ico" style="color:var(--chip-text);margin-top:2px"><use href="#i-bell"/></svg><p style="font-size:12.5px">تصلك الإشعارات بلغة التطبيق التي اخترتها. يمكنك إيقافها في أي وقت.</p></div>
+      </div>
+    </div>
+    <p class="cap">Notification settings (Arabic, dark): master switch plus the four events from spec §17. Native switches in the real app (Cupertino on iOS, Material on Android).</p>
+  </div>
+</div>
+
+<!-- ═════════ ROW 3 — ADMIN ═════════ -->
+<h2 class="row-title">3 · Admin dashboard — item editor and items list (desktop)</h2>
+<div class="row">
+  <div>
+    <div class="desk">
+      <div class="page"></div>
+      <aside class="side">
+        <div class="brand"><svg><use href="#logo"/></svg><div><b style="font-size:18px">UNMU</b><small>Admin</small></div></div>
+        <a><svg class="ico"><use href="#i-grid"/></svg>Overview</a>
+        <a><svg class="ico"><use href="#i-users"/></svg>Users</a>
+        <a><svg class="ico"><use href="#i-doc"/></svg>Posts</a>
+        <div class="sec">Pulse</div>
+        <a class="on"><svg class="ico"><use href="#i-pulse"/></svg>Pulse items</a>
+        <a><svg class="ico"><use href="#i-shield"/></svg>Review queue <span class="st" style="margin-inline-start:auto">3</span></a>
+        <a><svg class="ico"><use href="#i-clock"/></svg>Schedule</a>
+        <a><svg class="ico"><use href="#i-users"/></svg>Staff &amp; roles</a>
+        <a><svg class="ico"><use href="#i-chart"/></svg>Analytics</a>
+      </aside>
+      <section class="main">
+        <div class="crumb">Pulse › Items › Thu 22 Oct › Sharia</div>
+        <h2>Edit Pulse item <span class="st warn">In review</span></h2>
+        <div class="steps">
+          <div class="step done"><i>✓</i>Draft</div><div class="bar-line"></div>
+          <div class="step now"><i>2</i>In review</div><div class="bar-line"></div>
+          <div class="step"><i>3</i>Approved</div><div class="bar-line"></div>
+          <div class="step"><i>4</i>Scheduled</div><div class="bar-line"></div>
+          <div class="step"><i>5</i>Published</div>
+        </div>
+        <div class="cols">
+          <div class="glass block" style="padding:18px;margin:0">
+            <div class="two">
+              <div class="field"><label>Title (English)</label><div class="input">Screening status of a listed bank changes after debt-ratio review</div></div>
+              <div class="field" dir="rtl"><label>العنوان (عربي)</label><div class="input">تغيّر حالة الفحص الشرعي لبنك مدرج بعد مراجعة نسبة الدين</div></div>
+            </div>
+            <div class="two">
+              <div class="field"><label>Summary (English)</label><div class="input tall">The bank's debt ratio crossed the screening threshold in its latest filing.</div></div>
+              <div class="field" dir="rtl"><label>الملخص (عربي)</label><div class="input tall">تجاوزت نسبة الدين حد الفحص في أحدث إفصاح للبنك.</div></div>
+            </div>
+            <div class="two">
+              <div class="field"><label>Full details (English)</label><div class="input tall">…</div></div>
+              <div class="field" dir="rtl"><label>التفاصيل (عربي)</label><div class="input tall">…</div></div>
+            </div>
+            <div class="field"><label>Evidence</label><div class="input">Debt to market cap 33.4% vs 33% limit (Q3 filing, p.14)</div></div>
+          </div>
+          <div style="display:grid;gap:12px;align-content:start">
+            <div class="glass block" style="padding:16px;margin:0">
+              <div class="field"><label>Slot</label><div class="seg"><span>Global</span><span>Gulf</span><span class="on">Sharia</span><span>Opp.</span></div></div>
+              <div class="field"><label>Type</label><div class="seg"><span class="on">Confirmed</span><span>Analysis</span></div></div>
+              <div class="two">
+                <div class="field"><label>Source</label><div class="input">Company filing</div></div>
+                <div class="field"><label>Verified at</label><div class="input">22 Oct · 09:05</div></div>
+              </div>
+              <div class="field"><label>Linked stock</label><div class="input">SAMPLE Bank · Tadawul</div></div>
+              <div class="field"><label>Publish at</label><div class="input">22 Oct 2026 · 09:10</div></div>
+              <div style="display:flex;gap:8px;margin-top:4px"><span class="btn ghost" style="height:40px;flex:1">Reject</span><span class="btn primary" style="height:40px;flex:1">Approve</span></div>
+              <p class="note" style="margin-top:8px">Sharia items need a reviewer and an approver. The author cannot approve their own item.</p>
+            </div>
+            <div class="glass block" style="padding:16px;margin:0">
+              <h3>Change log</h3>
+              <div class="log">
+                <div><i></i><span><b>Sara</b> sent to review · 22 Oct 08:58</span></div>
+                <div><i></i><span><b>Sara</b> edited evidence · 22 Oct 08:51</span></div>
+                <div><i></i><span><b>Sara</b> created draft · 22 Oct 08:30</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+    <p class="cap" style="max-width:none">Editor: AR and EN side by side, status stepper (draft → review → approved → scheduled → published), segmented controls for slot and type, evidence/source/verification, linked stock, schedule, approval buttons gated by role, full change log.</p>
+  </div>
+
+  <div>
+    <div class="desk" style="height:470px">
+      <div class="page"></div>
+      <aside class="side">
+        <div class="brand"><svg><use href="#logo"/></svg><div><b style="font-size:18px">UNMU</b><small>Admin</small></div></div>
+        <a><svg class="ico"><use href="#i-grid"/></svg>Overview</a>
+        <div class="sec">Pulse</div>
+        <a class="on"><svg class="ico"><use href="#i-pulse"/></svg>Pulse items</a>
+        <a><svg class="ico"><use href="#i-shield"/></svg>Review queue</a>
+        <a><svg class="ico"><use href="#i-clock"/></svg>Schedule</a>
+        <a><svg class="ico"><use href="#i-users"/></svg>Staff &amp; roles</a>
+        <a><svg class="ico"><use href="#i-chart"/></svg>Analytics</a>
+      </aside>
+      <section class="main">
+        <h2>Pulse items
+          <span style="margin-inline-start:auto;display:flex;gap:10px;align-items:center"><span class="seg"><span class="on">All</span><span>Draft</span><span>Review</span><span>Scheduled</span><span>Published</span></span><span class="btn primary" style="height:40px">+ New item</span></span>
+        </h2>
+        <div class="glass" style="padding:8px 14px">
+          <table class="tbl">
+            <thead><tr><th>Date</th><th>Slot</th><th>Title</th><th>Type</th><th>Status</th><th>Views</th></tr></thead>
+            <tbody>
+              <tr><td>22 Oct</td><td>Global</td><td><b>Central banks signal slower rate cuts…</b></td><td>Confirmed</td><td><span class="st pub">Published</span></td><td>1,284</td></tr>
+              <tr><td>22 Oct</td><td>Gulf</td><td><b>Gulf exchange announces new listing rules…</b></td><td>Confirmed</td><td><span class="st pub">Published</span></td><td>962</td></tr>
+              <tr><td>22 Oct</td><td>Sharia</td><td><b>Screening status of a listed bank changes…</b></td><td>Confirmed</td><td><span class="st warn">In review</span></td><td>—</td></tr>
+              <tr><td>22 Oct</td><td>Opportunity</td><td><b>Dividend window opens for a screened…</b></td><td>Analysis</td><td><span class="st">Scheduled 09:30</span></td><td>—</td></tr>
+              <tr><td>23 Oct</td><td>Global</td><td><b>Manufacturing data preview</b></td><td>Confirmed</td><td><span class="st draft">Draft</span></td><td>—</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+    <p class="cap" style="max-width:none">Items list with status filters (segmented control); one row per slot per day.</p>
+  </div>
+</div>
+
+<p class="note" style="margin-top:40px">Not designed yet (will follow the same system): staff &amp; roles screen, analytics dashboard (existing Aurora chart cards, unchanged), scheduling calendar. Tell me what to change and I will revise before any code.</p>
+</body>
+</html>

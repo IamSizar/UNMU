@@ -34,8 +34,22 @@ type AppleIAPVerifier struct {
 	sharedSecret string
 	prodURL      string
 	sandboxURL   string
-	httpClient   *http.Client
+	// bundleID is the app the receipt must belong to. Apple's verifyReceipt
+	// accepts ANY app's valid receipt, so without this check a receipt from
+	// another app (with a matching product id) could unlock subscriptions.
+	// Always set by NewAppleIAPVerifier; empty only in older unit tests.
+	bundleID string
+	// rejectSandbox refuses sandbox (TestFlight / sandbox tester) receipts.
+	// Off by default: App Review buys with sandbox receipts against the
+	// production server, so refusing them would fail review. Turn it on
+	// with APPLE_IAP_ALLOW_SANDBOX=false between reviews if wanted.
+	rejectSandbox bool
+	httpClient    *http.Client
 }
+
+// defaultAppleBundleID is the iOS app's bundle id (ios/Runner.xcodeproj).
+// Override with APPLE_BUNDLE_ID if the app is ever re-published.
+const defaultAppleBundleID = "com.easytech.stocksanalyzer"
 
 // NewAppleIAPVerifier — soft-fails to nil when the shared secret is unset.
 func NewAppleIAPVerifier() *AppleIAPVerifier {
@@ -51,13 +65,31 @@ func NewAppleIAPVerifier() *AppleIAPVerifier {
 	if sandboxURL == "" {
 		sandboxURL = "https://sandbox.itunes.apple.com/verifyReceipt"
 	}
-	log.Printf("[apple-iap] verifier configured (prod=%s sandbox=%s)", prodURL, sandboxURL)
-	return &AppleIAPVerifier{
-		sharedSecret: secret,
-		prodURL:      prodURL,
-		sandboxURL:   sandboxURL,
-		httpClient:   &http.Client{Timeout: 15 * time.Second},
+	bundleID := strings.TrimSpace(os.Getenv("APPLE_BUNDLE_ID"))
+	if bundleID == "" {
+		bundleID = defaultAppleBundleID
 	}
+	rejectSandbox := sandboxDisallowed(os.Getenv("APPLE_IAP_ALLOW_SANDBOX"))
+	log.Printf("[apple-iap] verifier configured (prod=%s sandbox=%s bundle=%s sandbox_allowed=%t)",
+		prodURL, sandboxURL, bundleID, !rejectSandbox)
+	return &AppleIAPVerifier{
+		sharedSecret:  secret,
+		prodURL:       prodURL,
+		sandboxURL:    sandboxURL,
+		bundleID:      bundleID,
+		rejectSandbox: rejectSandbox,
+		httpClient:    &http.Client{Timeout: 15 * time.Second},
+	}
+}
+
+// sandboxDisallowed reads APPLE_IAP_ALLOW_SANDBOX: only an explicit
+// false/0/no turns sandbox receipts off; unset keeps them allowed.
+func sandboxDisallowed(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "false", "0", "no", "off":
+		return true
+	}
+	return false
 }
 
 // AppleVerifiedTransaction is the slice of Apple's response that the
@@ -68,16 +100,16 @@ type AppleVerifiedTransaction struct {
 	TransactionID         string
 	OriginalTransactionID string
 	ProductID             string
-	Environment           string    // "Production" or "Sandbox"
+	Environment           string // "Production" or "Sandbox"
 	PurchaseDate          time.Time
 	ExpiresDate           *time.Time // nil for non-subscription products
-	RawPayload            []byte    // the per-transaction JSON blob, for audit
+	RawPayload            []byte     // the per-transaction JSON blob, for audit
 }
 
 // VerifyReceipt sends the receipt to Apple, picks the most recent
-// transaction for `expectedProductID` (when non-empty), and returns it.
-// Empty expectedProductID matches any product — useful when the client
-// hasn't told us which SKU it bought (or when restoring purchases).
+// transaction for `expectedProductID`, and returns it. The product id is
+// required: matching "any product" let a receipt for one purchase unlock
+// another (e.g. a Premium receipt activating an expert subscription).
 //
 // Errors are intentionally generic ("verification failed") so we don't
 // leak Apple's status codes to the API caller; the codes are logged.
@@ -93,6 +125,10 @@ func (v *AppleIAPVerifier) VerifyReceipt(
 	if receiptData == "" {
 		return nil, fmt.Errorf("apple-iap: empty receipt")
 	}
+	expectedProductID = strings.TrimSpace(expectedProductID)
+	if expectedProductID == "" {
+		return nil, fmt.Errorf("apple-iap: product id required")
+	}
 
 	// Try production first; if Apple returns 21007 ("sandbox receipt sent
 	// to production"), retry against sandbox. This is the canonical flow
@@ -102,6 +138,9 @@ func (v *AppleIAPVerifier) VerifyReceipt(
 		return nil, err
 	}
 	if resp.Status == 21007 {
+		if v.rejectSandbox {
+			return nil, fmt.Errorf("apple-iap: sandbox receipts are not accepted")
+		}
 		resp, env, err = v.callApple(ctx, v.sandboxURL, receiptData)
 		if err != nil {
 			return nil, err
@@ -112,6 +151,10 @@ func (v *AppleIAPVerifier) VerifyReceipt(
 			resp.Status, env,
 			"https://developer.apple.com/documentation/appstorereceipts/status")
 		return nil, fmt.Errorf("apple-iap: verification failed (status %d)", resp.Status)
+	}
+	if v.bundleID != "" && resp.Receipt.BundleID != v.bundleID {
+		log.Printf("[apple-iap] receipt bundle %q does not match %q", resp.Receipt.BundleID, v.bundleID)
+		return nil, fmt.Errorf("apple-iap: receipt belongs to another app")
 	}
 
 	txn, err := pickLatestTransaction(resp, expectedProductID)
@@ -174,14 +217,15 @@ func (v *AppleIAPVerifier) callApple(
 // care about. The full schema is documented at:
 // https://developer.apple.com/documentation/appstorereceipts/responsebody
 type appleVerifyResponse struct {
-	Status            int                       `json:"status"`
-	Environment       string                    `json:"environment"`
-	LatestReceiptInfo []appleVerifyTransaction  `json:"latest_receipt_info"`
-	Receipt           appleVerifyReceiptInner   `json:"receipt"`
+	Status            int                      `json:"status"`
+	Environment       string                   `json:"environment"`
+	LatestReceiptInfo []appleVerifyTransaction `json:"latest_receipt_info"`
+	Receipt           appleVerifyReceiptInner  `json:"receipt"`
 }
 
 type appleVerifyReceiptInner struct {
-	InApp []appleVerifyTransaction `json:"in_app"`
+	BundleID string                   `json:"bundle_id"`
+	InApp    []appleVerifyTransaction `json:"in_app"`
 }
 
 type appleVerifyTransaction struct {
@@ -194,8 +238,8 @@ type appleVerifyTransaction struct {
 	ExpiresDateMS  string `json:"expires_date_ms"`
 }
 
-// pickLatestTransaction selects the most-recent transaction matching
-// (or any, when expectedProductID is empty). Subscriptions live in
+// pickLatestTransaction selects the most-recent transaction for
+// expectedProductID. Subscriptions live in
 // latest_receipt_info; consumables / non-renewing live in receipt.in_app.
 // We check both and pick whichever wins on purchase_date.
 func pickLatestTransaction(
@@ -210,7 +254,7 @@ func pickLatestTransaction(
 
 	for i := range candidates {
 		t := &candidates[i]
-		if expectedProductID != "" && t.ProductID != expectedProductID {
+		if t.ProductID != expectedProductID {
 			continue
 		}
 		ms, _ := strconv.ParseInt(t.PurchaseDateMS, 10, 64)

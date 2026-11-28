@@ -23,6 +23,7 @@ import 'i18n_legal.dart';
 import 'i18n_misc.dart';
 import 'i18n_widgets.dart';
 import 'i18n_widgets2.dart';
+import 'i18n_pulse.dart';
 
 /// =============================================================================
 /// Centralized app translations (GetX i18n) — the single source of truth.
@@ -72,6 +73,7 @@ class AppTranslations extends Translations {
           ...miscEn,
           ...widgetsEn,
           ...widgets2En,
+          ...pulseEn,
         },
         'ar': {
           ..._ar,
@@ -96,6 +98,7 @@ class AppTranslations extends Translations {
           ...miscAr,
           ...widgetsAr,
           ...widgets2Ar,
+          ...pulseAr,
         },
       };
 }
@@ -115,6 +118,8 @@ const Map<String, String> _en = {
   'common.edit': 'Edit',
   'common.remove': 'Remove',
   'common.retry': 'Retry',
+  'common.loadFailed.title': "Couldn't load this",
+  'common.loadFailed.body': 'Check your connection and try again.',
   'common.refresh': 'Refresh',
   'common.loading': 'Loading...',
   'common.error': 'Error',
@@ -212,6 +217,8 @@ const Map<String, String> _ar = {
   'common.edit': 'تعديل',
   'common.remove': 'إزالة',
   'common.retry': 'إعادة المحاولة',
+  'common.loadFailed.title': 'تعذّر التحميل',
+  'common.loadFailed.body': 'تحقّق من اتصالك ثم حاول مرة أخرى.',
   'common.refresh': 'تحديث',
   'common.loading': 'جارٍ التحميل...',
   'common.error': 'خطأ',

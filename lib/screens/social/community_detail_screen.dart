@@ -35,6 +35,8 @@ import 'post_detail_screen.dart';
 import 'reels_player_screen.dart';
 import 'social_tokens.dart';
 import 'video_player_screen.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_dialog.dart';
 
 /// =============================================================================
 /// Community Detail & Live Market Forums.
@@ -312,31 +314,13 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
 
   /// Delete with confirmation. Permanent.
   Future<void> _deletePost(CommunityPost post) async {
-    final palette = SocialTheme.of(context);
-    final confirm = await showDialog<bool>(
+    final confirm = await PlatformDialog.show(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: palette.surface,
-        title: Text(
-          'community.deletePost.title'.tr,
-          style: TextStyle(color: palette.textPrimary),
-        ),
-        content: Text(
-          'community.deletePost.body'.tr,
-          style: TextStyle(color: palette.textSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('common.cancel'.tr),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: SocialTokens.down),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text('common.delete'.tr),
-          ),
-        ],
-      ),
+      title: 'community.deletePost.title'.tr,
+      content: 'community.deletePost.body'.tr,
+      cancelText: 'common.cancel'.tr,
+      confirmText: 'common.delete'.tr,
+      isDestructive: true,
     );
     if (confirm != true) return;
     final res = await CommunityService.deletePost(
@@ -449,51 +433,13 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
   /// Owners never reach this — the membership button isn't rendered
   /// for them in the first place (see `if (!amOwner ...)` in build).
   Future<bool?> _confirmLeave() {
-    return showDialog<bool>(
+    return PlatformDialog.show(
       context: context,
-      builder: (dialogCtx) {
-        final palette = SocialTheme.of(dialogCtx);
-        return AlertDialog(
-          backgroundColor: palette.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-          title: Text(
-            'community.leave.title'.trParams({'name': widget.community.name}),
-            style: TextStyle(
-              color: palette.textPrimary,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          content: Text(
-            'community.leave.body'.tr,
-            style: TextStyle(
-              color: palette.textMuted,
-              fontSize: 13.5,
-              height: 1.4,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogCtx).pop(false),
-              child: Text(
-                'common.cancel'.tr,
-                style: TextStyle(color: palette.textMuted),
-              ),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(dialogCtx).pop(true),
-              style: TextButton.styleFrom(
-                foregroundColor: SocialTokens.down,
-              ),
-              child: Text(
-                'community.leave'.tr,
-                style: const TextStyle(fontWeight: FontWeight.w900),
-              ),
-            ),
-          ],
-        );
-      },
+      title: 'community.leave.title'.trParams({'name': widget.community.name}),
+      content: 'community.leave.body'.tr,
+      cancelText: 'common.cancel'.tr,
+      confirmText: 'community.leave'.tr,
+      isDestructive: true,
     );
   }
 
@@ -1781,7 +1727,7 @@ class _CommunityPostsTab extends StatelessWidget {
               const SizedBox(height: 100),
               Center(
                 child: loading
-                    ? const CircularProgressIndicator()
+                    ? const PlatformSpinner()
                     : Text(
                         'community.posts.empty'.tr,
                         style: TextStyle(color: palette.textMuted, fontSize: 14),
@@ -2070,7 +2016,7 @@ class _PostThread extends StatelessWidget {
                         child: const SizedBox(
                           width: 22,
                           height: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2.2),
+                          child: PlatformSpinner(strokeWidth: 2.2),
                         ),
                       ),
                 errorBuilder: (ctx, _, __) => Container(
@@ -2342,27 +2288,13 @@ class _CommunityMembersTabState extends State<_CommunityMembersTab> {
   /// Owner-only — confirm + fire DELETE /communities/:id/members/:userId,
   /// then prune the row from local state without a full refetch.
   Future<void> _confirmKick(CommunityMember m) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await PlatformDialog.show(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('community.kick.title'.tr),
-        content: Text(
-          'community.kick.body'.trParams({'name': m.name}),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('common.cancel'.tr),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFE65A6E),
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text('common.remove'.tr),
-          ),
-        ],
-      ),
+      title: 'community.kick.title'.tr,
+      content: 'community.kick.body'.trParams({'name': m.name}),
+      cancelText: 'common.cancel'.tr,
+      confirmText: 'common.remove'.tr,
+      isDestructive: true,
     );
     if (confirmed != true) return;
     final res = await CommunityService.removeMember(
@@ -2422,7 +2354,7 @@ class _CommunityMembersTabState extends State<_CommunityMembersTab> {
     final palette = SocialTheme.of(context);
     if (_loading && _members.isEmpty) {
       return Center(
-        child: CircularProgressIndicator(color: widget.accent),
+        child: PlatformSpinner(color: widget.accent),
       );
     }
     if (_error != null && _members.isEmpty) {
@@ -3056,7 +2988,6 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
   /// Confirmation dialog + API call for the chosen action. Returns
   /// to the picker on cancel; closes the picker on success.
   Future<void> _onPick(BuildContext ctx, CommunityMemberRow m) async {
-    final palette = SocialTheme.of(ctx);
     final isRemove = widget.mode == _PickerMode.remove;
     final memberName = m.name.isEmpty ? m.email : m.name;
     final title = isRemove
@@ -3066,42 +2997,15 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
         ? 'community.picker.confirmRemoveBody'.trParams({'name': memberName})
         : 'community.picker.confirmTransferBody'
             .trParams({'name': memberName});
-    final confirmed = await showDialog<bool>(
+    final confirmed = await PlatformDialog.show(
       context: ctx,
-      builder: (dialogCtx) => AlertDialog(
-        backgroundColor: palette.surface,
-        title: Text(
-          title,
-          style: TextStyle(
-            color: palette.textPrimary,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        content: Text(
-          body,
-          style: TextStyle(color: palette.textMuted),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx, false),
-            child: Text('common.cancel'.tr),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx, true),
-            child: Text(
-              isRemove
-                  ? 'community.picker.remove'.tr
-                  : 'community.picker.transfer'.tr,
-              style: TextStyle(
-                color: isRemove
-                    ? const Color(0xFFFF6B7A)
-                    : SocialTokens.cyan,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ],
-      ),
+      title: title,
+      content: body,
+      cancelText: 'common.cancel'.tr,
+      confirmText: isRemove
+          ? 'community.picker.remove'.tr
+          : 'community.picker.transfer'.tr,
+      isDestructive: isRemove,
     );
     if (confirmed != true) return;
     HapticFeedback.selectionClick();
@@ -3184,9 +3088,7 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
               Expanded(
                 child: _loading
                     ? Center(
-                        child: CircularProgressIndicator(
-                          color: palette.textMuted,
-                        ),
+                        child: PlatformSpinner(color: palette.textMuted),
                       )
                     : _error != null
                         ? Center(
@@ -3429,10 +3331,7 @@ class _MembershipButton extends StatelessWidget {
                     SizedBox(
                       width: 14,
                       height: 14,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: accent,
-                      ),
+                      child: PlatformSpinner(strokeWidth: 2, color: accent),
                     )
                   else
                     Icon(

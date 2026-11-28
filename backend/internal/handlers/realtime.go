@@ -31,15 +31,18 @@ func NewRealtimeHandler(
 	hub *realtime.Hub,
 	users *repositories.UserRepository,
 	social *repositories.SocialRepository,
+	originAllowed func(origin string) bool,
 ) *RealtimeHandler {
 	return &RealtimeHandler{
 		hub:    hub,
 		users:  users,
 		social: social,
 		upgrader: websocket.Upgrader{
-			// We rely on the same CORS policy as REST. WS handshake doesn't
-			// run our gin CORS middleware, so accept all origins here.
-			CheckOrigin: func(r *http.Request) bool { return true },
+			// The WS handshake doesn't run the gin CORS middleware, so apply
+			// the same origin allow-list here (native apps send no Origin).
+			CheckOrigin: func(r *http.Request) bool {
+				return originAllowed(r.Header.Get("Origin"))
+			},
 		},
 	}
 }

@@ -5,6 +5,7 @@ import '../../localization/locale_format.dart';
 import '../../models/expert_post.dart';
 import '../../screens/social/social_tokens.dart';
 import '../../services/expert_post_service.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Bottom sheet that lists every saved snapshot of a post (mig 0020,
 /// item 4.16).
@@ -129,7 +130,7 @@ class _PostHistorySheetState extends State<PostHistorySheet> {
 
   Widget _body(SocialPalette palette) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: PlatformSpinner());
     }
     if (_error != null) {
       return Center(

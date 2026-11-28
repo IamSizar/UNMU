@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -17,10 +19,13 @@ import (
 // only knows about Apple (StoreKit) — Google Play / Stripe can plug in
 // the same shape later.
 type IAPHandler struct {
-	appleVerifier *services.AppleIAPVerifier   // nullable
+	appleVerifier *services.AppleIAPVerifier // nullable
 	appleTxRepo   *repositories.AppleIAPTransactionRepository
 	expertSubRepo *repositories.ExpertSubscriptionRepository
 	userRepo      *repositories.UserRepository
+	// Google Play (wired by SetGooglePlay; nil → 503).
+	googleVerifier *services.GooglePlayVerifier
+	googleRepo     *repositories.GooglePlayPurchaseRepository
 }
 
 func NewIAPHandler(
@@ -42,14 +47,12 @@ func NewIAPHandler(
 //	receiptData — the base64 receipt blob the Flutter `in_app_purchase`
 //	              plugin gives us via verificationData.serverVerificationData.
 //	productId   — the SKU the user just bought (e.g.
-//	              "com.unmu.expert.<expertId>.monthly"). Optional but
-//	              recommended — we pick the latest matching transaction
-//	              when set, else the latest of any product in the receipt.
-//	expertId    — when the SKU represents an expert subscription, the
-//	              expert UUID to attach the resulting expert_subscription
-//	              row to. Optional — when omitted we just persist the
-//	              transaction without creating a subscription row (the
-//	              client can call /experts/:id/subscriptions separately).
+//	              "com.unmu.expert.<expertId>.monthly"). Required: we pick
+//	              the latest transaction for exactly this product.
+//	expertId    — optional. The expert always comes from the verified
+//	              SKU; when sent, it must match that SKU or the request
+//	              is refused (it used to be trusted as-is, so buying one
+//	              expert's subscription could unlock another's).
 type verifyAppleBody struct {
 	ReceiptData string `json:"receiptData" binding:"required"`
 	ProductID   string `json:"productId"`
@@ -94,10 +97,17 @@ func (h *IAPHandler) VerifyApple(c *gin.Context) {
 		return
 	}
 
+	body.ProductID = strings.TrimSpace(body.ProductID)
+	body.ExpertID = strings.TrimSpace(body.ExpertID)
+	if err := checkVerifyRequest(body.ProductID, body.ExpertID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	verified, err := h.appleVerifier.VerifyReceipt(
 		c.Request.Context(),
 		body.ReceiptData,
-		strings.TrimSpace(body.ProductID),
+		body.ProductID,
 	)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -115,58 +125,23 @@ func (h *IAPHandler) VerifyApple(c *gin.Context) {
 		verified.ExpiresDate,
 		verified.RawPayload,
 	)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to persist transaction: " + err.Error(),
-		})
-		return
-	}
-
-	// Replay protection: if this transaction belongs to a different user,
-	// refuse. (Could happen if a leaked receipt is re-used by an
-	// attacker.) When inserted=false we already had a row — verify owner.
-	if !inserted && tx.UserID != userID {
+	// Replay protection: the subscription (original_transaction_id)
+	// belongs to the first account that verified it, renewals included.
+	if errors.Is(err, repositories.ErrAppleSubOwnedByAnotherUser) {
 		c.JSON(http.StatusConflict, gin.H{
 			"error": "This receipt belongs to another account.",
 			"code":  "RECEIPT_OWNED_BY_ANOTHER_USER",
 		})
 		return
 	}
+	if err != nil {
+		log.Printf("[apple-iap] persist transaction for user %d: %v", userID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save the purchase"})
+		return
+	}
 
-	// If an expertId is present and looks like an expert subscription,
-	// activate the matching sub. Mapping is intentionally loose — the
-	// product ID is whatever the operator set up in App Store Connect.
-	if expertID := strings.TrimSpace(body.ExpertID); expertID != "" {
-		_ = h.activateExpertSubscription(userID, expertID, verified, tx.ID)
-	}
-	// proActivated distinguishes "not a Pro SKU" from "was a Pro SKU but
-	// activation failed" from "activated successfully", so the Flutter
-	// client can tell the difference instead of assuming success just
-	// because the HTTP call returned 200 — a verified-but-unactivated
-	// purchase should prompt a retry, not silently show as Premium only
-	// after the user happens to reload.
-	var proActivated *bool
-	if isProProductID(verified.ProductID) {
-		// The general app-wide Pro tier — see activateProSubscription's
-		// doc comment. This was the one gap that made the whole feature a
-		// no-op end to end: the Flutter purchase screen and the real IAP
-		// wiring both already existed, but nothing on this side ever
-		// called UserRepository.UpdateSubscription, so a completed
-		// purchase never actually granted Premium.
-		ok := true
-		if err := h.activateProSubscription(userID, verified); err != nil {
-			ok = false
-			// Best-effort, matching activateExpertSubscription's pattern:
-			// the payment is already verified and the transaction is
-			// already persisted above, so we don't fail the whole request
-			// over an entitlement-write error — but it IS worth knowing
-			// about, since it means a paying user doesn't get Premium.
-			services.CaptureError(err, map[string]string{
-				"handler": "iap.VerifyApple", "stage": "activate_pro",
-			})
-		}
-		proActivated = &ok
-	}
+	proActivated := h.grantEntitlements(userID, appleEntitlement(verified),
+		models.PaymentMethodAppleIAP, "apple_iap:"+intToStr(tx.ID))
 
 	response := gin.H{
 		"id":            tx.ID,
@@ -183,36 +158,34 @@ func (h *IAPHandler) VerifyApple(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// activateExpertSubscription is best-effort. The cash/FIB flow already
-// creates a "pending" expert_subscription row that admin approves; the
-// IAP flow short-circuits that — Apple verified the payment, so the sub
-// is immediately active.
-//
-// If no pending subscription exists yet, the client is expected to also
-// POST /experts/:id/subscriptions with paymentMethod=apple_iap (which
-// will reference this transaction). We don't auto-create one here to
-// keep the data model simple.
+// activateExpertSubscription activates (or, on renewal, extends) the
+// user's subscription to expertID. The cash/FIB flow creates a "pending"
+// row that an admin approves; a store purchase is already paid, so the sub
+// is immediately active. paymentRef points at the stored store record
+// ("apple_iap:<row id>" / "google_play:<row id>") for the admin dashboard.
 func (h *IAPHandler) activateExpertSubscription(
 	userID int64,
 	expertID string,
-	verified *services.AppleVerifiedTransaction,
-	appleTxRowID int64,
+	e storeEntitlement,
+	paymentMethod, paymentRef string,
 ) error {
+	// Same rule as Premium: an expired (or expiry-less) purchase must not
+	// re-activate a subscription.
+	if err := requireCurrentSubscription(e); err != nil {
+		return err
+	}
 	// Map product → plan. Convention: SKUs end in ".monthly" / ".yearly".
 	plan := models.PlanMonthly
-	if strings.HasSuffix(strings.ToLower(verified.ProductID), ".yearly") {
+	if strings.HasSuffix(strings.ToLower(e.ProductID), ".yearly") {
 		plan = models.PlanYearly
 	}
-	// We use payment_ref to carry the apple transaction PK so the admin
-	// dashboard can drill in. Format: "apple_iap:<row id>".
-	paymentRef := "apple_iap:" + intToStr(appleTxRowID)
 	return h.expertSubRepo.ActivateFromIAP(
 		userID, expertID,
 		string(plan),
-		models.PaymentMethodAppleIAP,
+		paymentMethod,
 		paymentRef,
-		verified.PurchaseDate,
-		verified.ExpiresDate,
+		e.PurchaseDate,
+		e.ExpiresDate,
 	)
 }
 
@@ -258,24 +231,60 @@ func isProProductID(productID string) bool {
 // endpoint again; until that exists, entitlement freshness depends on
 // the client re-verifying periodically, not on the backend knowing
 // proactively.
-func (h *IAPHandler) activateProSubscription(userID int64, verified *services.AppleVerifiedTransaction) error {
-	// Every SKU that reaches here (isProProductID's allowlist) is a
-	// subscription product, so ExpiresDate should always be populated —
-	// apple_iap_verifier.go's pickLatestTransaction only leaves it nil
-	// when expires_date_ms was empty, unparseable, or <= 0. Treat that as
-	// "can't verify this purchase is current" and refuse, same as an
-	// actually-expired date — the original code only checked the latter,
-	// so a malformed/missing expiry from Apple silently skipped the
-	// expiry gate entirely and granted Premium with no expiry at all.
-	if verified.ExpiresDate == nil {
-		return fmt.Errorf("apple-iap: receipt for product %s has no parseable expiry date — refusing to activate Pro without one",
-			verified.ProductID)
+func (h *IAPHandler) activateProSubscription(userID int64, e storeEntitlement) error {
+	if err := requireCurrentSubscription(e); err != nil {
+		return err
 	}
-	if verified.ExpiresDate.Before(timeNow()) {
-		return fmt.Errorf("apple-iap: receipt for product %s has already expired (expiresDate=%s) — not activating Pro",
-			verified.ProductID, verified.ExpiresDate.Format(time.RFC3339))
+	return h.userRepo.UpdateSubscription(userID, "PREMIUM", "ACTIVE", e.ExpiresDate)
+}
+
+// requireCurrentSubscription refuses a receipt whose subscription has
+// expired, or whose expiry Apple did not report (every UNMU product is a
+// subscription, so a missing expiry means we cannot tell it is current).
+// Without it, an old receipt could be replayed to re-grant access forever.
+func requireCurrentSubscription(e storeEntitlement) error {
+	if e.ExpiresDate == nil {
+		return fmt.Errorf("iap: purchase of %s has no expiry date", e.ProductID)
 	}
-	return h.userRepo.UpdateSubscription(userID, "PREMIUM", "ACTIVE", verified.ExpiresDate)
+	if e.ExpiresDate.Before(timeNow()) {
+		return fmt.Errorf("iap: purchase of %s expired at %s",
+			e.ProductID, e.ExpiresDate.Format(time.RFC3339))
+	}
+	return nil
+}
+
+// Expert SKUs are com.unmu.expert.<expertId>.<plan>, matching
+// IAPService.expertIdFromProductId in the Flutter app.
+const expertSKUPrefix = "com.unmu.expert."
+
+var expertSKUPlans = []string{".monthly", ".yearly"}
+
+// expertIDFromProductID returns the expert id inside an expert SKU, or ""
+// for any other product.
+func expertIDFromProductID(productID string) string {
+	rest, ok := strings.CutPrefix(productID, expertSKUPrefix)
+	if !ok {
+		return ""
+	}
+	for _, plan := range expertSKUPlans {
+		if id, found := strings.CutSuffix(rest, plan); found {
+			return id
+		}
+	}
+	return ""
+}
+
+// checkVerifyRequest validates the client's productId / expertId before
+// calling Apple: the product is required, and an expertId must be the one
+// inside that product's SKU.
+func checkVerifyRequest(productID, expertID string) error {
+	if productID == "" {
+		return errors.New("productId required")
+	}
+	if expertID != "" && expertID != expertIDFromProductID(productID) {
+		return errors.New("expertId does not match the purchased product")
+	}
+	return nil
 }
 
 // timeNow — a var, not a direct time.Now() call, so a future test can

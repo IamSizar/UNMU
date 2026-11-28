@@ -7,6 +7,8 @@ import '../../utils/haptic_utils.dart';
 import '../../widgets/auth/auth_widgets.dart';
 import '../../widgets/dismiss_keyboard_on_tap.dart';
 import '../social/social_tokens.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_dialog.dart';
 
 /// Settings sub-screen — permanently delete the signed-in account.
 ///
@@ -63,25 +65,13 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
     // One more confirmation dialog — there's no undo and the soft-
     // delete tombstone can't be re-claimed under the original email
     // until the user re-registers.
-    final go = await showDialog<bool>(
+    final go = await PlatformDialog.show(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('deleteAccount.confirmTitle'.tr),
-        content: Text('deleteAccount.confirmBody'.tr),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('common.cancel'.tr),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: SocialTokens.down,
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text('deleteAccount.deletePermanently'.tr),
-          ),
-        ],
-      ),
+      title: 'deleteAccount.confirmTitle'.tr,
+      content: 'deleteAccount.confirmBody'.tr,
+      cancelText: 'common.cancel'.tr,
+      confirmText: 'deleteAccount.deletePermanently'.tr,
+      isDestructive: true,
     );
     if (go != true) return;
 
@@ -212,10 +202,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
                       ? const SizedBox(
                           width: 18,
                           height: 18,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
+                          child: PlatformSpinner(color: Colors.white, strokeWidth: 2),
                         )
                       : const Icon(Icons.delete_forever_rounded),
                   label: Text(

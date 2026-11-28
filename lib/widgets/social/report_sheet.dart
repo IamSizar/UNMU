@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../services/report_service.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Bottom-sheet that lets the user pick a reason, optionally add a note,
 /// and submit a report. Returns true when the report was accepted (or
@@ -195,10 +196,7 @@ class _ReportSheetState extends State<ReportSheet> {
                       ? const SizedBox(
                           width: 18,
                           height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation(Colors.white),
-                          ),
+                          child: PlatformSpinner(strokeWidth: 2, color: Colors.white),
                         )
                       : Text('report.submit'.tr),
                 ),

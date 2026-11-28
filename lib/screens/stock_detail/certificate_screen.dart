@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../screens/social/social_tokens.dart';
 import '../../services/api_service.dart';
 import '../../utils/haptic_utils.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Compliance certificate — a dated, methodology-versioned record for one
 /// stock, meant to be screenshotted/shared as evidence of a compliance
@@ -89,7 +90,7 @@ class _CertificateScreenState extends State<CertificateScreen> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: PlatformSpinner())
           : _failed
               ? _ErrorState(palette: palette, notFound: _notFound, onRetry: _load)
               : _buildCertificate(palette),

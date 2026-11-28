@@ -5,7 +5,11 @@ import '../../controllers/subscription_controller.dart';
 import '../../localization/locale_format.dart';
 import '../../models/expert_subscription.dart';
 import '../../services/community_subscription_service.dart';
+import '../../services/iap_service.dart';
+import '../../widgets/subscriptions/restore_purchases_button.dart';
 import 'subscribe_modal.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_dialog.dart';
 
 /// User-facing list of every subscription request the user has ever made.
 /// Reachable from Profile.
@@ -26,12 +30,23 @@ class _MySubscriptionsScreenState extends State<MySubscriptionsScreen> {
   List<CommunitySubscriptionRow> _communitySubs = const [];
   bool _loadingCommunitySubs = true;
 
+  /// Reloads the list when a restored App Store purchase is verified.
+  Worker? _restoreWorker;
+
   @override
   void initState() {
     super.initState();
     controller = Get.find<SubscriptionController>();
     controller.refreshAll();
     _loadCommunitySubs();
+    _restoreWorker =
+        ever<int>(IAPService.instance.verifiedRestores, (_) => _refreshAll());
+  }
+
+  @override
+  void dispose() {
+    _restoreWorker?.dispose();
+    super.dispose();
   }
 
   Future<void> _loadCommunitySubs() async {
@@ -51,30 +66,17 @@ class _MySubscriptionsScreenState extends State<MySubscriptionsScreen> {
   }
 
   Future<void> _cancelCommunitySub(CommunitySubscriptionRow sub) async {
-    final ok = await showDialog<bool>(
+    final ok = await PlatformDialog.show(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('mySubscriptions.commCancel.title'.tr),
-        content: Text(
-          sub.isPending
-              ? 'mySubscriptions.commCancel.bodyPending'
-                  .trParams({'name': sub.communityName})
-              : 'mySubscriptions.commCancel.bodyActive'
-                  .trParams({'name': sub.communityName}),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text('mySubscriptions.cancel.keep'.tr)),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(ctx).colorScheme.error,
-            ),
-            child: Text('mySubscriptions.cancel.confirm'.tr),
-          ),
-        ],
-      ),
+      title: 'mySubscriptions.commCancel.title'.tr,
+      content: sub.isPending
+          ? 'mySubscriptions.commCancel.bodyPending'
+              .trParams({'name': sub.communityName})
+          : 'mySubscriptions.commCancel.bodyActive'
+              .trParams({'name': sub.communityName}),
+      cancelText: 'mySubscriptions.cancel.keep'.tr,
+      confirmText: 'mySubscriptions.cancel.confirm'.tr,
+      isDestructive: true,
     );
     if (ok != true || !mounted) return;
     final res = await CommunitySubscriptionService.cancel(sub.id);
@@ -110,28 +112,15 @@ class _MySubscriptionsScreenState extends State<MySubscriptionsScreen> {
   }
 
   Future<void> _confirmCancel(ExpertSubscription sub) async {
-    final ok = await showDialog<bool>(
+    final ok = await PlatformDialog.show(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('mySubscriptions.cancel.title'.tr),
-        content: Text(
-          sub.status == SubStatus.pending
-              ? 'mySubscriptions.cancel.bodyPending'.tr
-              : 'mySubscriptions.cancel.bodyActive'.tr,
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text('mySubscriptions.cancel.keep'.tr)),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(ctx).colorScheme.error,
-            ),
-            child: Text('mySubscriptions.cancel.confirm'.tr),
-          ),
-        ],
-      ),
+      title: 'mySubscriptions.cancel.title'.tr,
+      content: sub.status == SubStatus.pending
+          ? 'mySubscriptions.cancel.bodyPending'.tr
+          : 'mySubscriptions.cancel.bodyActive'.tr,
+      cancelText: 'mySubscriptions.cancel.keep'.tr,
+      confirmText: 'mySubscriptions.cancel.confirm'.tr,
+      isDestructive: true,
     );
     if (ok != true || !mounted) return;
 
@@ -154,6 +143,7 @@ class _MySubscriptionsScreenState extends State<MySubscriptionsScreen> {
       appBar: AppBar(
         title: Text('mySubscriptions.title'.tr),
         actions: [
+          const RestorePurchasesButton(),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _refreshAll,
@@ -168,7 +158,7 @@ class _MySubscriptionsScreenState extends State<MySubscriptionsScreen> {
             final subs = controller.all;
             final commSubs = _communitySubs;
             if (loading && subs.isEmpty && commSubs.isEmpty) {
-              return const Center(child: CircularProgressIndicator());
+              return const Center(child: PlatformSpinner());
             }
             if (subs.isEmpty && commSubs.isEmpty) {
               return _EmptyState();

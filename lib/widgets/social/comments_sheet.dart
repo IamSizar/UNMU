@@ -14,6 +14,8 @@ import '../../screens/social/social_tokens.dart';
 import '../../utils/haptic_utils.dart';
 import '../dismiss_keyboard_on_tap.dart';
 import 'report_sheet.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_dialog.dart';
 
 /// Modal bottom sheet — comments thread for a single post.
 ///
@@ -232,25 +234,13 @@ class _CommentsSheetState extends State<CommentsSheet> {
   }
 
   Future<void> _delete(PostComment c) async {
-    final ok = await showDialog<bool>(
+    final ok = await PlatformDialog.show(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('comments.deleteTitle'.tr),
-        content: Text('comments.deleteBody'.tr),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('common.cancel'.tr),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFE65A6E),
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text('common.delete'.tr),
-          ),
-        ],
-      ),
+      title: 'comments.deleteTitle'.tr,
+      content: 'comments.deleteBody'.tr,
+      cancelText: 'common.cancel'.tr,
+      confirmText: 'common.delete'.tr,
+      isDestructive: true,
     );
     if (ok != true) return;
     final err = await PostInteractionService.deleteComment(widget.postId, c.id);
@@ -609,10 +599,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
                             ? const SizedBox(
                                 width: 14,
                                 height: 14,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Color(0xFF0A1628),
-                                ),
+                                child: PlatformSpinner(strokeWidth: 2, color: Color(0xFF0A1628)),
                               )
                             : const Icon(
                                 Icons.send_rounded,

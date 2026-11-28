@@ -18,6 +18,7 @@ import 'controllers/auth_controller.dart';
 import 'controllers/chat_presence_controller.dart';
 import 'controllers/currency_controller.dart';
 import 'controllers/feed_controller.dart';
+import 'controllers/pulse_controller.dart';
 import 'controllers/language_controller.dart';
 import 'controllers/mute_controller.dart';
 import 'controllers/notifications_controller.dart';
@@ -36,7 +37,6 @@ import 'screens/splash/splash_screen.dart';
 import 'services/deep_link_service.dart';
 import 'services/iap_service.dart';
 import 'services/push_token_service.dart';
-import 'services/tracking_service.dart';
 import 'theme/halal_fintech_theme.dart';
 import 'widgets/social/community_message_banner.dart';
 import 'widgets/upload_status_pill.dart';
@@ -121,6 +121,8 @@ Future<void> main() async {
   // Saved posts — single source of truth for "is post X bookmarked?"
   // across every card, plus the saved-posts screen list.
   Get.put(SavedController(), permanent: true);
+  // UNMU Pulse — daily briefing state (today's items, saves, analytics events).
+  Get.put(PulseController(), permanent: true);
   // Tracks the community whose chat the user is currently viewing —
   // drives the global new-message banner so we don't toast a chat
   // the user is already reading.
@@ -214,17 +216,18 @@ class _AppEntryState extends State<_AppEntry> {
     super.initState();
     Future.delayed(_splashMin, () {
       if (mounted) setState(() => _splashReady = true);
-      // App Tracking Transparency. iOS surfaces a system modal here;
-      // calling it post-splash means the brand impression lands first.
-      // Fire-and-forget — never block the handoff to the main tab
-      // scaffold on the user dismissing the prompt.
-      unawaited(TrackingService.instance.requestIfNeeded());
     });
     // Wire up deep-link routing once the first frame is on screen — at
     // that point the navigator is mounted, so a cold-start `unmu.app/p/:id`
     // URL can push the post viewer on top of the splash / main scaffold.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       DeepLinkService.instance.init();
+      // Launched by tapping a Pulse push: wait a beat so the main scaffold
+      // is mounted, then open the item (mirrors the deep-link delay).
+      Future<void>.delayed(
+        const Duration(milliseconds: 600),
+        () => PushTokenService.instance.handleLaunchNotification(),
+      );
     });
   }
 

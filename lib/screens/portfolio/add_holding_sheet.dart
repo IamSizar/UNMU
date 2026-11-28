@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import '../../controllers/portfolio_controller.dart';
 import '../../screens/social/social_tokens.dart';
 import '../../services/api_service.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Bottom sheet: search a stock, enter shares + avg buy price, save.
 /// Extracted from portfolio_screen.dart to keep that file under the
@@ -306,7 +307,7 @@ class _DetailsStep extends StatelessWidget {
               ? const SizedBox(
                   width: 18,
                   height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: PlatformSpinner(strokeWidth: 2),
                 )
               : Text('portfolio.save'.tr),
         ),

@@ -273,6 +273,7 @@ func (h *FirebaseAuthHandler) OAuth(c *gin.Context) {
 			Role:     user.Role,
 			ExpertID: expertID,
 			Tier:     user.SubscriptionTier,
+			CreatedAt: memberSince(user.CreatedAt),
 		},
 		"needsOnboarding": needsOnboarding,
 	})

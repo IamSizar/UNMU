@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
 import 'auth_service.dart';
+import 'pulse_push_router.dart';
 
 /// Per-device push-notification token plumbing.
 ///
@@ -113,6 +114,13 @@ class PushTokenService {
     FirebaseMessaging.onMessage.listen((msg) {
       debugPrint('[push] foreground message: title=${msg.notification?.title} '
           'body=${msg.notification?.body} data=${msg.data}');
+    });
+
+    // Notification tap while the app is in the background: route Pulse
+    // pushes to the item they are about. Non-Pulse pushes are ignored here.
+    FirebaseMessaging.onMessageOpenedApp.listen((msg) {
+      debugPrint('[push] onMessageOpenedApp fired');
+      openPulsePush(msg.data);
     });
 
     // iOS: wait for APNs token before asking Firebase for the FCM token.
@@ -275,6 +283,18 @@ class PushTokenService {
       await _sendTokenToBackend(token);
     } else {
       await _refreshAndPrint();
+    }
+  }
+
+  /// Cold start: if the app was launched by tapping a notification, route it.
+  /// Call once after the first frame so the navigator exists (same timing
+  /// as DeepLinkService.init). Safe to call when there is no such message.
+  Future<void> handleLaunchNotification() async {
+    try {
+      final msg = await FirebaseMessaging.instance.getInitialMessage();
+      if (msg != null) openPulsePush(msg.data);
+    } catch (e) {
+      debugPrint('[push] getInitialMessage failed: $e');
     }
   }
 

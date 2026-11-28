@@ -127,6 +127,11 @@ A comprehensive Halal stock screening and investment management application with
 - `GET /api/ads?region_code={code}` - Get ads for region
 - `POST /api/promo/validate` - Validate promo code
 
+### UNMU Pulse (Require JWT)
+- `GET /api/pulse/today`, `/api/pulse/days/{date}`, `/api/pulse/items/{id}`, `/api/pulse/archive`, `/api/pulse/saved`
+- `POST|DELETE /api/pulse/items/{id}/save`, `POST /api/pulse/events`
+- `/api/pulse-admin/*` - editorial CMS (admin + a Pulse staff role). Guide: `docs/pulse/OPERATING.md`
+
 ## Shariah Screening Rules
 
 1. **Activity Filter**: Checks for haram sectors/keywords (banking, gambling, alcohol, tobacco, etc.)

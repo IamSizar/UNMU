@@ -6,6 +6,7 @@ import '../../screens/social/social_tokens.dart';
 import '../../services/community_proposal_service.dart';
 import '../../utils/haptic_utils.dart';
 import '../../widgets/dismiss_keyboard_on_tap.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Modal bottom-sheet that lets an expert submit a new community proposal
 /// for admin review. Backed by `POST /api/me/community-proposals`.
@@ -712,12 +713,7 @@ class _SubmitButton extends StatelessWidget {
                   const SizedBox(
                     width: 18,
                     height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        Color(0xFF0A1628),
-                      ),
-                    ),
+                    child: PlatformSpinner(strokeWidth: 2, color: Color(0xFF0A1628),),
                   )
                 else
                   const Icon(

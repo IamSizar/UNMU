@@ -23,20 +23,29 @@ func NewNotificationPrefsRepository(db *sql.DB) *NotificationPrefsRepository {
 // NotificationPrefs mirrors the table row. JSON tags use camelCase for
 // the Flutter client.
 type NotificationPrefs struct {
-	UserID               int64     `json:"userId"`
-	PushEnabled          bool      `json:"pushEnabled"`
-	EmailEnabled         bool      `json:"emailEnabled"`
-	LikesEnabled         bool      `json:"likesEnabled"`
-	CommentsEnabled      bool      `json:"commentsEnabled"`
-	SubscriptionsEnabled bool      `json:"subscriptionsEnabled"`
-	CommunitiesEnabled   bool      `json:"communitiesEnabled"`
-	MarketingEnabled     bool      `json:"marketingEnabled"`
-	UpdatedAt            time.Time `json:"updatedAt"`
+	UserID               int64 `json:"userId"`
+	PushEnabled          bool  `json:"pushEnabled"`
+	EmailEnabled         bool  `json:"emailEnabled"`
+	LikesEnabled         bool  `json:"likesEnabled"`
+	CommentsEnabled      bool  `json:"commentsEnabled"`
+	SubscriptionsEnabled bool  `json:"subscriptionsEnabled"`
+	CommunitiesEnabled   bool  `json:"communitiesEnabled"`
+	MarketingEnabled     bool  `json:"marketingEnabled"`
+	// UNMU Pulse (migration 0056). PulseEnabled is the master switch for all
+	// Pulse notifications; the other four pick which events are sent.
+	PulseEnabled            bool      `json:"pulseEnabled"`
+	PulseNewEnabled         bool      `json:"pulseNewEnabled"`
+	PulseUpdatesEnabled     bool      `json:"pulseUpdatesEnabled"`
+	PulseCorrectionsEnabled bool      `json:"pulseCorrectionsEnabled"`
+	PulseSavedEnabled       bool      `json:"pulseSavedEnabled"`
+	UpdatedAt               time.Time `json:"updatedAt"`
 }
 
 const prefsCols = `user_id, push_enabled, email_enabled,
 	likes_enabled, comments_enabled, subscriptions_enabled,
-	communities_enabled, marketing_enabled, updated_at`
+	communities_enabled, marketing_enabled,
+	pulse_enabled, pulse_new_enabled, pulse_updates_enabled,
+	pulse_corrections_enabled, pulse_saved_enabled, updated_at`
 
 func scanPrefs(row interface{ Scan(dest ...any) error }) (*NotificationPrefs, error) {
 	p := &NotificationPrefs{}
@@ -45,6 +54,8 @@ func scanPrefs(row interface{ Scan(dest ...any) error }) (*NotificationPrefs, er
 		&p.PushEnabled, &p.EmailEnabled,
 		&p.LikesEnabled, &p.CommentsEnabled, &p.SubscriptionsEnabled,
 		&p.CommunitiesEnabled, &p.MarketingEnabled,
+		&p.PulseEnabled, &p.PulseNewEnabled, &p.PulseUpdatesEnabled,
+		&p.PulseCorrectionsEnabled, &p.PulseSavedEnabled,
 		&p.UpdatedAt,
 	); err != nil {
 		return nil, err
@@ -86,6 +97,12 @@ type PrefsMutation struct {
 	SubscriptionsEnabled *bool
 	CommunitiesEnabled   *bool
 	MarketingEnabled     *bool
+
+	PulseEnabled            *bool
+	PulseNewEnabled         *bool
+	PulseUpdatesEnabled     *bool
+	PulseCorrectionsEnabled *bool
+	PulseSavedEnabled       *bool
 }
 
 // Update applies the mutation and returns the refreshed row. Creates
@@ -103,12 +120,19 @@ func (r *NotificationPrefsRepository) Update(userID int64, m PrefsMutation) (*No
 		    subscriptions_enabled = COALESCE($5, subscriptions_enabled),
 		    communities_enabled   = COALESCE($6, communities_enabled),
 		    marketing_enabled     = COALESCE($7, marketing_enabled),
+		    pulse_enabled             = COALESCE($8, pulse_enabled),
+		    pulse_new_enabled         = COALESCE($9, pulse_new_enabled),
+		    pulse_updates_enabled     = COALESCE($10, pulse_updates_enabled),
+		    pulse_corrections_enabled = COALESCE($11, pulse_corrections_enabled),
+		    pulse_saved_enabled       = COALESCE($12, pulse_saved_enabled),
 		    updated_at            = NOW()
-		WHERE user_id = $8
+		WHERE user_id = $13
 	`,
 		m.PushEnabled, m.EmailEnabled,
 		m.LikesEnabled, m.CommentsEnabled, m.SubscriptionsEnabled,
 		m.CommunitiesEnabled, m.MarketingEnabled,
+		m.PulseEnabled, m.PulseNewEnabled, m.PulseUpdatesEnabled,
+		m.PulseCorrectionsEnabled, m.PulseSavedEnabled,
 		userID,
 	)
 	if err != nil {

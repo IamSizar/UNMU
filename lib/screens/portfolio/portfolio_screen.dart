@@ -8,6 +8,7 @@ import '../../screens/social/social_tokens.dart';
 import '../../utils/haptic_utils.dart';
 import '../../widgets/platform_adaptive/platform_dialog.dart';
 import 'add_holding_sheet.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Portfolio screen — the user's real, valued holdings (shares + average
 /// buy price), distinct from the Watchlist (which tracks stocks without a
@@ -62,7 +63,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
           ? _SignInPrompt(palette: palette)
           : Obx(() {
               if (portfolio.isLoading && portfolio.holdings.isEmpty) {
-                return const Center(child: CircularProgressIndicator());
+                return const Center(child: PlatformSpinner());
               }
               if (portfolio.error != null && portfolio.holdings.isEmpty) {
                 return _ErrorState(

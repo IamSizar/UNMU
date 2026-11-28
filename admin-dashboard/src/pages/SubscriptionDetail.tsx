@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { api } from '../api/client'
 import { useI18n } from '../i18n/I18nContext'
+import type { TranslationKey } from '../i18n/translations'
 import { fmtDateTime } from '../i18n/datefmt'
 
 // Mirrors the backend `models.ExpertSubscription` row (with denormalised
@@ -67,7 +68,7 @@ const STATUS_TINT: Record<string, string> = {
   expired: 'bg-slate-500/15 text-slate-300 ring-slate-500/30',
 }
 
-const STATUS_TKEY: Record<string, string> = {
+const STATUS_TKEY: Record<string, TranslationKey> = {
   pending: 'subscriptions.status.pending',
   active: 'subscriptions.status.active',
   rejected: 'subscriptions.status.rejected',

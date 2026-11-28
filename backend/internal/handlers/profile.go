@@ -76,6 +76,7 @@ type userJSON struct {
 	ExpertID  string `json:"expertId,omitempty"`
 	Tier      string `json:"subscriptionTier,omitempty"`
 	Locale    string `json:"locale,omitempty"`
+	CreatedAt string `json:"createdAt,omitempty"`
 }
 
 func userToJSON(u *models.User) userJSON {
@@ -85,6 +86,7 @@ func userToJSON(u *models.User) userJSON {
 		Role:   u.Role,
 		Tier:   u.SubscriptionTier,
 		Locale: u.Locale,
+		CreatedAt: memberSince(u.CreatedAt),
 	}
 	if u.Name.Valid {
 		out.Name = u.Name.String
@@ -641,6 +643,13 @@ type prefsBody struct {
 	SubscriptionsEnabled *bool `json:"subscriptionsEnabled"`
 	CommunitiesEnabled   *bool `json:"communitiesEnabled"`
 	MarketingEnabled     *bool `json:"marketingEnabled"`
+
+	// UNMU Pulse switches (migration 0056).
+	PulseEnabled            *bool `json:"pulseEnabled"`
+	PulseNewEnabled         *bool `json:"pulseNewEnabled"`
+	PulseUpdatesEnabled     *bool `json:"pulseUpdatesEnabled"`
+	PulseCorrectionsEnabled *bool `json:"pulseCorrectionsEnabled"`
+	PulseSavedEnabled       *bool `json:"pulseSavedEnabled"`
 }
 
 // GetNotificationPrefs — GET /api/me/notification-prefs
@@ -682,6 +691,12 @@ func (h *ProfileHandler) UpdateNotificationPrefs(c *gin.Context) {
 		SubscriptionsEnabled: body.SubscriptionsEnabled,
 		CommunitiesEnabled:   body.CommunitiesEnabled,
 		MarketingEnabled:     body.MarketingEnabled,
+
+		PulseEnabled:            body.PulseEnabled,
+		PulseNewEnabled:         body.PulseNewEnabled,
+		PulseUpdatesEnabled:     body.PulseUpdatesEnabled,
+		PulseCorrectionsEnabled: body.PulseCorrectionsEnabled,
+		PulseSavedEnabled:       body.PulseSavedEnabled,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -716,3 +731,12 @@ func looksLikeURL(s string) bool {
 // errRowMissing — kept for completeness, currently unused. If a future
 // handler needs to map sql.ErrNoRows differently it can reference this.
 var _ = sql.ErrNoRows
+
+// memberSince formats a sign-up time for the client, or "" when unknown
+// so the field is left out of the JSON.
+func memberSince(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format(time.RFC3339)
+}

@@ -235,7 +235,7 @@ function Stat({
 
 function kindLabel(
   kind: GraphNode['kind'],
-  t: (key: any, vars?: Record<string, unknown>) => string,
+  t: (key: any, vars?: Record<string, string | number>) => string,
 ): string {
   if (kind === 'expert') return t('nodeDetail.kindExpert')
   if (kind === 'community') return t('nodeDetail.kindCommunity')

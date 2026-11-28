@@ -40,10 +40,15 @@ import {
   BarChart3,
   LifeBuoy,
   Network as NetworkIcon,
+  ClipboardCheck,
+  CalendarClock,
+  UserCog,
   X,
 } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
 import { api } from '../api/client'
+import { pulseApi } from '../api/pulse'
+import { PULSE_CHANGED_EVENT } from '../pages/pulse/pulseEvents'
 import { useRealtime, useRealtimeStatus } from '../api/realtime'
 import { useI18n } from '../i18n/I18nContext'
 import type { TranslationKey } from '../i18n/translations'
@@ -73,6 +78,24 @@ const primary: NavItem[] = [
   { to: '/dashboard', label: 'nav.overview', icon: LayoutDashboard },
   { to: '/network', label: 'nav.network', icon: NetworkIcon },
 ]
+
+// UNMU Pulse (نبض أنمو) — daily curated briefing. Open to system admins and to
+// Pulse staff (editor / reviewer / approver); staff who are not admins see ONLY
+// this section. The badge counts items waiting in the review queue.
+function pulseItems(reviewCount: number | null): NavItem[] {
+  return [
+    { to: '/pulse', label: 'nav.pulseItems', icon: Activity },
+    {
+      to: '/pulse/review',
+      label: 'nav.pulseReview',
+      icon: ClipboardCheck,
+      badge: reviewCount && reviewCount > 0 ? (reviewCount >= 50 ? '50+' : reviewCount) : undefined,
+    },
+    { to: '/pulse/schedule', label: 'nav.pulseSchedule', icon: CalendarClock },
+    { to: '/pulse/staff', label: 'nav.pulseStaff', icon: UserCog },
+    { to: '/pulse/analytics', label: 'nav.pulseAnalytics', icon: BarChart3 },
+  ]
+}
 
 function communityItems(
   pendingCount: number | null,
@@ -259,6 +282,8 @@ function Section({
 // ────────────────────────────────────────────────────────────────────
 export default function Sidebar({ open, onClose }: SidebarProps) {
   const { user, logout } = useAuth()
+  // Pulse staff who are not system admins only get the Pulse section.
+  const isAdmin = (user?.role ?? 'ADMIN') === 'ADMIN'
   const navigate = useNavigate()
   const location = useLocation()
   const { t } = useI18n()
@@ -277,6 +302,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
   const [pendingPayoutsCount, setPendingPayoutsCount] = useState<number | null>(
     null,
   )
+  const [pendingPulseCount, setPendingPulseCount] = useState<number | null>(null)
   const realtimeOnline = useRealtimeStatus()
 
   // Stable layoutId for the active-row indicator. Shared across every
@@ -361,25 +387,42 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
     }
   }
 
+  // Items waiting for review. The list API pages by 50, so 50 means "50 or more".
+  async function loadPendingPulse() {
+    try {
+      const res = await pulseApi.list({ status: 'in_review', limit: 50 })
+      setPendingPulseCount(res.items.length)
+    } catch {
+      setPendingPulseCount(0)
+    }
+  }
+
   useEffect(() => {
-    loadPending()
-    loadPendingSubs()
-    loadPendingProposals()
-    loadPendingCommunitySubs()
-    loadPendingSupport()
-    loadPendingReports()
-    loadPendingPayouts()
-    const t = setInterval(() => {
-      loadPending()
-      loadPendingSubs()
-      loadPendingProposals()
-      loadPendingCommunitySubs()
-      loadPendingSupport()
-      loadPendingReports()
-      loadPendingPayouts()
-    }, 60_000)
-    return () => clearInterval(t)
-  }, [])
+    // Pulse staff who are not system admins may not read the admin-only
+    // counters (the server would answer 403), so they only poll the Pulse one.
+    function refreshAll() {
+      if (isAdmin) {
+        loadPending()
+        loadPendingSubs()
+        loadPendingProposals()
+        loadPendingCommunitySubs()
+        loadPendingSupport()
+        loadPendingReports()
+        loadPendingPayouts()
+      }
+      loadPendingPulse()
+    }
+    refreshAll()
+    const t = setInterval(refreshAll, 60_000)
+    // The Pulse editor announces every change so the review badge updates at
+    // once instead of waiting for the next poll.
+    window.addEventListener(PULSE_CHANGED_EVENT, loadPendingPulse)
+    return () => {
+      clearInterval(t)
+      window.removeEventListener(PULSE_CHANGED_EVENT, loadPendingPulse)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin])
 
   useRealtime(
     [
@@ -476,11 +519,20 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
         </div>
 
         <nav className="flex-1 px-2 py-3 overflow-y-auto">
+          {isAdmin && (
+            <Section
+              items={primary}
+              onNavigate={onClose}
+              activeKey={activeKey}
+            />
+          )}
           <Section
-            items={primary}
+            title="nav.pulse"
+            items={pulseItems(pendingPulseCount)}
             onNavigate={onClose}
             activeKey={activeKey}
           />
+          {isAdmin && (<>
           <Section
             title="nav.community"
             items={communityItems(pendingCount, pendingProposalsCount)}
@@ -521,6 +573,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
             onNavigate={onClose}
             activeKey={activeKey}
           />
+          </>)}
         </nav>
 
         {/* Account footer — avatar + name + role + realtime status. */}

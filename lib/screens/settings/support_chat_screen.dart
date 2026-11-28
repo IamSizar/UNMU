@@ -10,6 +10,7 @@ import '../../localization/locale_format.dart';
 import '../../services/support_service.dart';
 import '../../utils/haptic_utils.dart';
 import '../social/social_tokens.dart';
+import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
 /// Contact Admin — built-in user ↔ admin support chat.
 ///
@@ -476,10 +477,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
           Expanded(
             child: _loading
                 ? const Center(
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.2,
-                      color: SocialTokens.cyan,
-                    ),
+                    child: PlatformSpinner(strokeWidth: 2.2, color: SocialTokens.cyan),
                   )
                 : _messages.isEmpty
                     ? _EmptyHint(

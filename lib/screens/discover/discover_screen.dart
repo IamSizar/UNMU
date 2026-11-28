@@ -10,6 +10,7 @@ import '../../utils/responsive.dart';
 import '../../widgets/ads/banner_ad_widget.dart';
 import '../../widgets/stock_card.dart';
 import '../../widgets/skeleton_loaders.dart';
+import '../../widgets/profile_avatar_button.dart';
 
 /// =============================================================================
 /// Discover Screen — editorial bento redesign.
@@ -93,6 +94,9 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
             fontWeight: FontWeight.w800,
           ),
         ),
+        // Profile lives here on every tab now, not in the bottom bar —
+        // that freed the slot Indexes and Feed used to share.
+        actions: const [ProfileAvatarButton()],
       ),
       body: Obx(() {
         final provider = Get.find<StocksController>();
