@@ -5,6 +5,60 @@ context: read this before planning any work here.
 
 ---
 
+## 2026-11-28 (night) — Subscriptions are App Store / Google Play only (branch `feat/iap-only`, NOT committed, NOT deployed)
+
+**Asked for:** "subscriptions in the app will all be only IAP". Zaid chose fixed price tiers and to cut off cash/FIB now, then said "go" on `docs/payments/IAP_ONLY_PLAN.md` (read its "As built" section).
+
+**What changed:**
+- **Migration 0063** (`0063_iap_price_tiers.sql` + down):
+  - Adds `price_tier` (t1..t4) to experts and communities. Communities use NULL for free. Existing prices map to the nearest tier, and `*_price_cents` are rewritten to the tier prices.
+  - Adds the `store_access_grants` table (one row per store transaction, UNIQUE).
+  - `community_subscriptions.payment_method` now allows `apple_iap` and `google_iap`.
+- **Tiers:** t1 $4.99/$49.99, t2 $9.99/$99.99, t3 $19.99/$199.99, t4 $49.99/$499.99. The store product is `com.unmu.access.<tier>.<month|year>`: Apple non-renewing, Google consumable. Defined in `backend/internal/models/price_tier.go`, mirrored in `lib/services/iap_access.dart` and `admin-dashboard/src/api/priceTiers.ts`.
+- **Backend:**
+  - New `POST /api/me/iap/access/apple|google` (`handlers/iap_access.go`, `repositories/store_access_grants.go`, `services/google_play_products.go`).
+  - A grant extends the active row by 30 or 365 days (pro-rated if the target's tier rose during checkout), adds the price to `price_cents`, and adds the community member. Google purchases are consumed after the grant. Apple ignores refunded (cancelled) transactions.
+  - Cash/FIB subscribe returns 410. The admin accept/reject routes and code are deleted, as is the promo-at-checkout code. Pricing endpoints take `priceTier`. The network graph no longer lists subscription "pending" items.
+  - Fixed a race where the community expiry sweep could undo a fresh renewal.
+- **App:**
+  - One `StorePurchaseSheet` (`lib/widgets/subscriptions/`) serves both `SubscribeModal` and `CommunityPaymentSheet`, which are now thin wrappers. Community owners pick a tier.
+  - A tier purchase is finished with the store only after the backend grants it. On Android it is not auto-consumed. The target is saved per product and per user.
+  - Cash/FIB/promo UI and strings are removed, and the legal text covers Google Play.
+  - Small fixes: the profile photo is kept on `/me` refresh, and the Social discovery title is now "Communities".
+- **Dashboard:** tier pickers for experts and communities; accept/reject and the pending badges are removed; old rows are read-only.
+- **Cut-off script:** `docs/payments/cutoff_pending_cash_fib.sql` rejects pending cash/FIB rows and RETURNS them for refunds. It has not been run anywhere except a local test.
+
+**Verified:**
+- Backend: `go vet ./...` is clean. `PULSE_TEST_DSN=postgres://localhost/unmu_pulse_dev?sslmode=disable go test ./...` all passes, including the new grant integration tests, handler checks, Google product and Apple exact-transaction tests.
+- Migration 0063: up, down and up again on `unmu_pulse_dev`.
+- App: `flutter analyze` has no errors or warnings, and `flutter test` passes 119 tests.
+- Dashboard: `npm run build` passes.
+- A security review was done; findings 1–3 and 5–8 are fixed.
+
+**Refunds (same branch, `docs/payments/REFUNDS_PLAN.md`):**
+- Migration **0064** adds `subscription_id`, `period_start`, `period_end` and `refunded_at` to `store_access_grants`. `Revoke` (`repositories/store_access_refunds.go`) removes only the unused part of the refunded purchase's own span, from its own row. Later stacked purchases shift earlier, the price comes off, and the row (and the community member) expires when no time is left. It is safe to repeat. Details are in REFUNDS_PLAN.md "As built".
+- **Apple:** public webhook `POST /api/webhooks/apple/notifications` (`handlers/apple_notifications.go`).
+  - The JWS is verified against Apple Root CA G3, embedded in `services/certs/` (downloaded from apple.com; SHA-256 fingerprint checked: 63:34:3A:…:91:79). The Apple OIDs, the ES256 signature and the bundle id are also checked.
+  - REFUND and REVOKE notifications for tier products revoke access; other types get 200 and are ignored. A failed revoke gets 500, so Apple retries.
+- **Google:** daily job `store_refunds` (`services/store_refunds.go`) reads the Voided Purchases API (last 30 days) and revokes each token. It is off until `STORE_REFUNDS_ENABLED=true` (`STORE_REFUNDS_HOUR_UTC`, default 4).
+- A second security review (no forgery path found) led to fixes for refunds hitting the wrong period, NULL `expires_at`, one bad Google token blocking the job, and the webhook body and rate limits.
+- Tests: Revoke integration tests (8 cases); verifier tests with a generated chain (valid, other root, missing OID, tampered payload, wrong bundle); webhook handler tests (7 cases); voided-purchase paging and job tests. Migration 0064 ran up, down and up locally.
+- **Zaid:** set the App Store Server Notifications v2 URL (production and sandbox) to `https://<api host>/api/webhooks/apple/notifications`; give the Play service account "View financial data"; set `STORE_REFUNDS_ENABLED=true`.
+
+**Still open:**
+- Commit and open a PR (Zaid asks). Deploy order: migrations 0063 and 0064 → backend → run the cut-off script → refund the returned rows by hand → release the app.
+- Zaid must create the 8 products in App Store Connect (non-renewing) and Play Console (consumable) before release. The Google service account must be set on the server (`GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`).
+- **Refund reversed** (Apple `REFUND_REVERSED`) is only logged; support re-grants by hand.
+- No record of Apple notifications and no Refund History reconciliation: if all of Apple's retries fail, only the Sentry alert remains.
+- Payouts use the gross price (no store fee taken off).
+
+**Traps:**
+- Old app versions get 410 when subscribing and 400 when saving prices ("Please update the app").
+- iOS requires `autoConsume: true` (it asserts); Android must use `autoConsume: false` for tier products.
+- `CommunityDetail.tsx` (dashboard) and many app files are still over 500 lines.
+
+---
+
 ## 2026-11-28 (later) — Daily screening refresh + AI-drafted Pulse (PR #7 → main `f934e72`; DEPLOYED to staging and production)
 
 **Asked for:** Pulse "automate it and make it fetch daily news", then "go ahead all approved and agreed lets buld this". The plan and test list are in `docs/pulse/AUTODRAFT.md`. The Phase 3 public API product is NOT built: it waits on the EODHD redistribution licence and a Sharia sign-off.

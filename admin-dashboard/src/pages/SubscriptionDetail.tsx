@@ -23,8 +23,7 @@ import { fmtDateTime } from '../i18n/datefmt'
 
 // Mirrors the backend `models.ExpertSubscription` row (with denormalised
 // expertName + userName/email from the join). Step-22 detail-page wires
-// in here so admin can click a row from the list and see all the context
-// alongside the Accept/Reject controls.
+// in here so admin can click a row from the list and see all the context.
 type Subscription = {
   id: number
   userId: number
@@ -79,12 +78,10 @@ const STATUS_TKEY: Record<string, TranslationKey> = {
 /**
  * SubscriptionDetail — `/subscriptions/:id`.
  *
- * Drill-in from the Subscriptions list. Shows the full payment proof,
- * subscriber + expert context, and exposes Accept / Reject (with a
- * proper textarea for the rejection reason — replaces the old
- * `prompt()` flow).
- *
- * Auto-refreshes after every action so the page mirrors the DB.
+ * Drill-in from the Subscriptions list. Read-only: shows the full
+ * payment proof, subscriber + expert context and the audit timeline.
+ * Payments now come only from the App Store / Google Play, so legacy
+ * cash/FIB rows are kept here for history with no admin actions.
  */
 export default function SubscriptionDetail() {
   const { t, locale } = useI18n()
@@ -93,9 +90,6 @@ export default function SubscriptionDetail() {
   const [sub, setSub] = useState<Subscription | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [actionBusy, setActionBusy] = useState<string | null>(null)
-  const [showRejectForm, setShowRejectForm] = useState(false)
-  const [rejectReason, setRejectReason] = useState('')
 
   async function load() {
     if (!id) return
@@ -115,36 +109,6 @@ export default function SubscriptionDetail() {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
-
-  async function accept() {
-    if (!sub) return
-    setActionBusy('accept')
-    try {
-      await api.post(`/admin/subscriptions/${sub.id}/accept`)
-      await load()
-    } catch (e) {
-      setError((e as Error).message)
-    } finally {
-      setActionBusy(null)
-    }
-  }
-
-  async function reject() {
-    if (!sub) return
-    setActionBusy('reject')
-    try {
-      await api.post(`/admin/subscriptions/${sub.id}/reject`, {
-        reason: rejectReason.trim(),
-      })
-      setShowRejectForm(false)
-      setRejectReason('')
-      await load()
-    } catch (e) {
-      setError((e as Error).message)
-    } finally {
-      setActionBusy(null)
-    }
-  }
 
   if (loading && !sub) {
     return <p className="text-slate-500">{t('common.loading')}</p>
@@ -169,7 +133,6 @@ export default function SubscriptionDetail() {
 
   const dollars = (sub.priceCents / 100).toFixed(0)
   const tint = STATUS_TINT[sub.status] ?? STATUS_TINT.pending
-  const isPending = sub.status === 'pending'
 
   return (
     <div className="space-y-6">
@@ -403,73 +366,6 @@ export default function SubscriptionDetail() {
           )}
         </ul>
       </section>
-
-      {/* Action zone — only when pending */}
-      {isPending && (
-        <section>
-          <h2 className="text-sm font-semibold text-slate-300 mb-3">
-            {t('subscriptionDetail.action')}
-          </h2>
-          <div className="rounded-xl bg-white/[0.02] ring-1 ring-white/5 p-4 space-y-3">
-            {showRejectForm ? (
-              <div className="space-y-2">
-                <p className="text-[10px] uppercase tracking-wider text-slate-400">
-                  {t('subscriptionDetail.rejectReasonLabel')}
-                </p>
-                <textarea
-                  value={rejectReason}
-                  onChange={(e) => setRejectReason(e.target.value)}
-                  rows={3}
-                  placeholder={t('subscriptionDetail.rejectReasonPlaceholder')}
-                  className="w-full px-3 py-2 rounded-md bg-white/5 ring-1 ring-white/10 text-sm text-slate-200 resize-y"
-                />
-                <div className="flex items-center justify-end gap-2">
-                  <button
-                    onClick={() => {
-                      setShowRejectForm(false)
-                      setRejectReason('')
-                    }}
-                    className="px-3 py-2 rounded-md text-sm text-slate-300 hover:bg-white/5"
-                  >
-                    {t('common.cancel')}
-                  </button>
-                  <button
-                    onClick={reject}
-                    disabled={actionBusy === 'reject'}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-bold bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 ring-1 ring-rose-500/30 disabled:opacity-50"
-                  >
-                    <X className="w-4 h-4" />
-                    {actionBusy === 'reject'
-                      ? t('subscriptionDetail.rejecting')
-                      : t('subscriptionDetail.confirmReject')}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={accept}
-                  disabled={actionBusy !== null}
-                  className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-bold bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 ring-1 ring-emerald-500/30 disabled:opacity-50"
-                >
-                  <Check className="w-5 h-5" />
-                  {actionBusy === 'accept'
-                    ? t('subscriptionDetail.accepting')
-                    : t('subscriptionDetail.acceptPayment')}
-                </button>
-                <button
-                  onClick={() => setShowRejectForm(true)}
-                  disabled={actionBusy !== null}
-                  className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-bold bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 ring-1 ring-rose-500/30 disabled:opacity-50"
-                >
-                  <X className="w-5 h-5" />
-                  {t('subscriptionDetail.rejectEllipsis')}
-                </button>
-              </div>
-            )}
-          </div>
-        </section>
-      )}
     </div>
   )
 }

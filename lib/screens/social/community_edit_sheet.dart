@@ -8,7 +8,8 @@ import 'package:image_picker/image_picker.dart';
 import '../../config/api_config.dart';
 import '../../services/community_service.dart';
 import '../../services/upload_service.dart';
-import '../../utils/price_format.dart';
+import '../../models/expert_subscription.dart';
+import '../../services/iap_access.dart';
 import 'social_tokens.dart';
 import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 
@@ -68,10 +69,9 @@ class _CommunityEditSheetState extends State<CommunityEditSheet> {
   List<String> _tags = [];
   // Step-23 — paid community pricing.
   bool _isPaidMode = false;
-  final _monthlyCtl = TextEditingController(); // dollars (UI), cents (wire)
-  final _yearlyCtl = TextEditingController();
-  String _currency = 'usd';
-  static const _currencies = ['usd', 'iqd', 'sar', 'aed', 'eur', 'gbp'];
+  // Mig 0063 — a paid community sells at one fixed price tier (one store
+  // product per tier); members pay through the App Store / Google Play.
+  String _tier = 't2';
 
   // Predefined category list — fetched on mount.
   List<String> _categories = const [];
@@ -93,22 +93,7 @@ class _CommunityEditSheetState extends State<CommunityEditSheet> {
     _descCtl.dispose();
     _rulesCtl.dispose();
     _tagInputCtl.dispose();
-    _monthlyCtl.dispose();
-    _yearlyCtl.dispose();
     super.dispose();
-  }
-
-  // Step-23 — formatters between cents (wire) and dollars (UI).
-  String _centsToDollars(int cents) {
-    if (cents <= 0) return '';
-    final v = cents / 100;
-    return v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
-  }
-
-  int _dollarsToCents(String raw) {
-    final v = double.tryParse(raw.trim()) ?? 0;
-    if (v <= 0) return 0;
-    return (v * 100).round();
   }
 
   Future<void> _bootstrap() async {
@@ -140,9 +125,7 @@ class _CommunityEditSheetState extends State<CommunityEditSheet> {
       _categories = catRes.categories ?? const [];
       // Step-23 — prefill pricing.
       _isPaidMode = m.isPaid;
-      _monthlyCtl.text = _centsToDollars(m.joinPriceMonthlyCents);
-      _yearlyCtl.text = _centsToDollars(m.joinPriceYearlyCents);
-      _currency = m.priceCurrency.isEmpty ? 'usd' : m.priceCurrency;
+      if (AccessTiers.isTier(m.priceTier)) _tier = m.priceTier!;
       _loading = false;
     });
   }
@@ -227,11 +210,6 @@ class _CommunityEditSheetState extends State<CommunityEditSheet> {
       _saving = true;
       _error = null;
     });
-    // Step-23 — pricing payload. Free mode forces both prices to 0;
-    // paid mode honours whatever the user typed (0 in either box is
-    // allowed — means "this plan disabled").
-    final monthlyCents = _isPaidMode ? _dollarsToCents(_monthlyCtl.text) : 0;
-    final yearlyCents = _isPaidMode ? _dollarsToCents(_yearlyCtl.text) : 0;
     final res = await CommunityService.update(
       widget.communityId,
       name: _nameCtl.text.trim().isEmpty ? null : _nameCtl.text.trim(),
@@ -243,9 +221,8 @@ class _CommunityEditSheetState extends State<CommunityEditSheet> {
       isPublic: _isPublic,
       category: _category,
       tags: _tags,
-      joinPriceMonthlyCents: monthlyCents,
-      joinPriceYearlyCents: yearlyCents,
-      priceCurrency: _currency,
+      // Empty tier = free community.
+      priceTier: _isPaidMode ? _tier : '',
     );
     if (!mounted) return;
     if (res.error != null) {
@@ -886,92 +863,17 @@ class _CommunityEditSheetState extends State<CommunityEditSheet> {
           ),
           if (_isPaidMode) ...[
             const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: _priceInput(
-                    palette,
-                    _monthlyCtl,
-                    label: 'communityEdit.monthly'.tr,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _priceInput(
-                    palette,
-                    _yearlyCtl,
-                    label: 'communityEdit.yearly'.tr,
-                  ),
-                ),
-              ],
-            ),
-            // Live "Save X%" preview — recomputes as the owner types
-            // either price. Hidden when the math doesn't apply (only
-            // one plan set, or yearly ≥ monthly×12). Subscribes via
-            // AnimatedBuilder + Listenable.merge so we don't have to
-            // wire two separate addListener calls.
-            AnimatedBuilder(
-              animation: Listenable.merge([_monthlyCtl, _yearlyCtl]),
-              builder: (_, __) {
-                final m = _dollarsToCents(_monthlyCtl.text);
-                final y = _dollarsToCents(_yearlyCtl.text);
-                final pct = PriceFormat.yearlySavingsPercent(m, y);
-                if (pct == null) return const SizedBox(height: 10);
-                return Padding(
-                  padding: const EdgeInsets.only(top: 10),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: SocialTokens.up.withValues(alpha: 0.13),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: SocialTokens.up.withValues(alpha: 0.40),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.savings_outlined,
-                          color: SocialTokens.up,
-                          size: 16,
-                        ),
-                        const SizedBox(width: 6),
-                        Flexible(
-                          child: Text(
-                            'communityEdit.yearlySavings'
-                                .trParams({'pct': '$pct'}),
-                            style: const TextStyle(
-                              color: SocialTokens.up,
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.2,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 10),
             Wrap(
               spacing: 6,
               runSpacing: 6,
               children: [
-                for (final cur in _currencies)
-                  _currencyChip(palette, cur),
+                for (final tier in AccessTiers.tiers) _tierChip(palette, tier),
               ],
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             Text(
-              'communityEdit.disablePlanHint'.tr,
-              style: TextStyle(
-                color: palette.textMuted,
-                fontSize: 11,
-              ),
+              'communityEdit.tierHint'.tr,
+              style: TextStyle(color: palette.textMuted, fontSize: 11),
             ),
           ],
         ],
@@ -979,70 +881,12 @@ class _CommunityEditSheetState extends State<CommunityEditSheet> {
     );
   }
 
-  Widget _priceInput(
-    SocialPalette palette,
-    TextEditingController ctl, {
-    required String label,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            color: palette.textMuted,
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.4,
-          ),
-        ),
-        const SizedBox(height: 4),
-        TextField(
-          controller: ctl,
-          keyboardType:
-              const TextInputType.numberWithOptions(decimal: true),
-          style: TextStyle(color: palette.textPrimary, fontSize: 14),
-          decoration: InputDecoration(
-            hintText: '0',
-            prefixIcon: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              child: Icon(
-                Icons.attach_money_rounded,
-                color: palette.textMuted,
-                size: 16,
-              ),
-            ),
-            prefixIconConstraints:
-                const BoxConstraints(minWidth: 0, minHeight: 0),
-            filled: true,
-            fillColor: palette.surface,
-            contentPadding: const EdgeInsets.symmetric(
-                horizontal: 4, vertical: 10),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: palette.border),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: palette.border),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide:
-                  const BorderSide(color: SocialTokens.gold, width: 1.4),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _currencyChip(SocialPalette palette, String code) {
-    final selected = _currency == code;
+  Widget _tierChip(SocialPalette palette, String tier) {
+    final selected = _tier == tier;
     return GestureDetector(
       onTap: () {
         HapticFeedback.selectionClick();
-        setState(() => _currency = code);
+        setState(() => _tier = tier);
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 140),
@@ -1058,7 +902,10 @@ class _CommunityEditSheetState extends State<CommunityEditSheet> {
           ),
         ),
         child: Text(
-          code.toUpperCase(),
+          'communityEdit.tierLabel'.trParams({
+            'monthly': AccessTiers.usdLabel(tier, SubPlan.monthly),
+            'yearly': AccessTiers.usdLabel(tier, SubPlan.yearly),
+          }),
           style: TextStyle(
             color: selected ? SocialTokens.gold : palette.textPrimary,
             fontSize: 11.5,

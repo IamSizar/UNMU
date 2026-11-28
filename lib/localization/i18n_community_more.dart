@@ -44,12 +44,11 @@ const Map<String, String> communityMoreEn = {
   'communityEdit.paidTitle': 'Paid community',
   'communityEdit.freeTitle': 'Free community',
   'communityEdit.paidDesc':
-      'Users pay monthly or yearly — admin verifies the payment.',
+      'Members pay monthly or yearly through the App Store or Google Play.',
   'communityEdit.freeDesc': 'One-tap join, no payment required.',
-  'communityEdit.monthly': 'Monthly',
-  'communityEdit.yearly': 'Yearly',
-  'communityEdit.yearlySavings': 'Subscribers save @pct% on yearly',
-  'communityEdit.disablePlanHint': 'Set one of the two to 0 to disable that plan.',
+  'communityEdit.tierLabel': '@monthly/mo · @yearly/yr',
+  'communityEdit.tierHint':
+      'Pick a price. The store shows it in each member\'s local currency.',
   'communityEdit.saveChanges': 'Save changes',
 
   // ---- communityDiscovery. (community_discovery_screen.dart) ----
@@ -66,8 +65,6 @@ const Map<String, String> communityMoreEn = {
 
   // ---- communityPreview. (community_preview_screen.dart) ----
   'communityPreview.couldNotJoin': 'Could not join.',
-  'communityPreview.paymentSubmitted':
-      'Payment submitted. You\'ll get access once admin verifies.',
   'communityPreview.couldNotLoad': 'Could not load preview.',
   'communityPreview.about': 'About',
   'communityPreview.experts': 'Experts',
@@ -158,12 +155,10 @@ const Map<String, String> communityMoreAr = {
   'communityEdit.paidTitle': 'مجتمع مدفوع',
   'communityEdit.freeTitle': 'مجتمع مجاني',
   'communityEdit.paidDesc':
-      'يدفع المستخدمون شهريًا أو سنويًا — يعتمد المسؤول الدفع.',
+      'يدفع الأعضاء شهريًا أو سنويًا عبر App Store أو Google Play.',
   'communityEdit.freeDesc': 'انضمام بنقرة واحدة بدون دفع.',
-  'communityEdit.monthly': 'شهري',
-  'communityEdit.yearly': 'سنوي',
-  'communityEdit.yearlySavings': 'يوفّر المشتركون @pct٪ بالخطة السنوية',
-  'communityEdit.disablePlanHint': 'اضبط أحد الحقلين على 0 لتعطيل تلك الخطة.',
+  'communityEdit.tierLabel': '@monthly/شهر · @yearly/سنة',
+  'communityEdit.tierHint': 'اختر سعرًا. يعرضه المتجر بالعملة المحلية لكل عضو.',
   'communityEdit.saveChanges': 'حفظ التغييرات',
 
   // ---- communityDiscovery. ----
@@ -180,8 +175,6 @@ const Map<String, String> communityMoreAr = {
 
   // ---- communityPreview. ----
   'communityPreview.couldNotJoin': 'تعذّر الانضمام.',
-  'communityPreview.paymentSubmitted':
-      'تم استلام الدفع. سيتم منحك الوصول بعد تحقق الإدارة.',
   'communityPreview.couldNotLoad': 'تعذّر تحميل المعاينة.',
   'communityPreview.about': 'الوصف',
   'communityPreview.experts': 'الخبراء',

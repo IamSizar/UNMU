@@ -125,58 +125,35 @@ const Map<String, String> subscriptionsEn = {
       '@total of your subscriptions expire soon (next: @name in @count '
           'day@plural). You can subscribe again once each expires.',
 
-  // ── Subscribe-to-expert modal (subscribe_modal.dart) ──
+  // ── Store purchase sheet (store_purchase_sheet.dart), used for experts
+  // and paid communities. Payment is App Store / Google Play only. ──
   'subscribe.title': 'Subscribe to @name',
-  'subscribe.introIos':
-      'Subscribe via the App Store for an instant activation, or pay the '
-          'admin in cash / via FIB and they\'ll confirm your subscription.',
-  'subscribe.introOther':
-      'Pay the admin in cash or via FIB transfer. Once they confirm your '
-          'payment, your subscription becomes active and you\'ll see all '
-          'locked posts.',
+  'subscribe.intro':
+      'Pay securely through @store. Access starts as soon as the payment '
+          'goes through.',
   'subscribe.choosePlan': 'Choose a plan',
-  'subscribe.paymentMethod': 'Payment method',
   'subscribe.planMonthly': 'Monthly',
   'subscribe.planYearly': 'Yearly',
-  'subscribe.planYearlyTagline':
-      '@yearly once a year — works out to @monthly/mo',
-  'subscribe.planMonthlyTagline': '@monthly every 30 days',
-  'subscribe.saveBadge': 'SAVE @pct%',
-  // Payment method tile labels + sub-labels
-  'subscribe.method.cashTitle': 'Cash',
-  'subscribe.method.cashSub': 'Pay admin in person',
-  'subscribe.method.fibSub': 'First Iraqi Bank transfer',
-  'subscribe.method.appleSub': 'Charge through App Store — activates instantly',
-  'subscribe.method.googleSub': 'Charge through Google Play',
-  // FIB reference + note inputs
-  'subscribe.fibRefLabel': 'FIB transaction reference (optional)',
-  'subscribe.fibRefHint': 'Helps the admin match your payment',
-  'subscribe.receiptLabel': 'Cash receipt photo (optional)',
-  'subscribe.noteLabel': 'Note for the admin (optional)',
-  'subscribe.noteHint': 'e.g. paid this morning at the office',
-  'subscribe.promoLabel': 'Promo code (optional)',
-  'subscribe.promoHint': 'Enter a code',
-  'subscribe.promoApply': 'Apply',
-  // Receipt picker tile
-  'subscribe.receipt.addTitle': 'Add a photo of your receipt',
-  'subscribe.receipt.addSub': 'Helps the admin verify cash payments',
-  'subscribe.receipt.uploadedTitle': 'Receipt uploaded',
-  'subscribe.receipt.uploadedSub': 'Tap to replace',
-  // Submit button + footnote
-  'subscribe.submit': 'Submit · @price',
-  'subscribe.footnoteIap':
-      'Charged immediately through the App Store. Cancel anytime from iOS '
-          'Settings → Subscriptions.',
-  'subscribe.footnoteAdmin':
-      'You won\'t be charged automatically. Pay the admin and they\'ll mark '
-          'this active.',
+  'subscribe.planMonthlyTagline': '30 days of access',
+  'subscribe.planYearlyTagline': '365 days of access',
+  'subscribe.buy': 'Subscribe · @price',
+  'subscribe.footnote':
+      'A one-time payment. It does not renew by itself: subscribe again to '
+          'extend. New time is added to any time you have left.',
+  'subscribe.storeApple': 'the App Store',
+  'subscribe.storeGoogle': 'Google Play',
+  'subscribe.retry': 'Try again',
+  'subscribe.success': 'You\'re subscribed.',
   // Errors
-  'subscribe.error.submitFailed': 'Failed to submit',
   'subscribe.error.iapUnavailable':
       'In-app purchases are unavailable on this device.',
   'subscribe.error.planNotSetUp':
-      'This plan isn\'t set up in the App Store yet. Please contact support.',
+      'This plan isn\'t available in the store yet. Please contact support.',
   'subscribe.error.purchaseFailed': 'Purchase failed.',
+  'subscribe.error.noPrice': 'The price for this subscription isn\'t set yet.',
+  'subscribe.error.previousOpen':
+      'An earlier purchase of this plan is still being completed. Reopen the '
+          'app in a minute and try again.',
   'subscribe.error.subDidNotShow':
       'Purchase succeeded but the subscription didn\'t show up — pull to '
           'refresh.',
@@ -282,55 +259,30 @@ const Map<String, String> subscriptionsAr = {
       'سينتهي @total من اشتراكاتك قريباً (التالي: @name خلال @count يوم). '
           'يمكنك الاشتراك مجدداً بمجرد انتهاء كل منها.',
 
-  // ── Subscribe-to-expert modal (subscribe_modal.dart) ──
+  // ── Store purchase sheet (store_purchase_sheet.dart) ──
   'subscribe.title': 'الاشتراك مع @name',
-  'subscribe.introIos':
-      'اشترك عبر App Store للتفعيل الفوري، أو ادفع للمشرف نقداً / عبر FIB '
-          'وسيؤكد اشتراكك.',
-  'subscribe.introOther':
-      'ادفع للمشرف نقداً أو عبر تحويل FIB. بمجرد تأكيد دفعتك، يصبح اشتراكك '
-          'نشطاً وستشاهد جميع المنشورات المقفلة.',
+  'subscribe.intro': 'ادفع بأمان عبر @store. يبدأ وصولك فور إتمام الدفع.',
   'subscribe.choosePlan': 'اختر خطة',
-  'subscribe.paymentMethod': 'طريقة الدفع',
   'subscribe.planMonthly': 'شهري',
   'subscribe.planYearly': 'سنوي',
-  'subscribe.planYearlyTagline':
-      '@yearly مرة واحدة سنوياً — أي ما يعادل @monthly/شهرياً',
-  'subscribe.planMonthlyTagline': '@monthly كل 30 يوماً',
-  'subscribe.saveBadge': 'وفّر @pct%',
-  // Payment method tile labels + sub-labels
-  'subscribe.method.cashTitle': 'نقداً',
-  'subscribe.method.cashSub': 'ادفع للمشرف شخصياً',
-  'subscribe.method.fibSub': 'تحويل عبر بنك العراق الأول',
-  'subscribe.method.appleSub': 'الدفع عبر App Store — يُفعّل فوراً',
-  'subscribe.method.googleSub': 'الدفع عبر Google Play',
-  // FIB reference + note inputs
-  'subscribe.fibRefLabel': 'مرجع معاملة FIB (اختياري)',
-  'subscribe.fibRefHint': 'يساعد المشرف على مطابقة دفعتك',
-  'subscribe.receiptLabel': 'صورة إيصال الدفع النقدي (اختياري)',
-  'subscribe.noteLabel': 'ملاحظة للمشرف (اختياري)',
-  'subscribe.noteHint': 'مثال: دفعت هذا الصباح في المكتب',
-  'subscribe.promoLabel': 'رمز ترويجي (اختياري)',
-  'subscribe.promoHint': 'أدخل الرمز',
-  'subscribe.promoApply': 'تطبيق',
-  // Receipt picker tile
-  'subscribe.receipt.addTitle': 'أضف صورة لإيصالك',
-  'subscribe.receipt.addSub': 'يساعد المشرف على التحقق من المدفوعات النقدية',
-  'subscribe.receipt.uploadedTitle': 'تم رفع الإيصال',
-  'subscribe.receipt.uploadedSub': 'اضغط للاستبدال',
-  // Submit button + footnote
-  'subscribe.submit': 'إرسال · @price',
-  'subscribe.footnoteIap':
-      'يُخصم المبلغ فوراً عبر App Store. يمكنك الإلغاء في أي وقت من إعدادات '
-          'iOS ← الاشتراكات.',
-  'subscribe.footnoteAdmin':
-      'لن يتم خصم أي مبلغ تلقائياً. ادفع للمشرف وسيقوم بتفعيل هذا الاشتراك.',
+  'subscribe.planMonthlyTagline': 'وصول لمدة 30 يوماً',
+  'subscribe.planYearlyTagline': 'وصول لمدة 365 يوماً',
+  'subscribe.buy': 'اشترك · @price',
+  'subscribe.footnote':
+      'دفعة لمرة واحدة ولا تتجدد تلقائياً: اشترك مجدداً للتمديد. تُضاف المدة '
+          'الجديدة إلى ما تبقّى من اشتراكك.',
+  'subscribe.storeApple': 'App Store',
+  'subscribe.storeGoogle': 'Google Play',
+  'subscribe.retry': 'حاول مجدداً',
+  'subscribe.success': 'تم اشتراكك.',
   // Errors
-  'subscribe.error.submitFailed': 'فشل الإرسال',
   'subscribe.error.iapUnavailable': 'عمليات الشراء داخل التطبيق غير متاحة على هذا الجهاز.',
   'subscribe.error.planNotSetUp':
-      'لم يتم إعداد هذه الخطة في App Store بعد. يرجى التواصل مع الدعم.',
+      'هذه الخطة غير متاحة في المتجر بعد. يرجى التواصل مع الدعم.',
   'subscribe.error.purchaseFailed': 'فشل الشراء.',
+  'subscribe.error.noPrice': 'لم يتم تحديد سعر هذا الاشتراك بعد.',
+  'subscribe.error.previousOpen':
+      'لا تزال عملية شراء سابقة لهذه الخطة قيد الإتمام. أعد فتح التطبيق بعد دقيقة وحاول مجدداً.',
   'subscribe.error.subDidNotShow':
       'نجح الشراء لكن الاشتراك لم يظهر — اسحب للأسفل للتحديث.',
 };

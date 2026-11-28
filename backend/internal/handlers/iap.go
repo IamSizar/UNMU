@@ -26,6 +26,8 @@ type IAPHandler struct {
 	// Google Play (wired by SetGooglePlay; nil → 503).
 	googleVerifier *services.GooglePlayVerifier
 	googleRepo     *repositories.GooglePlayPurchaseRepository
+	// Tier products for expert/community access (SetAccessGrants; nil → 503).
+	grantRepo *repositories.StoreAccessGrantRepository
 }
 
 func NewIAPHandler(

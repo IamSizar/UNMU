@@ -25,7 +25,7 @@ const (
 
 // dailyJobOrder is the order jobs run in on one tick: the screening
 // refresh first, so the drafts read today's verdicts.
-var dailyJobOrder = []string{JobScreeningRefresh, JobPulseAutodraft}
+var dailyJobOrder = []string{JobScreeningRefresh, JobPulseAutodraft, JobStoreRefunds}
 
 // ErrJobAlreadyRunning is returned by RunNow while a run is in progress.
 var ErrJobAlreadyRunning = errors.New("job is already running")

@@ -2466,10 +2466,20 @@ func (h *SocialHandler) UpdateCommunity(c *gin.Context) {
 		JoinPriceMonthlyCents *int    `json:"joinPriceMonthlyCents"`
 		JoinPriceYearlyCents  *int    `json:"joinPriceYearlyCents"`
 		PriceCurrency         *string `json:"priceCurrency"`
+		PriceTier             *string `json:"priceTier"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
 		return
+	}
+	pricing, msg := communityTierPricing(body.PriceTier, body.JoinPriceMonthlyCents, body.JoinPriceYearlyCents)
+	if msg != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+		return
+	}
+	body.JoinPriceMonthlyCents, body.JoinPriceYearlyCents = pricing.Monthly, pricing.Yearly
+	if pricing.Currency != nil {
+		body.PriceCurrency = pricing.Currency
 	}
 
 	upd := repositories.CommunityMetadataUpdate{}
@@ -2573,6 +2583,7 @@ func (h *SocialHandler) UpdateCommunity(c *gin.Context) {
 		}
 		upd.PriceCurrency = &s
 	}
+	upd.PriceTier = pricing.Tier
 
 	// Step-23 follow-up — track whether this PATCH flips free → paid
 	// so we can broadcast a member-changed event after the kick. The
@@ -2762,8 +2773,7 @@ var communityCategories = []string{
 // for $15.00/mo. We validate non-negative + an upper bound so a typo
 // can't price an expert into the millions.
 type AdminSetExpertPricingRequest struct {
-	MonthlyCents int `json:"monthlyCents" binding:"min=0,max=1000000"`
-	YearlyCents  int `json:"yearlyCents"  binding:"min=0,max=10000000"`
+	PriceTier string `json:"priceTier" binding:"required"`
 }
 
 // AdminSetExpertPricing — PATCH /api/admin/experts/:expertId/pricing.
@@ -2797,18 +2807,15 @@ func (h *SocialHandler) AdminSetExpertPricing(c *gin.Context) {
 		return
 	}
 
-	// Defense in depth — the repo also rejects negatives, but we
-	// duplicate the check here so the API returns a friendly 400
-	// rather than a 500 from the DB layer.
-	if req.MonthlyCents < 0 || req.YearlyCents < 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "prices must be non-negative"})
+	if !models.IsPriceTier(req.PriceTier) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "priceTier must be t1, t2, t3 or t4"})
 		return
 	}
+	newMonthly := models.TierPriceCents(req.PriceTier, models.SubPlanMonthly)
+	newYearly := models.TierPriceCents(req.PriceTier, models.SubPlanYearly)
 
-	if err := h.social.SetExpertPricing(
-		expertID, req.MonthlyCents, req.YearlyCents, "usd",
-	); err != nil {
-		log.Printf("[admin pricing] SetExpertPricing(%s): %v", expertID, err)
+	if err := h.social.SetExpertPriceTier(expertID, req.PriceTier); err != nil {
+		log.Printf("[admin pricing] SetExpertPriceTier(%s): %v", expertID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update pricing"})
 		return
 	}
@@ -2833,16 +2840,18 @@ func (h *SocialHandler) AdminSetExpertPricing(c *gin.Context) {
 			fmt.Sprintf(
 				"Updated pricing for %s: $%.2f/mo, $%.2f/yr",
 				before.Name,
-				float64(req.MonthlyCents)/100,
-				float64(req.YearlyCents)/100,
+				float64(newMonthly)/100,
+				float64(newYearly)/100,
 			),
 			map[string]any{
 				"expertId":         expertID,
 				"expertName":       before.Name,
 				"oldMonthlyCents":  before.MonthlyPriceCents,
 				"oldYearlyCents":   before.YearlyPriceCents,
-				"newMonthlyCents":  req.MonthlyCents,
-				"newYearlyCents":   req.YearlyCents,
+				"newMonthlyCents":  newMonthly,
+				"newYearlyCents":   newYearly,
+				"oldPriceTier":     before.PriceTier,
+				"newPriceTier":     req.PriceTier,
 				"currency":         "usd",
 			},
 		)

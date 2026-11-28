@@ -173,3 +173,32 @@ func TestVerifyReceipt_NilReceiver(t *testing.T) {
 		t.Fatal("expected error from nil verifier, got nil")
 	}
 }
+
+// TestVerifyReceiptTransaction_PicksExactTransaction — tier products are
+// bought many times; the named transaction wins over a newer one, and an
+// unknown transaction id is refused.
+func TestVerifyReceiptTransaction_PicksExactTransaction(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status": 0, "environment": "Production",
+			"receipt": map[string]any{"in_app": []map[string]any{
+				{"transaction_id": "T1", "original_transaction_id": "T1", "product_id": "com.unmu.access.t2.month", "purchase_date_ms": "1729200000000"},
+				{"transaction_id": "T2", "original_transaction_id": "T2", "product_id": "com.unmu.access.t2.month", "purchase_date_ms": "1729300000000"},
+			}},
+		})
+	}))
+	defer srv.Close()
+	v := &AppleIAPVerifier{sharedSecret: "x", prodURL: srv.URL, sandboxURL: srv.URL,
+		httpClient: &http.Client{Timeout: 5 * time.Second}}
+	ctx := context.Background()
+	txn, err := v.VerifyReceiptTransaction(ctx, "r", "com.unmu.access.t2.month", "T1")
+	if err != nil || txn.TransactionID != "T1" || txn.ExpiresDate != nil {
+		t.Fatalf("want T1 without expiry, got %+v %v", txn, err)
+	}
+	if txn, _ = v.VerifyReceipt(ctx, "r", "com.unmu.access.t2.month"); txn.TransactionID != "T2" {
+		t.Fatalf("latest should be T2, got %s", txn.TransactionID)
+	}
+	if _, err := v.VerifyReceiptTransaction(ctx, "r", "com.unmu.access.t2.month", "T9"); err == nil {
+		t.Fatal("unknown transaction must be refused")
+	}
+}

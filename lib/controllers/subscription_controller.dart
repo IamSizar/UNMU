@@ -103,39 +103,6 @@ class SubscriptionController extends GetxController {
     }
   }
 
-  /// User taps Subscribe in the modal.
-  Future<({ExpertSubscription? sub, String? error})> subscribe({
-    required String expertId,
-    required SubPlan plan,
-    required PaymentMethod method,
-    String? paymentRef,
-    String? receiptUrl,
-    String? note,
-    String? promoCode,
-  }) async {
-    if (_busy.contains(expertId)) {
-      return (sub: null, error: 'Please wait — request in progress');
-    }
-    _busy.add(expertId);
-    try {
-      final result = await ExpertSubscriptionService.subscribe(
-        expertId: expertId,
-        plan: plan,
-        method: method,
-        paymentRef: paymentRef,
-        receiptUrl: receiptUrl,
-        note: note,
-        promoCode: promoCode,
-      );
-      if (result.sub != null) {
-        _byExpert[expertId] = result.sub;
-      }
-      return result;
-    } finally {
-      _busy.remove(expertId);
-    }
-  }
-
   /// User taps Cancel from the expert profile or My Subs screen.
   Future<({ExpertSubscription? sub, String? error})> cancel(
     int id, {

@@ -74,18 +74,13 @@ export const communitiesEn = {
   'communityDetail.maxTags': 'Max 10 tags per community.',
   'communityDetail.tagTooLong': 'Tags must be 30 chars or less.',
   'communityDetail.pricing': 'Pricing',
-  'communityDetail.paidCommunity': 'Paid community',
   'communityDetail.freeCommunity': 'Free community',
-  'communityDetail.monthly': 'Monthly',
-  'communityDetail.yearly': 'Yearly',
-  'communityDetail.currency': 'Currency',
-  'communityDetail.saveYearlyHint': 'Subscribers save {pct}% on yearly',
   'communityDetail.pricingNote':
-    'Set one of the two to 0 to disable that plan. Existing subscribers keep access until expiry on price changes.',
+    'Paid tiers are sold only through the App Store / Google Play (USD). Existing subscribers keep access until expiry on price changes.',
   'communityDetail.flipPaidConfirm':
-    'Flip "{name}" to a paid community?\n\nThis removes ALL {count} current members except the owner.\nThey\'ll need to subscribe (and admin verify their payment) to regain access.\n\nContinue?',
+    'Flip "{name}" to a paid community?\n\nThis removes ALL {count} current members except the owner.\nThey\'ll need to subscribe through the App Store or Google Play to regain access.\n\nContinue?',
   'communityDetail.flipPaidConfirmOne':
-    'Flip "{name}" to a paid community?\n\nThis removes ALL {count} current member except the owner.\nThey\'ll need to subscribe (and admin verify their payment) to regain access.\n\nContinue?',
+    'Flip "{name}" to a paid community?\n\nThis removes ALL {count} current member except the owner.\nThey\'ll need to subscribe through the App Store or Google Play to regain access.\n\nContinue?',
   'communityDetail.saved': 'Saved.',
   'communityDetail.saving': 'Saving…',
   'communityDetail.saveChanges': 'Save changes',
@@ -158,7 +153,7 @@ export const communitiesEn = {
   'communitySubs.title': 'Community subscriptions',
   'communitySubs.pendingHeadline': '{count} pending',
   'communitySubs.subtitleSuffix':
-    ' · users pay admin (cash / FIB) for paid communities; admin verifies and accepts.',
+    ' · payments now come only from the App Store / Google Play; old cash/FIB rows are shown for history.',
   'communitySubs.headline': '{count} {status} subscriptions',
   'communitySubs.headlineOne': '{count} {status} subscription',
   'communitySubs.statusPending': 'Pending',
@@ -177,8 +172,6 @@ export const communitiesEn = {
   'communitySubs.noMatch': 'No {status} subscriptions match "{query}".',
   'communitySubs.noneStatus': 'No {status} subscriptions.',
   'communitySubs.loadMore': 'Load more',
-  'communitySubs.acceptFailed': 'Accept failed',
-  'communitySubs.rejectFailed': 'Reject failed',
   'communitySubs.joining': 'Joining',
   'communitySubs.plan': 'Plan',
   'communitySubs.planMonthly': 'Monthly',
@@ -187,11 +180,6 @@ export const communitiesEn = {
   'communitySubs.viewReceipt': 'View receipt',
   'communitySubs.reason': 'Reason:',
   'communitySubs.expires': 'Expires {date}',
-  'communitySubs.rejectionReasonOptional':
-    'Rejection reason (optional, shown to user)',
-  'communitySubs.rejectPlaceholderList': "e.g. Couldn't verify the receipt.",
-  'communitySubs.confirmReject': 'Confirm reject',
-  'communitySubs.acceptPayment': 'Accept payment',
   'communitySubs.reject': 'Reject',
   // relative time
   'communitySubs.secondsAgo': '{n}s ago',
@@ -219,18 +207,6 @@ export const communitiesEn = {
   'communitySubs.rejected': 'Rejected',
   'communitySubs.cancelled': 'Cancelled',
   'communitySubs.expiresLabel': 'Expires',
-  'communitySubs.action': 'Action',
-  'communitySubs.rejectionReasonOptionalDetail':
-    'Rejection reason (optional, shown to user)',
-  'communitySubs.rejectPlaceholderDetail':
-    "e.g. Couldn't verify your payment reference.",
-  'communitySubs.rejecting': 'Rejecting…',
-  'communitySubs.accepting': 'Accepting…',
-  'communitySubs.rejectEllipsis': 'Reject…',
-  'communitySubs.acceptingNoteYearly':
-    'Accepting flips the subscription to active, creates the membership row, and grants 365-day access.',
-  'communitySubs.acceptingNoteMonthly':
-    'Accepting flips the subscription to active, creates the membership row, and grants 30-day access.',
   'communitySubs.otherSubs': 'Other community subscriptions from this user',
   'communitySubs.noOtherSubs':
     'This user has no other paid community subscriptions.',
@@ -308,18 +284,13 @@ export const communitiesAr = {
   'communityDetail.maxTags': 'الحد الأقصى 10 وسوم لكل مجتمع.',
   'communityDetail.tagTooLong': 'يجب ألا تتجاوز الوسوم 30 حرفًا.',
   'communityDetail.pricing': 'التسعير',
-  'communityDetail.paidCommunity': 'مجتمع مدفوع',
   'communityDetail.freeCommunity': 'مجتمع مجاني',
-  'communityDetail.monthly': 'شهري',
-  'communityDetail.yearly': 'سنوي',
-  'communityDetail.currency': 'العملة',
-  'communityDetail.saveYearlyHint': 'يوفر المشتركون {pct}% على الاشتراك السنوي',
   'communityDetail.pricingNote':
-    'اضبط أحد الخيارين على 0 لتعطيل تلك الخطة. يحتفظ المشتركون الحاليون بالوصول حتى انتهاء الصلاحية عند تغيير الأسعار.',
+    'تُباع الفئات المدفوعة عبر App Store / Google Play فقط (بالدولار الأمريكي). يحتفظ المشتركون الحاليون بالوصول حتى انتهاء الصلاحية عند تغيير الأسعار.',
   'communityDetail.flipPaidConfirm':
-    'تحويل "{name}" إلى مجتمع مدفوع؟\n\nسيؤدي هذا إلى إزالة جميع الأعضاء الحاليين البالغ عددهم {count} باستثناء المالك.\nسيحتاجون إلى الاشتراك (والتحقق من دفعهم من قبل المسؤول) لاستعادة الوصول.\n\nهل تريد المتابعة؟',
+    'تحويل "{name}" إلى مجتمع مدفوع؟\n\nسيؤدي هذا إلى إزالة جميع الأعضاء الحاليين البالغ عددهم {count} باستثناء المالك.\nسيحتاجون إلى الاشتراك عبر App Store أو Google Play لاستعادة الوصول.\n\nهل تريد المتابعة؟',
   'communityDetail.flipPaidConfirmOne':
-    'تحويل "{name}" إلى مجتمع مدفوع؟\n\nسيؤدي هذا إلى إزالة جميع الأعضاء الحاليين البالغ عددهم {count} باستثناء المالك.\nسيحتاجون إلى الاشتراك (والتحقق من دفعهم من قبل المسؤول) لاستعادة الوصول.\n\nهل تريد المتابعة؟',
+    'تحويل "{name}" إلى مجتمع مدفوع؟\n\nسيؤدي هذا إلى إزالة جميع الأعضاء الحاليين البالغ عددهم {count} باستثناء المالك.\nسيحتاجون إلى الاشتراك عبر App Store أو Google Play لاستعادة الوصول.\n\nهل تريد المتابعة؟',
   'communityDetail.saved': 'تم الحفظ.',
   'communityDetail.saving': 'جارٍ الحفظ…',
   'communityDetail.saveChanges': 'حفظ التغييرات',
@@ -391,7 +362,7 @@ export const communitiesAr = {
   'communitySubs.title': 'اشتراكات المجتمعات',
   'communitySubs.pendingHeadline': '{count} قيد الانتظار',
   'communitySubs.subtitleSuffix':
-    ' · يدفع المستخدمون للمسؤول (نقدًا / FIB) للمجتمعات المدفوعة؛ يتحقق المسؤول ويقبل.',
+    ' · تأتي المدفوعات الآن من App Store / Google Play فقط؛ تُعرض صفوف النقد/FIB القديمة للسجل.',
   'communitySubs.headline': '{count} اشتراك {status}',
   'communitySubs.headlineOne': '{count} اشتراك {status}',
   'communitySubs.statusPending': 'قيد الانتظار',
@@ -410,8 +381,6 @@ export const communitiesAr = {
   'communitySubs.noMatch': 'لا توجد اشتراكات {status} تطابق "{query}".',
   'communitySubs.noneStatus': 'لا توجد اشتراكات {status}.',
   'communitySubs.loadMore': 'تحميل المزيد',
-  'communitySubs.acceptFailed': 'فشل القبول',
-  'communitySubs.rejectFailed': 'فشل الرفض',
   'communitySubs.joining': 'الانضمام إلى',
   'communitySubs.plan': 'الخطة',
   'communitySubs.planMonthly': 'شهري',
@@ -420,10 +389,6 @@ export const communitiesAr = {
   'communitySubs.viewReceipt': 'عرض الإيصال',
   'communitySubs.reason': 'السبب:',
   'communitySubs.expires': 'ينتهي {date}',
-  'communitySubs.rejectionReasonOptional': 'سبب الرفض (اختياري، يظهر للمستخدم)',
-  'communitySubs.rejectPlaceholderList': 'مثال: تعذّر التحقق من الإيصال.',
-  'communitySubs.confirmReject': 'تأكيد الرفض',
-  'communitySubs.acceptPayment': 'قبول الدفع',
   'communitySubs.reject': 'رفض',
   // relative time
   'communitySubs.secondsAgo': 'منذ {n} ثانية',
@@ -451,17 +416,6 @@ export const communitiesAr = {
   'communitySubs.rejected': 'مرفوض',
   'communitySubs.cancelled': 'ملغى',
   'communitySubs.expiresLabel': 'ينتهي',
-  'communitySubs.action': 'إجراء',
-  'communitySubs.rejectionReasonOptionalDetail':
-    'سبب الرفض (اختياري، يظهر للمستخدم)',
-  'communitySubs.rejectPlaceholderDetail': 'مثال: تعذّر التحقق من مرجع الدفع.',
-  'communitySubs.rejecting': 'جارٍ الرفض…',
-  'communitySubs.accepting': 'جارٍ القبول…',
-  'communitySubs.rejectEllipsis': 'رفض…',
-  'communitySubs.acceptingNoteYearly':
-    'القبول يحوّل الاشتراك إلى نشط، وينشئ صف العضوية، ويمنح وصولاً لمدة 365 يومًا.',
-  'communitySubs.acceptingNoteMonthly':
-    'القبول يحوّل الاشتراك إلى نشط، وينشئ صف العضوية، ويمنح وصولاً لمدة 30 يومًا.',
   'communitySubs.otherSubs': 'اشتراكات المجتمعات الأخرى لهذا المستخدم',
   'communitySubs.noOtherSubs':
     'ليس لدى هذا المستخدم اشتراكات مدفوعة أخرى في المجتمعات.',

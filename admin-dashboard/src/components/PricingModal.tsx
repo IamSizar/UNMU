@@ -1,24 +1,26 @@
 /**
- * PricingModal — admin edits monthly + yearly price for one expert.
+ * PricingModal — admin picks the price tier for one expert.
  *
  * Opens from the Experts page when the admin clicks "Edit pricing"
- * on a card. Two number inputs (USD), live preview of the saved
- * format, save button, cancel button.
+ * on a card. Subscriptions are sold only through the App Store /
+ * Google Play, so the admin chooses one of the fixed tiers
+ * (see ../api/priceTiers) instead of typing amounts.
  *
- * Calls PATCH /api/admin/experts/:expertId/pricing with cents. The
- * backend writes an EXPERT_PRICING_UPDATED audit row with before/
- * after metadata for the audit-log feed.
- *
- * Validation:
- *   - monthly $0 .. $1,000   (cents 0 .. 100,000)
- *   - yearly  $0 .. $10,000  (cents 0 .. 1,000,000)
- * Negative values rejected. Empty fields treated as 0.
+ * Calls PATCH /api/admin/experts/:expertId/pricing with {priceTier}.
+ * The backend sets the cents for the tier and writes an
+ * EXPERT_PRICING_UPDATED audit row for the audit-log feed.
  */
 
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Loader2, Check } from 'lucide-react'
 import { api } from '../api/client'
+import {
+  PRICE_TIERS,
+  formatTierLabel,
+  isPriceTier,
+  type PriceTier,
+} from '../api/priceTiers'
 import { DUR, EASE } from '../ui/motion'
 import { useI18n } from '../i18n/I18nContext'
 
@@ -28,6 +30,7 @@ export type PricingExpert = {
   monthlyPriceCents: number
   yearlyPriceCents: number
   priceCurrency: string
+  priceTier: string
 }
 
 type Props = {
@@ -39,18 +42,15 @@ type Props = {
 
 export default function PricingModal({ expert, onClose, onSaved }: Props) {
   const { t } = useI18n()
-  // Local state for the inputs — strings so empty / partial values
-  // (during typing) don't snap to 0.
-  const [monthly, setMonthly] = useState('')
-  const [yearly, setYearly] = useState('')
+  // Selected tier; null only if the expert row carries an unknown tier.
+  const [tier, setTier] = useState<PriceTier | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Hydrate inputs whenever a new expert is selected.
+  // Preselect the expert's current tier whenever a new expert is selected.
   useEffect(() => {
     if (!expert) return
-    setMonthly((expert.monthlyPriceCents / 100).toString())
-    setYearly((expert.yearlyPriceCents / 100).toString())
+    setTier(isPriceTier(expert.priceTier) ? expert.priceTier : null)
     setError(null)
   }, [expert])
 
@@ -65,32 +65,13 @@ export default function PricingModal({ expert, onClose, onSaved }: Props) {
   }, [expert, onClose])
 
   async function save() {
-    if (!expert) return
-    const monthlyDollars = parseFloat(monthly) || 0
-    const yearlyDollars = parseFloat(yearly) || 0
-
-    if (monthlyDollars < 0 || yearlyDollars < 0) {
-      setError(t('pricing.errNonNegative'))
-      return
-    }
-    if (monthlyDollars > 1000) {
-      setError(t('pricing.errMonthlyCap'))
-      return
-    }
-    if (yearlyDollars > 10000) {
-      setError(t('pricing.errYearlyCap'))
-      return
-    }
-
+    if (!expert || !tier) return
     setSaving(true)
     setError(null)
     try {
       const res = await api.patch<{ ok: boolean; expert: PricingExpert }>(
         `/admin/experts/${expert.id}/pricing`,
-        {
-          monthlyCents: Math.round(monthlyDollars * 100),
-          yearlyCents: Math.round(yearlyDollars * 100),
-        },
+        { priceTier: tier },
       )
       onSaved?.(res.expert)
       onClose()
@@ -99,15 +80,6 @@ export default function PricingModal({ expert, onClose, onSaved }: Props) {
     } finally {
       setSaving(false)
     }
-  }
-
-  // Suggest a 20% discount on yearly when the admin tweaks monthly.
-  // Decoupled by default — only computed for the "Suggest yearly" link.
-  function suggestedYearly(): string {
-    const m = parseFloat(monthly) || 0
-    if (m <= 0) return '0'
-    // 12 × monthly × 0.80 → 20% discount versus paying monthly.
-    return (m * 12 * 0.8).toFixed(2)
   }
 
   return (
@@ -153,33 +125,34 @@ export default function PricingModal({ expert, onClose, onSaved }: Props) {
 
               {/* Body */}
               <div className="p-5 space-y-4">
-                <PriceField
-                  label={t('pricing.monthly')}
-                  value={monthly}
-                  onChange={setMonthly}
-                  suffix="/mo"
-                  disabled={saving}
-                />
-                <PriceField
-                  label={t('pricing.yearly')}
-                  value={yearly}
-                  onChange={setYearly}
-                  suffix="/yr"
-                  disabled={saving}
-                  hint={
-                    <>
-                      {t('pricing.suggested')}{' '}
-                      <button
-                        type="button"
-                        onClick={() => setYearly(suggestedYearly())}
-                        className="text-brand-cyan hover:underline font-mono"
-                      >
-                        ${suggestedYearly()}
-                      </button>{' '}
-                      <span className="text-fg-subtle">{t('pricing.discountNote')}</span>
-                    </>
-                  }
-                />
+                <div>
+                  <p className="block text-xs font-bold tracking-wide uppercase text-fg-subtle mb-1.5">
+                    {t('pricing.tierLabel')}
+                  </p>
+                  <div role="radiogroup" className="space-y-2">
+                    {PRICE_TIERS.map((option) => {
+                      const selected = option.id === tier
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          disabled={saving}
+                          onClick={() => setTier(option.id)}
+                          className={`w-full flex items-center justify-between gap-3 px-3 py-2 rounded-md ring-1 text-sm font-mono tabular-nums ${
+                            selected
+                              ? 'ring-brand-cyan bg-brand-cyan/10 text-fg'
+                              : 'ring-line text-fg-muted hover:bg-hairline'
+                          }`}
+                        >
+                          <span>{formatTierLabel(option)}</span>
+                          {selected && <Check className="w-4 h-4 text-brand-cyan shrink-0" />}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
 
                 {error && (
                   <div className="rounded-md bg-err/10 ring-1 ring-err/30 px-3 py-2 text-err text-xs">
@@ -188,7 +161,7 @@ export default function PricingModal({ expert, onClose, onSaved }: Props) {
                 )}
 
                 <p className="text-xs text-fg-subtle">
-                  {t('pricing.currencyNote')}
+                  {t('pricing.tierNote')}
                 </p>
               </div>
 
@@ -203,7 +176,7 @@ export default function PricingModal({ expert, onClose, onSaved }: Props) {
                 </button>
                 <button
                   onClick={save}
-                  disabled={saving}
+                  disabled={saving || !tier}
                   className="btn-v2-primary"
                 >
                   {saving ? (
@@ -224,50 +197,5 @@ export default function PricingModal({ expert, onClose, onSaved }: Props) {
         </>
       )}
     </AnimatePresence>
-  )
-}
-
-// ────────────────────────────────────────────────────────────────────
-// PriceField — labeled USD input with a $ prefix and an editable suffix.
-// ────────────────────────────────────────────────────────────────────
-function PriceField({
-  label,
-  value,
-  onChange,
-  suffix,
-  disabled,
-  hint,
-}: {
-  label: string
-  value: string
-  onChange: (v: string) => void
-  suffix: string
-  disabled?: boolean
-  hint?: React.ReactNode
-}) {
-  return (
-    <div>
-      <label className="block text-xs font-bold tracking-wide uppercase text-fg-subtle mb-1.5">
-        {label}
-      </label>
-      <div className="relative">
-        <span className="absolute start-3 top-1/2 -translate-y-1/2 text-fg-muted font-mono text-sm">
-          $
-        </span>
-        <input
-          type="text"
-          inputMode="decimal"
-          value={value}
-          disabled={disabled}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="0.00"
-          className="input-v2 ps-7 pe-12 font-mono tabular-nums"
-        />
-        <span className="absolute end-3 top-1/2 -translate-y-1/2 text-fg-subtle text-sm font-mono">
-          {suffix}
-        </span>
-      </div>
-      {hint && <p className="text-[11px] mt-1.5 text-fg-muted">{hint}</p>}
-    </div>
   )
 }

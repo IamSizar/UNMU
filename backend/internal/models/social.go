@@ -28,6 +28,8 @@ type Expert struct {
 	MonthlyPriceCents int    `json:"monthlyPriceCents"`
 	YearlyPriceCents  int    `json:"yearlyPriceCents"`
 	PriceCurrency    string `json:"priceCurrency"`
+	// PriceTier (mig 0063): t1..t4, the store product the plans sell as.
+	PriceTier       string    `json:"priceTier"`
 	CreatedAt       time.Time `json:"createdAt"`
 	UpdatedAt       time.Time `json:"updatedAt"`
 }
@@ -64,6 +66,8 @@ type Community struct {
 	JoinPriceMonthlyCents int    `json:"joinPriceMonthlyCents"`
 	JoinPriceYearlyCents  int    `json:"joinPriceYearlyCents"`
 	PriceCurrency         string `json:"priceCurrency"`
+	// PriceTier (mig 0063): t1..t4, or "" for a free community.
+	PriceTier   string    `json:"priceTier"`
 	MemberCount int       `json:"memberCount"`
 	ActiveNow   int       `json:"activeNow"`
 	// Sprint-C step 5 — owner user id, exposed in JSON so the mobile

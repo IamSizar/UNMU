@@ -39,6 +39,7 @@ type ExpertProfile = {
   monthlyPriceCents: number
   yearlyPriceCents: number
   priceCurrency: string
+  priceTier: string
   subscriberCount: number
 }
 

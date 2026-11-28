@@ -53,6 +53,9 @@ type Config struct {
 	PulseAutodraftEnabled bool
 	PulseAutodraftHourUTC int
 	PulseAutodraftModel   string
+	// Google Play refund sync (docs/payments/REFUNDS_PLAN.md). Off unless "true".
+	StoreRefundsEnabled bool
+	StoreRefundsHourUTC int
 	GeminiAPIKey          string
 
 	// Rate Limiting
@@ -107,6 +110,8 @@ func Load() (*Config, error) {
 		DailyScreeningHourUTC: getEnvInt("DAILY_SCREENING_HOUR_UTC", 2),
 		PulseAutodraftEnabled: getEnv("PULSE_AUTODRAFT_ENABLED", "") == "true",
 		PulseAutodraftHourUTC: getEnvInt("PULSE_AUTODRAFT_HOUR_UTC", 3),
+		StoreRefundsEnabled:   getEnv("STORE_REFUNDS_ENABLED", "") == "true",
+		StoreRefundsHourUTC:   getEnvInt("STORE_REFUNDS_HOUR_UTC", 4),
 		PulseAutodraftModel:   getEnv("PULSE_AUTODRAFT_MODEL", ""),
 		GeminiAPIKey:          getEnv("GEMINI_API_KEY", ""),
 

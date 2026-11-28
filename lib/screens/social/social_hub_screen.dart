@@ -401,7 +401,7 @@ class _SocialHubScreenState extends State<SocialHubScreen> {
                       Expanded(
                         child: _SectionHeader(
                           palette: palette,
-                          title: 'socialHub.yourCommunitiesTitle'.tr,
+                          title: 'socialHub.communitiesTitle'.tr,
                           subtitle: 'socialHub.discoverCommunities'.tr,
                           // Discovery section — keep brand cyan. The
                           // sibling "Top experts" uses violet, and the

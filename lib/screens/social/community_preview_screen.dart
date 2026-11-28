@@ -126,21 +126,19 @@ class _CommunityPreviewScreenState extends State<CommunityPreviewScreen> {
   }
 
   Future<void> _subscribe(String plan) async {
-    if (_community == null) return;
-    final priceCents = plan == 'monthly'
-        ? _community!.joinPriceMonthlyCents
-        : _community!.joinPriceYearlyCents;
-    final result = await CommunityPaymentSheet.show(
+    final community = _community;
+    if (community == null) return;
+    final granted = await CommunityPaymentSheet.show(
       context,
-      communityId: _community!.id,
-      communityName: _community!.name,
+      communityId: community.id,
+      communityName: community.name,
       plan: plan,
-      priceCents: priceCents,
-      currency: _community!.priceCurrency,
+      priceTier: community.priceTier,
     );
-    if (result == null || !mounted) return;
-    setState(() => _pendingSub = result);
-    _snack('communityPreview.paymentSubmitted'.tr);
+    if (!granted || !mounted) return;
+    HapticFeedback.lightImpact();
+    _snack('subscribe.success'.tr);
+    await _bootstrap();
   }
 
   void _snack(String msg) {

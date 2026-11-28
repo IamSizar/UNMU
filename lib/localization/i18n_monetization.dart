@@ -8,7 +8,7 @@
 /// keys there directly.
 ///
 /// Namespaces used here (avoids collisions with other workers):
-///   paymentSheet.  pricingCard.  subGate.
+///   pricingCard.  subGate.
 ///
 /// `common.*` keys are intentionally NOT redefined — they live centrally
 /// (common.ok, common.cancel, …).
@@ -24,28 +24,6 @@ library;
 
 const Map<String, String> monetizationEn = {
   // ── Payment sheet (community_payment_sheet.dart) ──
-  'paymentSheet.title': 'Join community',
-  'paymentSheet.subscribeTo': 'Subscribe to @name',
-  'paymentSheet.monthlyPlan': 'Monthly plan',
-  'paymentSheet.yearlyPlan': 'Yearly plan',
-  'paymentSheet.paymentMethod': 'Payment method',
-  'paymentSheet.cash': 'Cash',
-  'paymentSheet.paymentReferenceOptional': 'Payment reference (optional)',
-  'paymentSheet.fibTransactionHint': 'FIB transaction id',
-  'paymentSheet.receiptDropHint': 'Receipt # / drop name',
-  'paymentSheet.cashReceiptPhotoOptional': 'Cash receipt photo (optional)',
-  'paymentSheet.noteForAdminOptional': 'Note for admin (optional)',
-  'paymentSheet.noteHint': 'Anything that helps admin verify',
-  'paymentSheet.submitting': 'Submitting…',
-  'paymentSheet.submitProof': 'Submit payment proof',
-  'paymentSheet.addReceiptPhoto': 'Add a photo of your receipt',
-  'paymentSheet.receiptUploaded': 'Receipt uploaded',
-  'paymentSheet.receiptHelp': 'Helps the admin verify cash payments',
-  'paymentSheet.tapToReplace': 'Tap to replace',
-  'paymentSheet.paymentSubmitted': 'Payment submitted',
-  'paymentSheet.successBody':
-      "We've forwarded your @plan payment for @name to the admin. You'll get a notification once they accept it — usually within a few hours.",
-  'paymentSheet.gotIt': 'Got it',
 
   // ── Pricing card (community_pricing_card.dart) ──
   'pricingCard.saveBadge': 'Save @pct%',
@@ -71,28 +49,6 @@ const Map<String, String> monetizationEn = {
 
 const Map<String, String> monetizationAr = {
   // ── Payment sheet (community_payment_sheet.dart) ──
-  'paymentSheet.title': 'الانضمام للمجتمع',
-  'paymentSheet.subscribeTo': 'الاشتراك في @name',
-  'paymentSheet.monthlyPlan': 'خطة شهرية',
-  'paymentSheet.yearlyPlan': 'خطة سنوية',
-  'paymentSheet.paymentMethod': 'طريقة الدفع',
-  'paymentSheet.cash': 'نقداً',
-  'paymentSheet.paymentReferenceOptional': 'مرجع الدفع (اختياري)',
-  'paymentSheet.fibTransactionHint': 'رقم عملية FIB',
-  'paymentSheet.receiptDropHint': 'رقم الإيصال / اسم التحويل',
-  'paymentSheet.cashReceiptPhotoOptional': 'صورة إيصال الدفع النقدي (اختياري)',
-  'paymentSheet.noteForAdminOptional': 'ملاحظة للمشرف (اختياري)',
-  'paymentSheet.noteHint': 'أي شيء يساعد المشرف على التحقق',
-  'paymentSheet.submitting': 'جارٍ الإرسال…',
-  'paymentSheet.submitProof': 'إرسال إثبات الدفع',
-  'paymentSheet.addReceiptPhoto': 'أضف صورة لإيصالك',
-  'paymentSheet.receiptUploaded': 'تم رفع الإيصال',
-  'paymentSheet.receiptHelp': 'يساعد المشرف على التحقق من المدفوعات النقدية',
-  'paymentSheet.tapToReplace': 'اضغط للاستبدال',
-  'paymentSheet.paymentSubmitted': 'تم إرسال الدفعة',
-  'paymentSheet.successBody':
-      'لقد أرسلنا دفعتك لخطة @plan الخاصة بـ @name إلى المشرف. ستصلك إشعار بمجرد قبولها — عادةً خلال بضع ساعات.',
-  'paymentSheet.gotIt': 'حسناً',
 
   // ── Pricing card (community_pricing_card.dart) ──
   'pricingCard.saveBadge': 'وفّر @pct%',

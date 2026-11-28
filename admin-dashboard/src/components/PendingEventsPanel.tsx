@@ -2,14 +2,14 @@
  * PendingEventsPanel — the right-side feed on the /network page.
  *
  * Renders the `pending` array from /api/admin/network/graph and lets
- * the admin approve/reject in place. Optimistic UI: the card animates
- * out the moment you click, and a rollback toast appears if the
- * backend rejects.
+ * the admin approve/reject in place where the kind supports it.
+ * Optimistic UI: the card animates out the moment you click, and a
+ * rollback toast appears if the backend rejects.
  *
  * Four event kinds we surface here:
  *   - expert_application      → POST /admin/expert-applications/:id/approve|reject
- *   - subscription            → POST /admin/subscriptions/:id/approve|reject
- *   - community_subscription  → POST /admin/community-subscriptions/:id/approve|reject
+ *   - subscription            → read-only (paid via App Store / Google Play)
+ *   - community_subscription  → read-only (paid via App Store / Google Play)
  *   - community_proposal      → POST /admin/community-proposals/:id/approve|reject
  *
  * Each route already exists; we just call them. On approve we set the
@@ -121,13 +121,15 @@ function EventCard({
   const meta = META[event.kind]
   const kindLabel = t(KIND_LABEL_KEY[event.kind] as Parameters<typeof t>[0])
 
+  const endpoint = meta.endpoint
+
   async function doAction(action: 'approve' | 'reject') {
-    if (state !== 'idle') return
+    if (state !== 'idle' || !endpoint) return
     setState(action === 'approve' ? 'approving' : 'rejecting')
     setErrorMsg(null)
 
     try {
-      await api.post(meta.endpoint(event.id, action), {})
+      await api.post(endpoint(event.id, action), {})
       setState(action === 'approve' ? 'approved' : 'rejected')
       // Give the user a 700ms green/red flash before bubbling the
       // event up — the parent will remove the row when it re-fetches.
@@ -183,8 +185,8 @@ function EventCard({
         </div>
       </div>
 
-      {/* Actions */}
-      {state === 'idle' && (
+      {/* Actions — only for kinds the admin can still resolve. */}
+      {state === 'idle' && endpoint && (
         <div className="flex items-center gap-1.5 mt-2.5">
           <button
             onClick={() => doAction('approve')}
@@ -230,20 +232,16 @@ function EventCard({
 
 // ── Per-kind icon + endpoint mapping ────────────────────────────────
 //
-// NOTE on verbs — the backend uses two conventions:
-//   * expert_application + community_proposal  → /approve  /reject
-//   * expert_subscription + community_subscription → /accept /reject
-//
-// The UI says "Approve" uniformly (admin-friendly word) but the wire
-// call has to pick the right verb per resource. Map both via the
-// `endpoint` callback below.
+// Kinds without an `endpoint` are shown read-only: expert and community
+// subscriptions are paid only through the App Store / Google Play, so
+// the admin accept/reject routes no longer exist.
 const META: Record<
   PendingEvent['kind'],
   {
     label: string
     icon: React.ComponentType<{ className?: string }>
     iconClass: string
-    endpoint: (id: number, action: 'approve' | 'reject') => string
+    endpoint?: (id: number, action: 'approve' | 'reject') => string
   }
 > = {
   expert_application: {
@@ -259,21 +257,12 @@ const META: Record<
     icon: CreditCard,
     iconClass:
       'bg-brand-cyan/15 text-brand-cyan ring-1 ring-inset ring-brand-cyan/30',
-    // Expert-subscription uses `/accept`, not `/approve`. Mapping
-    // happens here so the UI button can still say "Approve".
-    endpoint: (id, action) =>
-      `/admin/subscriptions/${id}/${action === 'approve' ? 'accept' : 'reject'}`,
   },
   community_subscription: {
     label: 'Community subscription',
     icon: Users2,
     iconClass:
       'bg-info/15 text-info ring-1 ring-inset ring-info/30',
-    // Same `/accept` convention as expert subscriptions.
-    endpoint: (id, action) =>
-      `/admin/community-subscriptions/${id}/${
-        action === 'approve' ? 'accept' : 'reject'
-      }`,
   },
   community_proposal: {
     label: 'Community proposal',

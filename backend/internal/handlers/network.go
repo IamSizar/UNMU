@@ -306,62 +306,9 @@ func (h *NetworkHandler) Graph(c *gin.Context) {
 		appRows.Close()
 	}
 
-	// Pending expert subscriptions
-	subPendRows, err := h.db.Query(`
-		SELECT s.id, s.user_id, COALESCE(u_target.id, 0), COALESCE(u.name, u.email), COALESCE(u_target.name, ''), s.created_at, COALESCE(s.plan, '')
-		FROM expert_subscriptions s
-		LEFT JOIN users u ON u.id = s.user_id
-		LEFT JOIN users u_target ON u_target.expert_id = s.expert_id
-		WHERE s.status = 'pending'
-		ORDER BY s.created_at DESC
-		LIMIT 20
-	`)
-	if err == nil {
-		for subPendRows.Next() {
-			var ev NetPendingEvent
-			var actorID, targetID int64
-			var actorName, targetName, plan string
-			if err := subPendRows.Scan(&ev.ID, &actorID, &targetID, &actorName, &targetName, &ev.CreatedAt, &plan); err != nil {
-				continue
-			}
-			ev.Kind = "subscription"
-			ev.Headline = actorName + " → " + targetName
-			ev.SubText = "Subscription · " + plan
-			ev.ActorUserID = &actorID
-			if targetID != 0 {
-				ev.TargetUserID = &targetID
-			}
-			resp.Pending = append(resp.Pending, ev)
-		}
-		subPendRows.Close()
-	}
-
-	// Pending community subscriptions
-	commSubRows, err := h.db.Query(`
-		SELECT cs.id, cs.user_id, COALESCE(u.name, u.email), cs.community_id, COALESCE(c.name, cs.community_id), cs.created_at
-		FROM community_subscriptions cs
-		LEFT JOIN users u ON u.id = cs.user_id
-		LEFT JOIN communities c ON c.id = cs.community_id
-		WHERE cs.status = 'pending'
-		ORDER BY cs.created_at DESC
-		LIMIT 20
-	`)
-	if err == nil {
-		for commSubRows.Next() {
-			var ev NetPendingEvent
-			var actorID int64
-			var actorName, commName, commID string
-			if err := commSubRows.Scan(&ev.ID, &actorID, &actorName, &commID, &commName, &ev.CreatedAt); err != nil {
-				continue
-			}
-			ev.Kind = "community_subscription"
-			ev.Headline = actorName + " → " + commName
-			ev.SubText = "Community membership"
-			ev.ActorUserID = &actorID
-			resp.Pending = append(resp.Pending, ev)
-		}
-		commSubRows.Close()
-	}
+	// Expert / community subscriptions are no longer listed here: they are
+	// paid through the App Store / Google Play and need no admin action
+	// (docs/payments/IAP_ONLY_PLAN.md).
 
 	// Pending community proposals (new community ideas from experts)
 	propRows, err := h.db.Query(`

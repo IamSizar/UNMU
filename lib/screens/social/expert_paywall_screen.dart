@@ -19,7 +19,7 @@ import 'package:halalstocks/widgets/platform_adaptive/platform_spinner.dart';
 /// Renders the expert's pricing live (fetched on init), the lock copy,
 /// the post title we were trying to reach, and a single big Subscribe
 /// CTA. Tapping the CTA opens [SubscribeModal] which handles the
-/// actual plan/payment-method selection + Apple IAP / cash / FIB.
+/// plan selection and the App Store / Google Play purchase.
 class ExpertPaywallScreen extends StatefulWidget {
   final String expertId;
   final String expertName;
@@ -88,9 +88,8 @@ class _ExpertPaywallScreenState extends State<ExpertPaywallScreen> {
       expertName: widget.expertName,
     );
     if (sub != null && mounted) {
-      // Subscription accepted (cash/FIB → admin approval) or active
-      // (Apple IAP path). Either way, drop the paywall — the caller's
-      // screen reloads from realtime events.
+      // Store purchase granted — drop the paywall; the caller's screen
+      // reloads from realtime events.
       Navigator.of(context).pop();
     }
   }
