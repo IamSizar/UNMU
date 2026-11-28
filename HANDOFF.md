@@ -5,7 +5,7 @@ context: read this before planning any work here.
 
 ---
 
-## 2026-11-28 (later) — Daily screening refresh + AI-drafted Pulse (PR #7, branch `feat/pulse-autodraft`; STAGING deployed, production NOT)
+## 2026-11-28 (later) — Daily screening refresh + AI-drafted Pulse (PR #7 → main `f934e72`; DEPLOYED to staging and production)
 
 **Asked for:** Pulse "automate it and make it fetch daily news", then "go ahead all approved and agreed lets buld this". The plan and test list are in `docs/pulse/AUTODRAFT.md`. The Phase 3 public API product is NOT built: it waits on the EODHD redistribution licence and a Sharia sign-off.
 
@@ -37,6 +37,14 @@ context: read this before planning any work here.
 - The job ran on start-up and `job_runs` shows `screening_refresh | succeeded | 0 refreshed, 1 skipped`. Staging has only 1 test stock, which EODHD doesn't cover.
 - Auto-draft logged "ANTHROPIC_API_KEY not set: auto-draft off", as designed.
 - `/api/admin/jobs` without auth returns 401.
+
+**Production (done, Zaid: "Yes, do production"):**
+- Migration 0062 applied; 30 users intact.
+- Set `DAILY_SCREENING_ENABLED=true` and `PULSE_AUTODRAFT_ENABLED=true`.
+- PR #7 squash-merged into `main` (`f934e72`); Railway deployed it (SUCCESS, health 200).
+- **The first screening run refreshed nothing.** `job_runs` says succeeded, but 0 refreshed and 25 skipped. The logs show EODHD returning `401 Unauthorized` on `/api/fundamentals` for every covered ticker (AAPL, TSLA, ...). The production `EODHD_API_KEY` no longer has fundamentals access; the last good refresh was 2026-05-23. **Zaid:** check the EODHD subscription or key, then run `POST /api/admin/jobs/screening_refresh/run`.
+- **Trap:** `FetchFundamentalsBatch` swallows HTTP errors, so a 401 looks like "no coverage", and the job reports success.
+- Auto-draft is off until `ANTHROPIC_API_KEY` is set on the production backend. The news endpoint will likely hit the same EODHD 401.
 
 **To deploy (needs Zaid's go):**
 1. Apply 0062 to staging, then to production.
